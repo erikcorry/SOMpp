@@ -86,7 +86,7 @@ static vm_oop_t sysLoad_(vm_oop_t /*unused*/, vm_oop_t rightObj) {
 }
 
 static vm_oop_t sysExit_(vm_oop_t /*unused*/, vm_oop_t err) {
-    int64_t const err_no = SMALL_INT_VAL(err);
+    som_int_t const err_no = SMALL_INT_VAL(err);
     Quit((int32_t)err_no);
 }
 

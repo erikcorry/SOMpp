@@ -25,43 +25,51 @@
  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  THE SOFTWARE.
  */
+#include <type_traits>
+
 #include "../misc/defs.h"
 
-// some MACROS for integer tagging
 /**
- * The second-highest bit of a 64bit integer is not useable, because we need it
- * for tagging at the other end. The highest bit is the sign, which we want/need
- * and can use though.
+ * The type of SOM's small integers, and the type used for all arithmetic on
+ * them. It is as wide as a pointer, because small integers are tagged
+ * pointers, so on a 16-bit target a small integer has 15 bits.
+ * Values that may be out of the small integer range, before they are checked,
+ * still use int64_t, for instance at the boundary to big integers.
  */
-#define VMTAGGED_INT_OUT_OUF_RANGE_BITS 0x4000'0000'0000'0000LL
+typedef intptr_t som_int_t;
+typedef uintptr_t som_uint_t;
+
+constexpr int SOM_INT_BITS = sizeof(som_int_t) * 8;
+
+// some MACROS for integer tagging
 
 /**
  * max value for tagged integers
  * 01111111 11111111 ... 11111111 1111111X
  *
  */
-#define VMTAGGEDINTEGER_MAX 0x3FFFFFFFFFFFFFFFLL
+#define VMTAGGEDINTEGER_MAX (INTPTR_MAX >> 1)
 
 /**
  * min value for tagged integers
  * 10000000 00000000 ... 00000000 0000000X
  */
-#define VMTAGGEDINTEGER_MIN (-0x4000000000000000LL)
+#define VMTAGGEDINTEGER_MIN (INTPTR_MIN >> 1)
 
-#ifdef __GNUC__
-  #define VMTAGGED_INTEGER_WITHIN_RANGE_CHECK(X) \
-      ((int64_t(X) >= VMTAGGEDINTEGER_MIN) &&    \
-       (int64_t(X) <= VMTAGGEDINTEGER_MAX))
-#else
-__attribute__((always_inline)) inline bool VMTAGGED_INTEGER_WITHIN_RANGE_CHECK(
-    int64_t X) {
-    int64_t overflow_check_result;
-
-    __builtin_add_overflow(X, VMTAGGED_INT_OUT_OUF_RANGE_BITS,
-                           &overflow_check_result);
-    return overflow_check_result >= 0;
+/**
+ * The comparison is done in the type of value, which may be wider than
+ * som_int_t, for instance an int64_t parsed from a literal, or unsigned, for
+ * instance a size_t.
+ */
+template <typename T>
+__attribute__((always_inline)) constexpr bool
+VMTAGGED_INTEGER_WITHIN_RANGE_CHECK(T value) {
+    if constexpr (std::is_unsigned_v<T>) {
+        return value <= (som_uint_t)VMTAGGEDINTEGER_MAX;
+    } else {
+        return value >= VMTAGGEDINTEGER_MIN && value <= VMTAGGEDINTEGER_MAX;
+    }
 }
-#endif
 
 #if ADDITIONAL_ALLOCATION
   #define TAG_INTEGER(X)                                                   \
@@ -77,7 +85,7 @@ __attribute__((always_inline)) inline bool VMTAGGED_INTEGER_WITHIN_RANGE_CHECK(
 
 #if USE_TAGGING
   #define SMALL_INT_VAL(X) \
-      ((int64_t)(X) >> 1U) /* NOLINT (hicpp-signed-bitwise) */
+      ((som_int_t)(X) >> 1U) /* NOLINT (hicpp-signed-bitwise) */
   #define NEW_INT(X) (TAG_INTEGER((X)))
   #define IS_TAGGED(X) ((bool)((uintptr_t)(X) & 1U))
   #define IS_SMALL_INT(X) IS_TAGGED(X)

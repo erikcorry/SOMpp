@@ -32,8 +32,8 @@ public:
         return sizeof(VMBigInteger);
     }
 
-    [[nodiscard]] inline int64_t GetHash() const override {
-        return embeddedInteger.toInt64();
+    [[nodiscard]] inline som_int_t GetHash() const override {
+        return (som_int_t)embeddedInteger.toInt64();
     }
 
     void MarkObjectAsInvalid() override;
@@ -42,19 +42,19 @@ public:
     [[nodiscard]] std::string AsDebugString() const override;
 
     /* primitive operations */
-    [[nodiscard]] vm_oop_t Add(int64_t /*value*/) const;
+    [[nodiscard]] vm_oop_t Add(som_int_t /*value*/) const;
     vm_oop_t Add(vm_oop_t /*value*/) const;
 
-    [[nodiscard]] vm_oop_t SubtractFrom(int64_t /*value*/) const;
+    [[nodiscard]] vm_oop_t SubtractFrom(som_int_t /*value*/) const;
     vm_oop_t Subtract(vm_oop_t /*value*/) const;
 
-    [[nodiscard]] vm_oop_t Multiply(int64_t /*value*/) const;
+    [[nodiscard]] vm_oop_t Multiply(som_int_t /*value*/) const;
     vm_oop_t Multiply(vm_oop_t /*value*/) const;
 
-    [[nodiscard]] vm_oop_t DivisionFrom(int64_t /*value*/) const;
+    [[nodiscard]] vm_oop_t DivisionFrom(som_int_t /*value*/) const;
     vm_oop_t DivideBy(vm_oop_t /*value*/) const;
 
-    [[nodiscard]] vm_oop_t ModuloFrom(int64_t /*value*/) const;
+    [[nodiscard]] vm_oop_t ModuloFrom(som_int_t /*value*/) const;
     vm_oop_t Modulo(vm_oop_t /*value*/) const;
 
     [[nodiscard]] vm_oop_t Negate();

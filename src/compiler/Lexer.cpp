@@ -39,7 +39,7 @@ Lexer::Lexer(istream& file) : infile(file), peekDone(false) {}
 #define _BC (buf[state.bufp])
 #define EOB (state.bufp >= buf.length())
 
-int64_t Lexer::fillBuffer() {
+ptrdiff_t Lexer::fillBuffer() {
     if (!infile.good()) {  // file stream
         return -1;
     }
@@ -47,7 +47,7 @@ int64_t Lexer::fillBuffer() {
     std::getline(infile, buf);
     state.lineNumber += 1;
     state.bufp = 0;
-    return (int64_t)buf.length();
+    return (ptrdiff_t)buf.length();
 }
 
 //

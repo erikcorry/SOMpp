@@ -11,7 +11,7 @@ inline bool Contains(std::vector<T>& vec, T elem) {
 }
 
 template <typename T>
-inline int64_t IndexOf(std::vector<T>& vec, T elem) {
+inline som_int_t IndexOf(std::vector<T>& vec, T elem) {
     auto it = std::find(vec.begin(), vec.end(), elem);
     if (it != vec.end()) {
         return it - vec.begin();

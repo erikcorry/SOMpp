@@ -44,18 +44,18 @@
 #include "Parser.h"
 
 void Emit1(MethodGenerationContext& mgenc, uint8_t bytecode,
-           int64_t stackEffect) {
+           som_int_t stackEffect) {
     mgenc.AddBytecode(bytecode, stackEffect);
 }
 
 void Emit2(MethodGenerationContext& mgenc, uint8_t bytecode, uint8_t idx,
-           int64_t stackEffect) {
+           som_int_t stackEffect) {
     mgenc.AddBytecode(bytecode, stackEffect);
     mgenc.AddBytecodeArgument(idx);
 }
 
 void Emit3(MethodGenerationContext& mgenc, uint8_t bytecode, uint8_t idx,
-           size_t ctx, int64_t stackEffect) {
+           size_t ctx, som_int_t stackEffect) {
     mgenc.AddBytecode(bytecode, stackEffect);
     mgenc.AddBytecodeArgument(idx);
     mgenc.AddBytecodeArgument(ctx);
@@ -141,7 +141,7 @@ void EmitPUSHARGUMENT(MethodGenerationContext& mgenc, const Parser& parser,
 
 void EmitPUSHFIELD(MethodGenerationContext& mgenc, const Parser& parser,
                    VMSymbol* field) {
-    const int64_t idx = mgenc.GetFieldIndex(field);
+    const som_int_t idx = mgenc.GetFieldIndex(field);
     if (idx < 0) {
         std::string const msg(
             "The method tries to access the field " + field->GetStdString() +
@@ -291,7 +291,7 @@ void EmitPOPARGUMENT(MethodGenerationContext& mgenc, const Parser& parser,
 
 void EmitPOPFIELD(MethodGenerationContext& mgenc, const Parser& parser,
                   VMSymbol* field) {
-    const int64_t idx = mgenc.GetFieldIndex(field);
+    const som_int_t idx = mgenc.GetFieldIndex(field);
     if (idx < 0) {
         std::string const msg(
             "The method tries to access the field " + field->GetStdString() +
@@ -319,7 +319,7 @@ void EmitSEND(MethodGenerationContext& mgenc, const Parser& parser,
     const uint8_t idx = mgenc.AddLiteralIfAbsent(msg, parser);
 
     const uint8_t numArgs = Signature::GetNumberOfArguments(msg);
-    const int64_t stackEffect = -numArgs + 1;  // +1 for the result
+    const som_int_t stackEffect = -numArgs + 1;  // +1 for the result
 
     Emit2(mgenc, numArgs == 1 ? BC_SEND_1 : BC_SEND, idx, stackEffect);
 }
@@ -328,7 +328,7 @@ void EmitSUPERSEND(MethodGenerationContext& mgenc, const Parser& parser,
                    VMSymbol* msg) {
     const uint8_t idx = mgenc.AddLiteralIfAbsent(msg, parser);
     const uint8_t numArgs = Signature::GetNumberOfArguments(msg);
-    const int64_t stackEffect = -numArgs + 1;  // +1 for the result
+    const som_int_t stackEffect = -numArgs + 1;  // +1 for the result
 
     Emit2(mgenc, BC_SUPER_SEND, idx, stackEffect);
 }
@@ -396,7 +396,7 @@ size_t EmitJumpOnWithDummyOffset(MethodGenerationContext& mgenc,
     // But if the test fails, we need to jump.
     // Thus, an  `#ifTrue:` needs to generated a jump_on_false.
     uint8_t bc = 0;
-    int64_t const stackEffect = needsPop ? -1 : 0;
+    som_int_t const stackEffect = needsPop ? -1 : 0;
 
     switch (condition) {
         case JumpCondition::ON_TRUE:
@@ -445,7 +445,7 @@ void EmitJumpBackwardWithOffset(MethodGenerationContext& mgenc,
 }
 
 size_t Emit3WithDummy(MethodGenerationContext& mgenc, uint8_t bytecode,
-                      int64_t stackEffect) {
+                      som_int_t stackEffect) {
     mgenc.AddBytecode(bytecode, stackEffect);
     size_t const index = mgenc.AddBytecodeArgumentAndGetIndex(0);
     mgenc.AddBytecodeArgument(0);

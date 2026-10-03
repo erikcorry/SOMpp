@@ -28,7 +28,7 @@ class AbstractVMObject : public VMObjectBase {
 public:
     typedef GCAbstractObject Stored;
 
-    [[nodiscard]] virtual int64_t GetHash() const = 0;
+    [[nodiscard]] virtual som_int_t GetHash() const = 0;
     [[nodiscard]] virtual VMClass* GetClass() const = 0;
     [[nodiscard]] virtual AbstractVMObject* CloneForMovingGC() const = 0;
     void Send(const std::string& selectorString, vm_oop_t* arguments,
@@ -54,7 +54,7 @@ public:
         ErrorPrint("this object doesn't support SetClass\n");
     }
 
-    int64_t GetFieldIndex(VMSymbol* fieldName) const;
+    som_int_t GetFieldIndex(VMSymbol* fieldName) const;
 
     virtual void WalkObjects(walk_heap_fn /*walk*/) {}
 

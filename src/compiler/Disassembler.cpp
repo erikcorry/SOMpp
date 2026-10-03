@@ -443,7 +443,7 @@ void Disassembler::printConstantAccess(vm_oop_t constant, uint8_t index) {
  */
 void Disassembler::DumpBytecode(VMFrame* frame, VMMethod* method,
                                 size_t bc_idx) {
-    static int64_t indentc = 0;
+    static som_int_t indentc = 0;
     static char ikind = '@';
     uint8_t const bc = BC_0;
     VMClass const* const cl = method->GetHolder();

@@ -216,12 +216,12 @@ VMInvokable* VMClass::LookupInvokable(VMSymbol* name) {
     return nullptr;
 }
 
-int64_t VMClass::LookupFieldIndex(VMSymbol* name) const {
+som_int_t VMClass::LookupFieldIndex(VMSymbol* name) const {
     size_t const numInstanceFields = GetNumberOfInstanceFields();
     for (size_t i = 0; i <= numInstanceFields; ++i) {
         // even with GetNumberOfInstanceFields == 0 there is the class field
         if (name == GetInstanceFieldName(i)) {
-            return (int64_t)i;
+            return (som_int_t)i;
         }
     }
     return -1;

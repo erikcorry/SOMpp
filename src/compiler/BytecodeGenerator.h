@@ -33,11 +33,11 @@
 #include "MethodGenerationContext.h"
 
 void Emit1(MethodGenerationContext& mgenc, uint8_t bytecode,
-           int64_t stackEffect);
+           som_int_t stackEffect);
 void Emit2(MethodGenerationContext& mgenc, uint8_t bytecode, uint8_t idx,
-           int64_t stackEffect);
+           som_int_t stackEffect);
 void Emit3(MethodGenerationContext& mgenc, uint8_t bytecode, uint8_t idx,
-           size_t ctx, int64_t stackEffect);
+           size_t ctx, som_int_t stackEffect);
 
 void EmitHALT(MethodGenerationContext& mgenc);
 void EmitDUP(MethodGenerationContext& mgenc);
@@ -85,7 +85,7 @@ size_t EmitJumpIfGreaterWithDummyOffset(MethodGenerationContext& mgenc);
 void EmitJumpBackwardWithOffset(MethodGenerationContext& mgenc,
                                 size_t jumpOffset);
 size_t Emit3WithDummy(MethodGenerationContext& mgenc, uint8_t bytecode,
-                      int64_t stackEffect);
+                      som_int_t stackEffect);
 
 void EmitPushFieldWithIndex(MethodGenerationContext& mgenc, uint8_t fieldIdx);
 void EmitPopFieldWithIndex(MethodGenerationContext& mgenc, uint8_t fieldIdx);

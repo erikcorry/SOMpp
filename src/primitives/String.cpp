@@ -71,7 +71,7 @@ static vm_oop_t strLength(vm_oop_t rcvr) {
     auto* self = static_cast<VMString*>(rcvr);
 
     size_t const len = self->GetStringLength();
-    return NEW_INT((int64_t)len);
+    return NEW_INT((som_int_t)len);
 }
 
 static vm_oop_t strEqual(vm_oop_t leftObj, vm_oop_t op1) {
@@ -108,8 +108,8 @@ static vm_oop_t strPrimSubstringFromTo(vm_oop_t rcvr,
     auto* self = static_cast<VMString*>(rcvr);
     std::string const str = self->GetStdString();
 
-    int64_t const s = SMALL_INT_VAL(start) - 1;
-    int64_t const e = SMALL_INT_VAL(end) - 1;
+    som_int_t const s = SMALL_INT_VAL(start) - 1;
+    som_int_t const e = SMALL_INT_VAL(end) - 1;
 
     std::string const result = str.substr(s, e - s + 1);
     return Universe::NewString(result);
@@ -117,7 +117,7 @@ static vm_oop_t strPrimSubstringFromTo(vm_oop_t rcvr,
 
 static vm_oop_t strCharAt(vm_oop_t rcvr, vm_oop_t indexPtr) {
     auto* self = static_cast<VMString*>(rcvr);
-    int64_t const index = SMALL_INT_VAL(indexPtr) - 1;
+    som_int_t const index = SMALL_INT_VAL(indexPtr) - 1;
 
     if (unlikely(index < 0 || (size_t)index >= self->GetStringLength())) {
         return Universe::NewString("Error - index out of bounds");

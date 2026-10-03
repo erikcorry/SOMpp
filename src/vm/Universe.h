@@ -84,7 +84,7 @@ public:
                                vector<BackJump>& inlinedLoops);
     static VMObject* NewInstance(VMClass* /*classOfInstance*/);
     static VMObject* NewInstanceWithoutFields();
-    static VMInteger* NewInteger(int64_t /*value*/);
+    static VMInteger* NewInteger(som_int_t /*value*/);
 
     static vm_oop_t NewInt(InfInt&& /*value*/);
 

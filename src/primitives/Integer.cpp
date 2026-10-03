@@ -61,11 +61,11 @@ static vm_oop_t intPlus(vm_oop_t leftObj, vm_oop_t rightObj) {
     assert(CLASS_OF(leftObj) == load_ptr(integerClass) &&
            "The receiver should always be an int");
     if (IS_SMALL_INT(leftObj)) {
-        int64_t const left = SMALL_INT_VAL(leftObj);
+        som_int_t const left = SMALL_INT_VAL(leftObj);
 
         if (IS_SMALL_INT(rightObj)) {
-            int64_t const right = SMALL_INT_VAL(rightObj);
-            int64_t result = 0;
+            som_int_t const right = SMALL_INT_VAL(rightObj);
+            som_int_t result = 0;
             if (unlikely(__builtin_add_overflow(left, right, &result))) {
                 InfInt const l(left);
                 InfInt const r(right);
@@ -88,30 +88,42 @@ static vm_oop_t intPlus(vm_oop_t leftObj, vm_oop_t rightObj) {
 
 static vm_oop_t intBitwiseXor(vm_oop_t leftObj, vm_oop_t rightObj) {
     if (IS_SMALL_INT(leftObj) && IS_SMALL_INT(rightObj)) {
-        int64_t const left = SMALL_INT_VAL(leftObj);
+        som_int_t const left = SMALL_INT_VAL(leftObj);
 
         // NOLINTNEXTLINE(hicpp-signed-bitwise)
-        int64_t const result = left ^ SMALL_INT_VAL(rightObj);
+        som_int_t const result = left ^ SMALL_INT_VAL(rightObj);
         return NEW_INT(result);
     }
 
     ErrorExit("#xor: not supported on non-small-int arguments");
 }
 
+/** Uses the clz builtin of som_uint_t's width, so it is a native op. */
+static inline int countLeadingZeros(som_uint_t value) {
+    // NOLINTBEGIN(misc-include-cleaner)
+    if constexpr (sizeof(som_uint_t) == sizeof(unsigned int)) {
+        return __builtin_clz(value);
+    } else if constexpr (sizeof(som_uint_t) == sizeof(unsigned long)) {
+        return __builtin_clzl(value);
+    } else {
+        return __builtin_clzll(value);
+    }
+    // NOLINTEND(misc-include-cleaner)
+}
+
 static vm_oop_t intLeftShift(vm_oop_t leftObj, vm_oop_t rightObj) {
     if (IS_SMALL_INT(leftObj) && IS_SMALL_INT(rightObj)) {
-        int64_t const left = SMALL_INT_VAL(leftObj);
-        int64_t const right = SMALL_INT_VAL(rightObj);
+        som_int_t const left = SMALL_INT_VAL(leftObj);
+        som_int_t const right = SMALL_INT_VAL(rightObj);
 
-        // NOLINTNEXTLINE(misc-include-cleaner)
-        auto const numberOfLeadingZeros = __builtin_clzll((uint64_t)left);
+        auto const numberOfLeadingZeros = countLeadingZeros((som_uint_t)left);
 
-        if (64 - numberOfLeadingZeros + right > 63) {
+        if (SOM_INT_BITS - numberOfLeadingZeros + right > SOM_INT_BITS - 1) {
             return Universe::NewInt(InfInt(left) << right);
         }
 
         // NOLINTNEXTLINE(hicpp-signed-bitwise)
-        int64_t const result = left << right;
+        som_int_t const result = left << right;
         return NEW_INT(result);
     }
 
@@ -120,11 +132,11 @@ static vm_oop_t intLeftShift(vm_oop_t leftObj, vm_oop_t rightObj) {
 
 static vm_oop_t intUnsignedRightShift(vm_oop_t leftObj, vm_oop_t rightObj) {
     if (IS_SMALL_INT(leftObj) && IS_SMALL_INT(rightObj)) {
-        uint64_t const left = SMALL_INT_VAL(leftObj);
-        uint64_t const right = SMALL_INT_VAL(rightObj);
+        som_uint_t const left = SMALL_INT_VAL(leftObj);
+        som_uint_t const right = SMALL_INT_VAL(rightObj);
 
         // NOLINTNEXTLINE(hicpp-signed-bitwise)
-        auto const result = static_cast<int64_t>(left >> right);
+        auto const result = static_cast<som_int_t>(left >> right);
         return NEW_INT(result);
     }
 
@@ -135,11 +147,11 @@ static vm_oop_t intMinus(vm_oop_t leftObj, vm_oop_t rightObj) {
     assert(CLASS_OF(leftObj) == load_ptr(integerClass) &&
            "The receiver should always be an int");
     if (IS_SMALL_INT(leftObj)) {
-        int64_t const left = SMALL_INT_VAL(leftObj);
+        som_int_t const left = SMALL_INT_VAL(leftObj);
 
         if (IS_SMALL_INT(rightObj)) {
-            int64_t const right = SMALL_INT_VAL(rightObj);
-            int64_t result = 0;
+            som_int_t const right = SMALL_INT_VAL(rightObj);
+            som_int_t result = 0;
             if (unlikely(__builtin_sub_overflow(left, right, &result))) {
                 InfInt const l(left);
                 InfInt const r(right);
@@ -164,11 +176,11 @@ static vm_oop_t intStar(vm_oop_t leftObj, vm_oop_t rightObj) {
     assert(CLASS_OF(leftObj) == load_ptr(integerClass) &&
            "The receiver should always be an int");
     if (IS_SMALL_INT(leftObj)) {
-        int64_t const left = SMALL_INT_VAL(leftObj);
+        som_int_t const left = SMALL_INT_VAL(leftObj);
 
         if (IS_SMALL_INT(rightObj)) {
-            int64_t const right = SMALL_INT_VAL(rightObj);
-            int64_t result = 0;
+            som_int_t const right = SMALL_INT_VAL(rightObj);
+            som_int_t result = 0;
             if (unlikely(__builtin_mul_overflow(left, right, &result))) {
                 InfInt const l(left);
                 InfInt const r(right);
@@ -214,17 +226,17 @@ static vm_oop_t intSlashslash(vm_oop_t leftObj, vm_oop_t rightObj) {
 
 static vm_oop_t intSlash(vm_oop_t leftObj, vm_oop_t rightObj) {
     if (IS_SMALL_INT(leftObj)) {
-        int64_t const left = SMALL_INT_VAL(leftObj);
+        som_int_t const left = SMALL_INT_VAL(leftObj);
 
         if (IS_SMALL_INT(rightObj)) {
-            int64_t const right = SMALL_INT_VAL(rightObj);
-            int64_t const result = left / right;
+            som_int_t const right = SMALL_INT_VAL(rightObj);
+            som_int_t const result = left / right;
             return NEW_INT(result);
         }
 
         if (IS_DOUBLE(rightObj)) {
             double const right = AS_DOUBLE(rightObj);
-            auto const result = (int64_t)(static_cast<double>(left) / right);
+            auto const result = (som_int_t)(static_cast<double>(left) / right);
             return NEW_INT(result);
         }
 
@@ -238,11 +250,11 @@ static vm_oop_t intSlash(vm_oop_t leftObj, vm_oop_t rightObj) {
 
 static vm_oop_t intPercent(vm_oop_t leftObj, vm_oop_t rightObj) {
     if (IS_SMALL_INT(leftObj)) {
-        int64_t const left = SMALL_INT_VAL(leftObj);
+        som_int_t const left = SMALL_INT_VAL(leftObj);
 
         if (IS_SMALL_INT(rightObj)) {
-            int64_t const right = SMALL_INT_VAL(rightObj);
-            int64_t result = left % right;
+            som_int_t const right = SMALL_INT_VAL(rightObj);
+            som_int_t result = left % right;
 
             if ((result != 0) && ((result < 0) != (right < 0))) {
                 result += right;
@@ -270,11 +282,11 @@ static vm_oop_t intPercent(vm_oop_t leftObj, vm_oop_t rightObj) {
 
 static vm_oop_t intRem(vm_oop_t leftObj, vm_oop_t rightObj) {
     if (IS_SMALL_INT(leftObj)) {
-        int64_t const left = SMALL_INT_VAL(leftObj);
+        som_int_t const left = SMALL_INT_VAL(leftObj);
 
         if (IS_SMALL_INT(rightObj)) {
-            int64_t const right = SMALL_INT_VAL(rightObj);
-            int64_t const result = left - ((left / right) * right);
+            som_int_t const right = SMALL_INT_VAL(rightObj);
+            som_int_t const result = left - ((left / right) * right);
 
             return NEW_INT(result);
         }
@@ -288,13 +300,14 @@ static vm_oop_t intRem(vm_oop_t leftObj, vm_oop_t rightObj) {
 static vm_oop_t intAnd(vm_oop_t leftObj, vm_oop_t rightObj) {
     if (IS_SMALL_INT(leftObj) && IS_SMALL_INT(rightObj)) {
         // NOLINTNEXTLINE(hicpp-signed-bitwise)
-        int64_t const result = SMALL_INT_VAL(leftObj) & SMALL_INT_VAL(rightObj);
+        som_int_t const result =
+            SMALL_INT_VAL(leftObj) & SMALL_INT_VAL(rightObj);
         return NEW_INT(result);
     }
 
     if (IS_BIG_INT(leftObj) && IS_SMALL_INT(rightObj)) {
         VMBigInteger const* const left = AS_BIG_INT(leftObj);
-        int64_t const l = left->embeddedInteger.truncateToInt64();
+        som_int_t const l = left->embeddedInteger.truncateToInt64();
         // NOLINTNEXTLINE(hicpp-signed-bitwise)
         return NEW_INT(l & SMALL_INT_VAL(rightObj));
     }
@@ -304,10 +317,10 @@ static vm_oop_t intAnd(vm_oop_t leftObj, vm_oop_t rightObj) {
 
 static vm_oop_t intEqual(vm_oop_t leftObj, vm_oop_t rightObj) {
     if (IS_SMALL_INT(leftObj)) {
-        int64_t const left = SMALL_INT_VAL(leftObj);
+        som_int_t const left = SMALL_INT_VAL(leftObj);
 
         if (IS_SMALL_INT(rightObj)) {
-            int64_t const right = SMALL_INT_VAL(rightObj);
+            som_int_t const right = SMALL_INT_VAL(rightObj);
             return left == right ? load_ptr(trueObject) : load_ptr(falseObject);
         }
 
@@ -347,7 +360,7 @@ static vm_oop_t intEqualEqual(vm_oop_t leftObj, vm_oop_t rightObj) {
 
 inline static bool lowerThan(vm_oop_t leftObj, vm_oop_t rightObj) {
     if (IS_SMALL_INT(leftObj)) {
-        int64_t const left = SMALL_INT_VAL(leftObj);
+        som_int_t const left = SMALL_INT_VAL(leftObj);
         if (IS_SMALL_INT(rightObj)) {
             return left < SMALL_INT_VAL(rightObj);
         }
@@ -385,7 +398,7 @@ static vm_oop_t intLowerthan(vm_oop_t leftObj, vm_oop_t rightObj) {
 
 static vm_oop_t intLowerThanEqual(vm_oop_t leftObj, vm_oop_t rightObj) {
     if (IS_SMALL_INT(leftObj)) {
-        int64_t const left = SMALL_INT_VAL(leftObj);
+        som_int_t const left = SMALL_INT_VAL(leftObj);
 
         if (IS_SMALL_INT(rightObj)) {
             return left <= SMALL_INT_VAL(rightObj) ? load_ptr(trueObject)
@@ -427,7 +440,7 @@ static vm_oop_t intLowerThanEqual(vm_oop_t leftObj, vm_oop_t rightObj) {
 
 static vm_oop_t intGreaterThan(vm_oop_t leftObj, vm_oop_t rightObj) {
     if (IS_SMALL_INT(leftObj)) {
-        int64_t const left = SMALL_INT_VAL(leftObj);
+        som_int_t const left = SMALL_INT_VAL(leftObj);
 
         if (IS_SMALL_INT(rightObj)) {
             return left > SMALL_INT_VAL(rightObj) ? load_ptr(trueObject)
@@ -469,7 +482,7 @@ static vm_oop_t intGreaterThan(vm_oop_t leftObj, vm_oop_t rightObj) {
 
 static vm_oop_t intGreaterThanEqual(vm_oop_t leftObj, vm_oop_t rightObj) {
     if (IS_SMALL_INT(leftObj)) {
-        int64_t const left = SMALL_INT_VAL(leftObj);
+        som_int_t const left = SMALL_INT_VAL(leftObj);
 
         if (IS_SMALL_INT(rightObj)) {
             return left >= SMALL_INT_VAL(rightObj) ? load_ptr(trueObject)
@@ -511,7 +524,7 @@ static vm_oop_t intGreaterThanEqual(vm_oop_t leftObj, vm_oop_t rightObj) {
 
 static vm_oop_t intAsString(vm_oop_t self) {
     if (IS_SMALL_INT(self)) {
-        int64_t const integer = SMALL_INT_VAL(self);
+        som_int_t const integer = SMALL_INT_VAL(self);
         ostringstream Str;
         Str << integer;
         return Universe::NewString(Str.str());
@@ -558,13 +571,13 @@ static vm_oop_t intSqrt(vm_oop_t self) {
     double const result = sqrt((double)SMALL_INT_VAL(self));
 
     if (result == rint(result)) {
-        return NEW_INT((int64_t)result);
+        return NEW_INT((som_int_t)result);
     }
     return Universe::NewDouble(result);
 }
 
 static vm_oop_t intAtRandom(vm_oop_t self) {
-    int64_t const result =
+    som_int_t const result =
         SMALL_INT_VAL(self) *
         rand();  // NOLINT(clang-analyzer-security.insecureAPI.rand,misc-predictable-rand)
     return NEW_INT(result);
@@ -572,7 +585,7 @@ static vm_oop_t intAtRandom(vm_oop_t self) {
 
 static vm_oop_t intAbs(vm_oop_t self) {
     if (IS_SMALL_INT(self)) {
-        int64_t const result = SMALL_INT_VAL(self);
+        som_int_t const result = SMALL_INT_VAL(self);
         if (result < 0) {
             return NEW_INT(-result);
         }
@@ -601,7 +614,7 @@ static vm_oop_t intFromString(vm_oop_t /*unused*/, vm_oop_t right) {
 
 static vm_oop_t intUnequal(vm_oop_t leftObj, vm_oop_t rightObj) {
     if (IS_SMALL_INT(leftObj)) {
-        int64_t const left = SMALL_INT_VAL(leftObj);
+        som_int_t const left = SMALL_INT_VAL(leftObj);
 
         if (IS_SMALL_INT(rightObj)) {
             return left != SMALL_INT_VAL(rightObj) ? load_ptr(trueObject)
@@ -647,14 +660,14 @@ static vm_oop_t intUnequal(vm_oop_t leftObj, vm_oop_t rightObj) {
 }
 
 static vm_oop_t intRange(vm_oop_t leftObj, vm_oop_t rightObj) {
-    int64_t const left = SMALL_INT_VAL(leftObj);
-    int64_t const right = SMALL_INT_VAL(rightObj);
+    som_int_t const left = SMALL_INT_VAL(leftObj);
+    som_int_t const right = SMALL_INT_VAL(rightObj);
 
-    int64_t const numInteger = right - left + 1;
+    som_int_t const numInteger = right - left + 1;
     VMArray* arr = Universe::NewArray(numInteger);
 
     size_t index = 0;
-    for (int64_t i = left; i <= right; i += 1, index += 1) {
+    for (som_int_t i = left; i <= right; i += 1, index += 1) {
         arr->SetIndexableField(index, NEW_INT(i));
     }
 

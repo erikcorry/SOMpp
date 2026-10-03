@@ -44,7 +44,7 @@ static vm_oop_t objEqualequal(vm_oop_t op2, vm_oop_t op1) {
 }
 
 static vm_oop_t objObjectSize(vm_oop_t self) {
-    return NEW_INT((int64_t)AS_OBJ(self)->GetObjectSize());
+    return NEW_INT((som_int_t)AS_OBJ(self)->GetObjectSize());
 }
 
 static vm_oop_t objHashcode(vm_oop_t self) {
@@ -117,7 +117,7 @@ static void objPerformWithArgumentsInSuperclass(VMFrame* frame) {
 }
 
 static vm_oop_t objInstVarAt(vm_oop_t self, vm_oop_t idx) {
-    int64_t const field_idx = SMALL_INT_VAL(idx) - 1;
+    som_int_t const field_idx = SMALL_INT_VAL(idx) - 1;
     return static_cast<VMObject*>(self)->GetField(field_idx);
 }
 
@@ -129,7 +129,7 @@ static vm_oop_t objInstVarAtPut(vm_oop_t self, vm_oop_t idx, vm_oop_t value) {
 
 static vm_oop_t objInstVarNamed(vm_oop_t self, vm_oop_t nameObj) {
     auto* name = (VMSymbol*)nameObj;
-    int64_t const fieldIdx = AS_OBJ(self)->GetFieldIndex(name);
+    som_int_t const fieldIdx = AS_OBJ(self)->GetFieldIndex(name);
     return static_cast<VMObject*>(self)->GetField(fieldIdx);
 }
 

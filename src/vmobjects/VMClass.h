@@ -69,7 +69,7 @@ public:
     [[nodiscard]] VMInvokable* GetInstanceInvokable(size_t index) const;
     void SetInstanceInvokable(size_t index, VMInvokable* invokable);
     VMInvokable* LookupInvokable(VMSymbol* name);
-    int64_t LookupFieldIndex(VMSymbol* name) const;
+    som_int_t LookupFieldIndex(VMSymbol* name) const;
     PrimInstallResult InstallPrimitive(VMInvokable* invokable,
                                        size_t bytecodeHash,
                                        bool reportHashMismatch);

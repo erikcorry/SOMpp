@@ -34,15 +34,15 @@ class VMInteger : public AbstractVMObject {
 public:
     typedef GCInteger Stored;
 
-    explicit VMInteger(int64_t val) : embeddedInteger(val) {}
+    explicit VMInteger(som_int_t val) : embeddedInteger(val) {}
     ~VMInteger() override = default;
 
-    [[nodiscard]] inline int64_t GetEmbeddedInteger() const;
+    [[nodiscard]] inline som_int_t GetEmbeddedInteger() const;
     [[nodiscard]] VMInteger* CloneForMovingGC() const override;
     [[nodiscard]] VMClass* GetClass() const override;
     [[nodiscard]] inline size_t GetObjectSize() const override;
 
-    [[nodiscard]] inline int64_t GetHash() const override {
+    [[nodiscard]] inline som_int_t GetHash() const override {
         return embeddedInteger;
     }
 
@@ -53,10 +53,10 @@ public:
 
     make_testable(public);
 
-    int64_t embeddedInteger;
+    som_int_t embeddedInteger;
 };
 
-int64_t VMInteger::GetEmbeddedInteger() const {
+som_int_t VMInteger::GetEmbeddedInteger() const {
     return embeddedInteger;
 }
 

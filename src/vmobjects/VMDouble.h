@@ -39,10 +39,10 @@ public:
     [[nodiscard]] VMClass* GetClass() const override;
     [[nodiscard]] inline size_t GetObjectSize() const override;
 
-    [[nodiscard]] inline int64_t GetHash() const override {
+    [[nodiscard]] inline som_int_t GetHash() const override {
         // try to avoid a smart cast of the double value.
         // instead, try to get to the bit pattern as a int64_t
-        return (*(int64_t*)&embeddedDouble);
+        return (som_int_t)(*(int64_t*)&embeddedDouble);
     }
 
     void MarkObjectAsInvalid() override;

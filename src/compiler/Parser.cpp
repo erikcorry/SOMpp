@@ -138,7 +138,7 @@ void Parser::genPushVariable(MethodGenerationContext& mgenc,
     // pushed on the stack is a local variable, argument, or object field. This
     // is done by examining all available lexical contexts, starting with the
     // innermost (i.e., the one represented by mgenc).
-    int64_t index = 0;
+    som_int_t index = 0;
     int context = 0;
     bool is_argument = false;
 
@@ -164,7 +164,7 @@ void Parser::genPopVariable(MethodGenerationContext& mgenc,
     // popped off the stack is a local variable, argument, or object field. This
     // is done by examining all available lexical contexts, starting with the
     // innermost (i.e., the one represented by mgenc).
-    int64_t index = 0;
+    som_int_t index = 0;
     int context = 0;
     bool is_argument = false;
 
@@ -827,7 +827,7 @@ void Parser::literalArray(MethodGenerationContext& mgenc) {
     EmitPUSHCONSTANT(mgenc, arraySizeLiteralIndex);
     EmitSEND(mgenc, *this, newMessage);
 
-    int64_t i = 1;
+    som_int_t i = 1;
 
     while (sym != EndTerm) {
         vm_oop_t pushIndex = NEW_INT(i);

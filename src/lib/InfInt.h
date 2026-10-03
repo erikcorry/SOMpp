@@ -741,6 +741,12 @@ inline bool InfInt::isZero() const {
 }
 
 inline bool InfInt::isWithinSmallIntRange() const {
+    if constexpr (sizeof(intptr_t) < sizeof(int64_t)) {
+        // small integers are pointer sized, see som_int_t in ObjectFormats.h
+        return *this >= InfInt((int64_t)(INTPTR_MIN >> 1)) &&
+               *this <= InfInt((int64_t)(INTPTR_MAX >> 1));
+    }
+
     // this is implemented based on the <= and >= operators
     // and the known encoding of VMTAGGEDINTEGER_MAX and VMTAGGEDINTEGER_MIN as
     // an InfInt

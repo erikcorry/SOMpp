@@ -50,7 +50,7 @@ public:
     VMSymbol* GetSuperName() { return superName; };
     [[nodiscard]] bool IsClassSide() const { return classSide; };
 
-    int64_t GetFieldIndex(VMSymbol* field);
+    som_int_t GetFieldIndex(VMSymbol* field);
 
     void SetInstanceFieldsOfSuper(VMArray* fields);
     void SetClassFieldsOfSuper(VMArray* fields);

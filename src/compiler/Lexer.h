@@ -137,7 +137,7 @@ public:
     }
 
 private:
-    int64_t fillBuffer();
+    ptrdiff_t fillBuffer();
     void skipWhiteSpace();
     void skipComment();
 

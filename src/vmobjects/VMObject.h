@@ -95,7 +95,7 @@ public:
 
     ~VMObject() override = default;
 
-    [[nodiscard]] int64_t GetHash() const override { return hash; }
+    [[nodiscard]] som_int_t GetHash() const override { return hash; }
 
     [[nodiscard]] inline VMClass* GetClass() const override {
         assert(IsValidObject((VMObject*)load_ptr(clazz)));
@@ -159,7 +159,7 @@ protected:
     void nilInitializeFieldsFrom(size_t nillableFrom);
 
     // VMObject essentials
-    int64_t hash;
+    som_int_t hash;
 
     make_testable(public);
 

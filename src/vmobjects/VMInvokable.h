@@ -42,7 +42,7 @@ public:
     explicit VMInvokable(VMSymbol* sig)
         : hash((intptr_t)this), signature(store_with_separate_barrier(sig)) {}
 
-    [[nodiscard]] int64_t GetHash() const override { return hash; }
+    [[nodiscard]] som_int_t GetHash() const override { return hash; }
 
     virtual VMFrame* Invoke(VMFrame*) = 0;
     virtual VMFrame* Invoke1(VMFrame*) = 0;
@@ -82,7 +82,7 @@ public:
 protected:
     make_testable(public);
 
-    int64_t hash;
+    som_int_t hash;
 
     GCSymbol* signature;
     GCClass* holder{nullptr};

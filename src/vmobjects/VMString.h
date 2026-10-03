@@ -42,14 +42,14 @@ public:
         }
     }
 
-    [[nodiscard]] int64_t GetHash() const override {
-        uint64_t hash = 5381U;
+    [[nodiscard]] som_int_t GetHash() const override {
+        som_uint_t hash = 5381U;
 
         for (size_t i = 0; i < length; i++) {
             hash = ((hash << 5U) + hash) + chars[i];
         }
 
-        return (int64_t)hash;
+        return (som_int_t)hash;
     }
 
     /**

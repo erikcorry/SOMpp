@@ -77,7 +77,7 @@ bool ClassGenerationContext::HasField(VMSymbol* field) {
     return Contains(instanceFields, field);
 }
 
-int64_t ClassGenerationContext::GetFieldIndex(VMSymbol* field) {
+som_int_t ClassGenerationContext::GetFieldIndex(VMSymbol* field) {
     if (IsClassSide()) {
         return IndexOf(classFields, field);
     }

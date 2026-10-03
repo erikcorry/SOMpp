@@ -10,31 +10,31 @@
 
 static vm_oop_t vecNew(vm_oop_t clazz) {
     auto* classPtr = static_cast<VMClass*>(clazz);
-    int64_t const size = 50;
+    som_int_t const size = 50;
     VMVector* vec = Universe::NewVector(size, classPtr);
     return vec;
 }
 
 static vm_oop_t vecNewSize(vm_oop_t clazz, vm_oop_t arg) {
-    int64_t const size = SMALL_INT_VAL(arg);
+    som_int_t const size = SMALL_INT_VAL(arg);
     return Universe::NewVector(size, static_cast<VMClass*>(clazz));
 }
 
 static vm_oop_t vecAt(vm_oop_t obj, vm_oop_t arg) {
     auto* self = static_cast<VMVector*>(obj);
-    int64_t const index = SMALL_INT_VAL(arg);
+    som_int_t const index = SMALL_INT_VAL(arg);
     return self->GetStorage(index);
 }
 
 static vm_oop_t vecAtAWFY(vm_oop_t obj, vm_oop_t arg) {
     auto* self = static_cast<VMVector*>(obj);
-    int64_t const index = SMALL_INT_VAL(arg);
+    som_int_t const index = SMALL_INT_VAL(arg);
     return self->AWFYGetStorage(index);
 }
 
 static vm_oop_t vecAtPut(vm_oop_t obj, vm_oop_t at, vm_oop_t put) {
     auto* self = static_cast<VMVector*>(obj);  // Cast itself as a VMVector
-    int64_t const index = SMALL_INT_VAL(at);   // Set the index looking for
+    som_int_t const index = SMALL_INT_VAL(at);   // Set the index looking for
     // Call method to set the value at index. That deals with 1to0 indexing
     // conversion
     return self->SetStorage(index, put);
@@ -42,7 +42,7 @@ static vm_oop_t vecAtPut(vm_oop_t obj, vm_oop_t at, vm_oop_t put) {
 
 static vm_oop_t vecAtPutAWFY(vm_oop_t obj, vm_oop_t at, vm_oop_t put) {
     auto* self = static_cast<VMVector*>(obj);  // Cast itself as a VMVector
-    int64_t const index = SMALL_INT_VAL(at);   // Set the index looking for
+    som_int_t const index = SMALL_INT_VAL(at);   // Set the index looking for
     // Call method to set the value at index. That does not deal with 1to0
     // indexing conversion
     self->SetStorageAWFY(index, put);

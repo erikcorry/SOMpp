@@ -295,8 +295,8 @@ int8_t MethodGenerationContext::FindLiteralIndex(vm_oop_t lit) {
     return (int8_t)IndexOf(literals, lit);
 }
 
-int64_t MethodGenerationContext::GetFieldIndex(VMSymbol* field) {
-    int64_t const idx = holderGenc.GetFieldIndex(field);
+som_int_t MethodGenerationContext::GetFieldIndex(VMSymbol* field) {
+    som_int_t const idx = holderGenc.GetFieldIndex(field);
     return idx;
 }
 
@@ -310,8 +310,8 @@ static bool Contains(std::vector<Variable>& vec, std::string& name) {
     return false;
 }
 
-static int64_t IndexOf(std::vector<Variable>& vec, std::string& name) {
-    int64_t i = 0;
+static som_int_t IndexOf(std::vector<Variable>& vec, std::string& name) {
+    som_int_t i = 0;
     for (Variable const& v : vec) {
         if (v.IsNamed(name)) {
             return i;
@@ -322,7 +322,7 @@ static int64_t IndexOf(std::vector<Variable>& vec, std::string& name) {
     return -1;
 }
 
-bool MethodGenerationContext::FindVar(std::string& var, int64_t* index,
+bool MethodGenerationContext::FindVar(std::string& var, som_int_t* index,
                                       int* context, bool* isArgument) {
     *index = IndexOf(locals, var);
     if (*index == -1) {
@@ -394,7 +394,7 @@ uint8_t MethodGenerationContext::AddLiteral(vm_oop_t lit,
 
 uint8_t MethodGenerationContext::AddLiteralIfAbsent(vm_oop_t lit,
                                                     const Parser& parser) {
-    int64_t const idx = IndexOf(literals, lit);
+    som_int_t const idx = IndexOf(literals, lit);
     if (idx != -1) {
         assert(idx < 256);
         assert(idx >= 0 && (size_t)idx < literals.size() &&
@@ -428,7 +428,7 @@ bool MethodGenerationContext::HasBytecodes() {
     return !bytecode.empty();
 }
 
-void MethodGenerationContext::AddBytecode(uint8_t bc, int64_t stackEffect) {
+void MethodGenerationContext::AddBytecode(uint8_t bc, som_int_t stackEffect) {
     currentStackDepth += stackEffect;
     maxStackDepth = max(maxStackDepth, currentStackDepth);
 

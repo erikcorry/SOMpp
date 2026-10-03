@@ -22,7 +22,7 @@ public:
     /** Size in bytes of the object. */
     [[nodiscard]] inline size_t GetObjectSize() const override { return size; }
 
-    [[nodiscard]] inline int64_t GetHash() const override {
+    [[nodiscard]] inline som_int_t GetHash() const override {
         ErrorPrint("this object doesn't support GetHash\n");
         return -1;
     }

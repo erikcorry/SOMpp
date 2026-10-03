@@ -52,11 +52,11 @@ public:
     VMInvokable* AssemblePrimitive(bool classSide);
 
     int8_t FindLiteralIndex(vm_oop_t lit);
-    bool FindVar(std::string& var, int64_t* index, int* context,
+    bool FindVar(std::string& var, som_int_t* index, int* context,
                  bool* isArgument);
     bool HasField(VMSymbol* field);
 
-    int64_t GetFieldIndex(VMSymbol* field);
+    som_int_t GetFieldIndex(VMSymbol* field);
 
     void SetSignature(VMSymbol* sig);
 
@@ -95,7 +95,7 @@ public:
     void RemoveLastPopForBlockLocalReturn();
 
     uint8_t GetNumberOfArguments();
-    void AddBytecode(uint8_t bc, int64_t stackEffect);
+    void AddBytecode(uint8_t bc, som_int_t stackEffect);
     void AddBytecodeArgument(uint8_t arg);
     size_t AddBytecodeArgumentAndGetIndex(size_t bc);
 

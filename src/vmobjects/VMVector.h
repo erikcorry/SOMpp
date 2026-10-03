@@ -19,8 +19,8 @@ public:
     /* Getter Methods */
 
     /* handles 1 - 0 indexing give the SOM index to this function */
-    [[nodiscard]] vm_oop_t GetStorage(int64_t index);
-    [[nodiscard]] vm_oop_t AWFYGetStorage(int64_t index);
+    [[nodiscard]] vm_oop_t GetStorage(som_int_t index);
+    [[nodiscard]] vm_oop_t AWFYGetStorage(som_int_t index);
 
     /* Return the first element */
     [[nodiscard]] inline vm_oop_t GetFirst() {
@@ -30,7 +30,7 @@ public:
 
     /* Return the last element */
     [[nodiscard]] inline vm_oop_t GetLast() {
-        const int64_t last = SMALL_INT_VAL(load_ptr(this->last));
+        const som_int_t last = SMALL_INT_VAL(load_ptr(this->last));
         vm_oop_t returned = GetStorage(last - 1);
         return returned;
     }
@@ -38,8 +38,8 @@ public:
     /* Setter Methods */
 
     /* handles 1 - 0 indexing give the SOM index to this function */
-    vm_oop_t SetStorage(int64_t index, vm_oop_t value);
-    void SetStorageAWFY(int64_t index, vm_oop_t value);
+    vm_oop_t SetStorage(som_int_t index, vm_oop_t value);
+    void SetStorageAWFY(som_int_t index, vm_oop_t value);
 
     /* Append an item to end of Vector */
     void Append(vm_oop_t value);
@@ -52,7 +52,7 @@ public:
 
     vm_oop_t RemoveObj(vm_oop_t other);
 
-    vm_oop_t remove(int64_t index);
+    vm_oop_t remove(som_int_t index);
 
     void RemoveAll();
 
@@ -60,8 +60,8 @@ public:
 
     /* Size of the Vector */
     [[nodiscard]] inline vm_oop_t Size() {
-        const int64_t first = SMALL_INT_VAL(load_ptr(this->first));
-        const int64_t last = SMALL_INT_VAL(load_ptr(this->last));
+        const som_int_t first = SMALL_INT_VAL(load_ptr(this->first));
+        const som_int_t last = SMALL_INT_VAL(load_ptr(this->last));
         return NEW_INT(last - first);
     }
 

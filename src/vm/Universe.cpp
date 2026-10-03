@@ -363,7 +363,7 @@ void Universe::initialize(int32_t _argc, char** _argv) {
 
 #if CACHE_INTEGER
     // create prebuilt integers
-    for (int64_t it = INT_CACHE_MIN_VALUE; it <= INT_CACHE_MAX_VALUE; ++it) {
+    for (som_int_t it = INT_CACHE_MIN_VALUE; it <= INT_CACHE_MAX_VALUE; ++it) {
         prebuildInts[(size_t)(it - INT_CACHE_MIN_VALUE)] =
             store_root(new (GetHeap<HEAP_CLS>(), 0) VMInteger(it));
     }
@@ -828,7 +828,7 @@ VMObject* Universe::NewInstanceWithoutFields() {
     return result;
 }
 
-VMInteger* Universe::NewInteger(int64_t value) {
+VMInteger* Universe::NewInteger(som_int_t value) {
     recordStat(IntegerHistogram, value);
 
 #if CACHE_INTEGER
