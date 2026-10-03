@@ -116,7 +116,7 @@ vm_oop_t VMVector::RemoveLast() {
     // Throw an error correctly (error: method in som)
     if (last == first) {
         // VMSafe*Primitive::Invoke will push it right back to the same frame
-        VMFrame* frame = Interpreter::GetFrame();
+        VMFrame* frame = GetInterpreter()->GetFrame();
         vm_oop_t errorMsg =
             Universe::NewString("Vector: error when removing Last item.");
         vm_oop_t args[1] = {errorMsg};
@@ -134,7 +134,7 @@ vm_oop_t VMVector::RemoveFirst() {
     // Throw an error correctly (error: method in som)
     if (first >= SMALL_INT_VAL(load_ptr(this->last))) {
         // VMSafe*Primitive::Invoke will push it right back to the same frame
-        VMFrame* frame = Interpreter::GetFrame();
+        VMFrame* frame = GetInterpreter()->GetFrame();
         vm_oop_t errorMsg =
             Universe::NewString("Vector: error when removing First item.");
         vm_oop_t args[1] = {errorMsg};
@@ -210,7 +210,7 @@ vm_oop_t VMVector::copyStorageArray() {
 /* Rename as a more specific error function */
 vm_oop_t VMVector::IndexOutOfBounds(size_t maxSize, size_t indexAccessed) {
     // VMSafe*Primitive::Invoke will push it right back to the same frame
-    VMFrame* frame = Interpreter::GetFrame();
+    VMFrame* frame = GetInterpreter()->GetFrame();
     char message[64];
     snprintf(message, sizeof(message),
              "Vector[1..%zu]: Index %zu out of bounds", maxSize,
@@ -222,7 +222,7 @@ vm_oop_t VMVector::IndexOutOfBounds(size_t maxSize, size_t indexAccessed) {
 }
 
 vm_oop_t VMVector::IndexOutOfBoundsAWFY() {
-    VMFrame* frame = Interpreter::GetFrame();
+    VMFrame* frame = GetInterpreter()->GetFrame();
     this->Send("println", nullptr, 1);
     return frame->Pop();
 }

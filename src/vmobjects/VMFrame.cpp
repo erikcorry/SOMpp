@@ -271,5 +271,5 @@ std::string VMFrame::AsDebugString() const {
 
 void VMFrame::ResetBytecodeIndex() {
     bytecodeIndex = 0;
-    Interpreter::ResetBytecodeIndex(this);
+    GetInterpreter()->ResetBytecodeIndex(this);
 }

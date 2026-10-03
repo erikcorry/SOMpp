@@ -47,82 +47,93 @@
     }
 
 class Interpreter {
+    // The fields come first, and the most used first: fructus has short
+    // encodings for the offsets 0, 2, 4, 6, and 8.
+
+    // The following two fields cache main parts of the current execution
+    // context
+    size_t bytecodeIndexGlobal;
+    uint8_t* currentBytecodes;
+
+    VMFrame* frame;
+    VMMethod* method;
+
 public:
-    static vm_oop_t Start();
+    vm_oop_t Start();
 
-    static VMFrame* PushNewFrame(VMMethod* method);
-    static void SetFrame(VMFrame* frm);
+    VMFrame* PushNewFrame(VMMethod* method);
+    void SetFrame(VMFrame* frm);
 
-    static inline VMFrame* GetFrame() { return frame; }
+    inline VMFrame* GetFrame() { return frame; }
 
-    static VMMethod* GetMethod();
-    static uint8_t* GetBytecodes();
-    static void WalkGlobals(walk_heap_fn /*walk*/);
+    VMMethod* GetMethod();
+    uint8_t* GetBytecodes();
+    void WalkGlobals(walk_heap_fn /*walk*/);
 
-    static void SendUnknownGlobal(VMSymbol* globalName);
+    void SendUnknownGlobal(VMSymbol* globalName);
 
-    static inline size_t GetBytecodeIndex() { return bytecodeIndexGlobal; }
+    inline size_t GetBytecodeIndex() { return bytecodeIndexGlobal; }
 
-    static void ResetBytecodeIndex(VMFrame* forFrame) {
+    void ResetBytecodeIndex(VMFrame* forFrame) {
         assert(frame == forFrame);
         assert(forFrame != nullptr);
         bytecodeIndexGlobal = 0;
     }
 
 private:
-    static vm_oop_t GetSelf();
-
-    static VMFrame* frame;
-    static VMMethod* method;
-
-    // The following three variables are used to cache main parts of the
-    // current execution context
-    static size_t bytecodeIndexGlobal;
-    static uint8_t* currentBytecodes;
+    vm_oop_t GetSelf();
 
     static constexpr const char* unknownGlobal = "unknownGlobal:";
     static constexpr const char* doesNotUnderstand =
         "doesNotUnderstand:arguments:";
     static constexpr const char* escapedBlock = "escapedBlock:";
 
-    static void startGC();
+    void startGC();
 
-    static VMFrame* popFrame();
-    static void popFrameAndPushResult(vm_oop_t result);
+    VMFrame* popFrame();
+    void popFrameAndPushResult(vm_oop_t result);
 
-    static void send(VMSymbol* signature, VMClass* receiverClass);
+    void send(VMSymbol* signature, VMClass* receiverClass);
 
-    static void triggerDoesNotUnderstand(VMSymbol* signature);
+    void triggerDoesNotUnderstand(VMSymbol* signature);
 
-    static void doDup();
-    static void doPushLocal(size_t bytecodeIndex);
-    static void doPushLocalWithIndex(uint8_t localIndex);
-    static void doReturnFieldWithIndex(uint8_t fieldIndex);
-    static void doPushArgument(size_t bytecodeIndex);
-    static void doPushField(size_t bytecodeIndex);
-    static void doPushFieldWithIndex(uint8_t fieldIndex);
-    static void doPushBlock(size_t bytecodeIndex);
+    void doDup();
+    void doPushLocal(size_t bytecodeIndex);
+    void doPushLocalWithIndex(uint8_t localIndex);
+    void doReturnFieldWithIndex(uint8_t fieldIndex);
+    void doPushArgument(size_t bytecodeIndex);
+    void doPushField(size_t bytecodeIndex);
+    void doPushFieldWithIndex(uint8_t fieldIndex);
+    void doPushBlock(size_t bytecodeIndex);
 
-    static inline void doPushConstant(size_t bytecodeIndex) {
+    inline void doPushConstant(size_t bytecodeIndex) {
         vm_oop_t constant = method->GetConstant(bytecodeIndex);
         GetFrame()->Push(constant);
     }
 
-    static void doPushGlobal(size_t bytecodeIndex);
-    static void doPop();
-    static void doPopLocal(size_t bytecodeIndex);
-    static void doPopLocalWithIndex(uint8_t localIndex);
-    static void doPopArgument(size_t bytecodeIndex);
-    static void doPopField(size_t bytecodeIndex);
-    static void doPopFieldWithIndex(uint8_t fieldIndex);
-    static void doSend(size_t bytecodeIndex);
-    static void doUnarySend(size_t bytecodeIndex);
-    static void doSuperSend(size_t bytecodeIndex);
-    static void doReturnLocal();
-    static void doReturnNonLocal();
-    static void doInc();
-    static void doDec();
-    static void doIncField(uint8_t fieldIndex);
-    static void doIncFieldPush(uint8_t fieldIndex);
-    static bool checkIsGreater();
+    void doPushGlobal(size_t bytecodeIndex);
+    void doPop();
+    void doPopLocal(size_t bytecodeIndex);
+    void doPopLocalWithIndex(uint8_t localIndex);
+    void doPopArgument(size_t bytecodeIndex);
+    void doPopField(size_t bytecodeIndex);
+    void doPopFieldWithIndex(uint8_t fieldIndex);
+    void doSend(size_t bytecodeIndex);
+    void doUnarySend(size_t bytecodeIndex);
+    void doSuperSend(size_t bytecodeIndex);
+    void doReturnLocal();
+    void doReturnNonLocal();
+    void doInc();
+    void doDec();
+    void doIncField(uint8_t fieldIndex);
+    void doIncFieldPush(uint8_t fieldIndex);
+    bool checkIsGreater();
 };
+
+/** There is one interpreter. It has no constructor, so it needs no static
+ * initialization, and it starts out zeroed. */
+extern Interpreter theInterpreter ZP;
+
+inline Interpreter* GetInterpreter() {
+    return &theInterpreter;
+}

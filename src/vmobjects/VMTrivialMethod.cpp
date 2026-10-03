@@ -106,7 +106,7 @@ VMFrame* VMGlobalReturn::Invoke(VMFrame* frame) {
     if (value != nullptr) {
         frame->Push(value);
     } else {
-        Interpreter::SendUnknownGlobal(load_ptr(globalName));
+        GetInterpreter()->SendUnknownGlobal(load_ptr(globalName));
     }
 
     return nullptr;
@@ -120,7 +120,7 @@ VMFrame* VMGlobalReturn::Invoke1(VMFrame* frame) {
     if (value != nullptr) {
         frame->Push(value);
     } else {
-        Interpreter::SendUnknownGlobal(load_ptr(globalName));
+        GetInterpreter()->SendUnknownGlobal(load_ptr(globalName));
     }
 
     return nullptr;

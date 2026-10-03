@@ -20,7 +20,7 @@
 
 void AbstractVMObject::Send(const char* selectorString,
                             vm_oop_t* arguments, size_t argc) {
-    VMFrame* frame = Interpreter::GetFrame();
+    VMFrame* frame = GetInterpreter()->GetFrame();
     VMSymbol* selector = SymbolFor(selectorString);
     frame->Push(this);
 

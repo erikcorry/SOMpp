@@ -170,6 +170,17 @@ typedef PagedMarkSweepHeap HEAP_CLS;
 #endif
 
 /**
+ * ZP puts a variable with static storage into fructus' zero page, where it
+ * can be reached relative to one base register, instead of loading its full
+ * 16-bit address for every access.
+ */
+#ifdef FRUCTUS
+  #define ZP __attribute__((zp))
+#else
+  #define ZP
+#endif
+
+/**
  * AsDebugString() is only available in debug builds. Subclasses of
  * AbstractVMObject declare it with DECLARE_AS_DEBUG_STRING(override) or
  * DECLARE_AS_DEBUG_STRING(final), and define it inside #if DEBUG.

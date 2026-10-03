@@ -159,9 +159,9 @@ void VMMethod::SetCachedFrame(VMFrame* frame) {
 VMFrame* VMMethod::Invoke(VMFrame* frame) {
     // since an invokable is able to change/use the frame, we have to write
     // cached values before, and read cached values after calling
-    frame->SetBytecodeIndex(Interpreter::GetBytecodeIndex());
+    frame->SetBytecodeIndex(GetInterpreter()->GetBytecodeIndex());
 
-    VMFrame* frm = Interpreter::PushNewFrame(this);
+    VMFrame* frm = GetInterpreter()->PushNewFrame(this);
     frm->CopyArgumentsFrom(frame);
     return frm;
 }
@@ -169,9 +169,9 @@ VMFrame* VMMethod::Invoke(VMFrame* frame) {
 VMFrame* VMMethod::Invoke1(VMFrame* frame) {
     // since an invokable is able to change/use the frame, we have to write
     // cached values before, and read cached values after calling
-    frame->SetBytecodeIndex(Interpreter::GetBytecodeIndex());
+    frame->SetBytecodeIndex(GetInterpreter()->GetBytecodeIndex());
 
-    VMFrame* frm = Interpreter::PushNewFrame(this);
+    VMFrame* frm = GetInterpreter()->PushNewFrame(this);
     frm->SetArgument(0, frame->Top());
     return frm;
 }

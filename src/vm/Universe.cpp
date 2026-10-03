@@ -354,7 +354,7 @@ vm_oop_t Universe::interpretMethod(VMObject* receiver, VMInvokable* initialize,
                                    VMArray* argumentsArray) {
     VMMethod* bootstrapMethod = createBootstrapMethod(load_ptr(systemClass), 2);
 
-    VMFrame* bootstrapFrame = Interpreter::PushNewFrame(bootstrapMethod);
+    VMFrame* bootstrapFrame = GetInterpreter()->PushNewFrame(bootstrapMethod);
     for (size_t argIdx = 0; argIdx < bootstrapMethod->GetNumberOfArguments();
          argIdx += 1) {
         bootstrapFrame->SetArgument(argIdx, 0, load_ptr(nilObject));
@@ -368,7 +368,7 @@ vm_oop_t Universe::interpretMethod(VMObject* receiver, VMInvokable* initialize,
 
     initialize->Invoke(bootstrapFrame);
 
-    return Interpreter::Start();
+    return GetInterpreter()->Start();
 }
 
 #ifdef FRUCTUS
@@ -1034,7 +1034,7 @@ void Universe::WalkGlobals(walk_heap_fn walk) {
     }
 #endif
 
-    Interpreter::WalkGlobals(walk);
+    GetInterpreter()->WalkGlobals(walk);
 }
 
 #ifdef FRUCTUS

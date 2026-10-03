@@ -55,13 +55,7 @@
 #include "../vmobjects/VMSymbol.h"
 
 
-VMFrame* Interpreter::frame = nullptr;
-VMMethod* Interpreter::method = nullptr;
-
-// The following three variables are used to cache main parts of the
-// current execution context
-size_t Interpreter::bytecodeIndexGlobal;
-uint8_t* Interpreter::currentBytecodes;
+Interpreter theInterpreter ZP;
 
 vm_oop_t Interpreter::Start() {
 #ifdef BYTECODE_HEATMAP

@@ -68,7 +68,7 @@ void Shell::Start() {
     cout << "SOM Shell. Type \"" << QUIT_CMD << "\" to exit.\n";
 
     // Create a fake bootstrap frame
-    currentFrame = Interpreter::PushNewFrame(GetBootstrapMethod());
+    currentFrame = GetInterpreter()->PushNewFrame(GetBootstrapMethod());
     // Remember the first bytecode index, e.g. index of the halt instruction
     bytecodeIndex = currentFrame->GetBytecodeIndex();
 
@@ -105,7 +105,7 @@ void Shell::Start() {
             continue;
         }
 
-        currentFrame = Interpreter::GetFrame();
+        currentFrame = GetInterpreter()->GetFrame();
 
         // Go back, so we will evaluate the bootstrap frames halt
         // instruction again
@@ -125,7 +125,7 @@ void Shell::Start() {
 
         // Start the Interpreter
 
-        Interpreter::Start();
+        GetInterpreter()->Start();
 
         // Save the result of the run method
         it = currentFrame->Pop();
