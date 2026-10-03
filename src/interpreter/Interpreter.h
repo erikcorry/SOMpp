@@ -33,28 +33,33 @@
 #include "../vmobjects/VMFrame.h"
 #include "../vmobjects/VMMethod.h"
 
-#define DISPATCH_NOGC()                                           \
-    {                                                             \
-        goto* loopTargets[currentBytecodes[bytecodeIndexGlobal]]; \
+// The program counter, pc, is a local of Start() pointing into the bytecodes
+// of the running method, so that it can stay in a register. The frame's
+// bytecode index is only up to date after SAVE_PC(): it must be saved before
+// anything that may look at the frame, switch frames or move the method,
+// and reloaded after anything that may have switched frames or moved it.
+#define SAVE_PC() frame->SetBytecodeIndex(pc - method->GetBytecodes())
+
+#define RELOAD_PC() pc = method->GetBytecodes() + frame->GetBytecodeIndex()
+
+#define DISPATCH_NOGC()         \
+    {                           \
+        goto* loopTargets[*pc]; \
     }
 
-#define DISPATCH_GC()                                             \
-    {                                                             \
-        if (GetHeap<HEAP_CLS>()->isCollectionTriggered()) {       \
-            startGC();                                            \
-        }                                                         \
-        goto* loopTargets[currentBytecodes[bytecodeIndexGlobal]]; \
+#define DISPATCH_GC()                                       \
+    {                                                       \
+        if (GetHeap<HEAP_CLS>()->isCollectionTriggered()) { \
+            SAVE_PC();                                      \
+            startGC();                                      \
+            RELOAD_PC();                                    \
+        }                                                   \
+        goto* loopTargets[*pc];                             \
     }
 
 class Interpreter {
     // The fields come first, and the most used first: fructus has short
     // encodings for the offsets 0, 2, 4, 6, and 8.
-
-    // The following two fields cache main parts of the current execution
-    // context
-    size_t bytecodeIndexGlobal;
-    uint8_t* currentBytecodes;
-
     VMFrame* frame;
     VMMethod* method;
 
@@ -71,14 +76,6 @@ public:
     void WalkGlobals(walk_heap_fn /*walk*/);
 
     void SendUnknownGlobal(VMSymbol* globalName);
-
-    inline size_t GetBytecodeIndex() { return bytecodeIndexGlobal; }
-
-    void ResetBytecodeIndex(VMFrame* forFrame) {
-        assert(frame == forFrame);
-        assert(forFrame != nullptr);
-        bytecodeIndexGlobal = 0;
-    }
 
 private:
     vm_oop_t GetSelf();
@@ -98,29 +95,29 @@ private:
     void triggerDoesNotUnderstand(VMSymbol* signature);
 
     void doDup();
-    void doPushLocal(size_t bytecodeIndex);
+    void doPushLocal(uint8_t bc1, uint8_t bc2);
     void doPushLocalWithIndex(uint8_t localIndex);
     void doReturnFieldWithIndex(uint8_t fieldIndex);
-    void doPushArgument(size_t bytecodeIndex);
-    void doPushField(size_t bytecodeIndex);
+    void doPushArgument(uint8_t argIndex, uint8_t contextLevel);
+    void doPushField(uint8_t fieldIndex);
     void doPushFieldWithIndex(uint8_t fieldIndex);
-    void doPushBlock(size_t bytecodeIndex);
+    void doPushBlock(uint8_t constantIndex);
 
-    inline void doPushConstant(size_t bytecodeIndex) {
-        vm_oop_t constant = method->GetConstant(bytecodeIndex);
+    inline void doPushConstant(uint8_t constantIndex) {
+        vm_oop_t constant = method->GetConstantWithIndex(constantIndex);
         GetFrame()->Push(constant);
     }
 
-    void doPushGlobal(size_t bytecodeIndex);
+    bool doPushGlobal(uint8_t constantIndex);
     void doPop();
-    void doPopLocal(size_t bytecodeIndex);
+    void doPopLocal(uint8_t bc1, uint8_t bc2);
     void doPopLocalWithIndex(uint8_t localIndex);
-    void doPopArgument(size_t bytecodeIndex);
-    void doPopField(size_t bytecodeIndex);
+    void doPopArgument(uint8_t bc1, uint8_t bc2);
+    void doPopField(uint8_t fieldIndex);
     void doPopFieldWithIndex(uint8_t fieldIndex);
-    void doSend(size_t bytecodeIndex);
-    void doUnarySend(size_t bytecodeIndex);
-    void doSuperSend(size_t bytecodeIndex);
+    void doSend(uint8_t constantIndex);
+    void doUnarySend(uint8_t constantIndex);
+    void doSuperSend(uint8_t constantIndex);
     void doReturnLocal();
     void doReturnNonLocal();
     void doInc();

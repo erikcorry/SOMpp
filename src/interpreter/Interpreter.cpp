@@ -54,24 +54,24 @@
 #include "../vmobjects/VMObject.h"
 #include "../vmobjects/VMSymbol.h"
 
-
 Interpreter theInterpreter ZP;
 
 vm_oop_t Interpreter::Start() {
 #ifdef BYTECODE_HEATMAP
-  #define HEATMAP_INC() method->heatmap[bytecodeIndexGlobal]++
+  #define HEATMAP_INC() method->heatmap[pc - method->GetBytecodes()]++
 #else
   #define HEATMAP_INC() ((void)0)
 #endif
-#define PROLOGUE(bcCount)                 \
-    {                                     \
-        HEATMAP_INC();                    \
-        bytecodeIndexGlobal += (bcCount); \
+#define PROLOGUE(bcCount) \
+    {                     \
+        HEATMAP_INC();    \
+        pc += (bcCount);  \
     }
 
     // initialization
     method = GetMethod();
-    currentBytecodes = GetBytecodes();
+    uint8_t* pc = nullptr;
+    RELOAD_PC();
 
     void const* const loopTargets[] = {&&LABEL_BC_HALT,
                                        &&LABEL_BC_DUP,
@@ -141,12 +141,13 @@ vm_oop_t Interpreter::Start() {
                                        &&LABEL_BC_JUMP2_IF_GREATER,
                                        &&LABEL_BC_JUMP2_BACKWARD};
 
-    goto* loopTargets[currentBytecodes[bytecodeIndexGlobal]];
+    goto* loopTargets[*pc];
 
     //
     // THIS IS THE former interpretation loop
 LABEL_BC_HALT:
     PROLOGUE(1);
+    SAVE_PC();
     return GetFrame()->GetStackElement(0);  // handle the halt bytecode
 
 LABEL_BC_DUP:
@@ -164,7 +165,7 @@ LABEL_BC_DUP_SECOND:
 
 LABEL_BC_PUSH_LOCAL:
     PROLOGUE(3);
-    doPushLocal(bytecodeIndexGlobal - 3);
+    doPushLocal(pc[-2], pc[-1]);
     DISPATCH_NOGC();
 
 LABEL_BC_PUSH_LOCAL_0:
@@ -184,7 +185,7 @@ LABEL_BC_PUSH_LOCAL_2:
 
 LABEL_BC_PUSH_ARGUMENT:
     PROLOGUE(3);
-    doPushArgument(bytecodeIndexGlobal - 3);
+    doPushArgument(pc[-2], pc[-1]);
     DISPATCH_NOGC();
 
 LABEL_BC_PUSH_SELF:
@@ -213,7 +214,7 @@ LABEL_BC_PUSH_ARG_2:
 
 LABEL_BC_PUSH_FIELD:
     PROLOGUE(2);
-    doPushField(bytecodeIndexGlobal - 2);
+    doPushField(pc[-1]);
     DISPATCH_NOGC();
 
 LABEL_BC_PUSH_FIELD_0:
@@ -228,12 +229,12 @@ LABEL_BC_PUSH_FIELD_1:
 
 LABEL_BC_PUSH_BLOCK:
     PROLOGUE(2);
-    doPushBlock(bytecodeIndexGlobal - 2);
+    doPushBlock(pc[-1]);
     DISPATCH_GC();
 
 LABEL_BC_PUSH_CONSTANT:
     PROLOGUE(2);
-    doPushConstant(bytecodeIndexGlobal - 2);
+    doPushConstant(pc[-1]);
     DISPATCH_NOGC();
 
 LABEL_BC_PUSH_CONSTANT_0:
@@ -285,7 +286,13 @@ LABEL_BC_PUSH_NIL:
 
 LABEL_BC_PUSH_GLOBAL:
     PROLOGUE(2);
-    doPushGlobal(bytecodeIndexGlobal - 2);
+    if (!doPushGlobal(pc[-1])) {
+        // sends #unknownGlobal:, which pushes a new frame
+        SAVE_PC();
+        SendUnknownGlobal(
+            static_cast<VMSymbol*>(method->GetConstantWithIndex(pc[-1])));
+        RELOAD_PC();
+    }
     DISPATCH_GC();
 
 LABEL_BC_POP:
@@ -295,7 +302,7 @@ LABEL_BC_POP:
 
 LABEL_BC_POP_LOCAL:
     PROLOGUE(3);
-    doPopLocal(bytecodeIndexGlobal - 3);
+    doPopLocal(pc[-2], pc[-1]);
     DISPATCH_NOGC();
 
 LABEL_BC_POP_LOCAL_0:
@@ -315,12 +322,12 @@ LABEL_BC_POP_LOCAL_2:
 
 LABEL_BC_POP_ARGUMENT:
     PROLOGUE(3);
-    doPopArgument(bytecodeIndexGlobal - 3);
+    doPopArgument(pc[-2], pc[-1]);
     DISPATCH_NOGC();
 
 LABEL_BC_POP_FIELD:
     PROLOGUE(2);
-    doPopField(bytecodeIndexGlobal - 2);
+    doPopField(pc[-1]);
     DISPATCH_NOGC();
 
 LABEL_BC_POP_FIELD_0:
@@ -335,27 +342,35 @@ LABEL_BC_POP_FIELD_1:
 
 LABEL_BC_SEND:
     PROLOGUE(2);
-    doSend(bytecodeIndexGlobal - 2);
+    SAVE_PC();
+    doSend(pc[-1]);
+    RELOAD_PC();
     DISPATCH_GC();
 
 LABEL_BC_SEND_1:
     PROLOGUE(2);
-    doUnarySend(bytecodeIndexGlobal - 2);
+    SAVE_PC();
+    doUnarySend(pc[-1]);
+    RELOAD_PC();
     DISPATCH_GC();
 
 LABEL_BC_SUPER_SEND:
     PROLOGUE(2);
-    doSuperSend(bytecodeIndexGlobal - 2);
+    SAVE_PC();
+    doSuperSend(pc[-1]);
+    RELOAD_PC();
     DISPATCH_GC();
 
 LABEL_BC_RETURN_LOCAL:
     PROLOGUE(1);
     doReturnLocal();
+    RELOAD_PC();
     DISPATCH_NOGC();
 
 LABEL_BC_RETURN_NON_LOCAL:
     PROLOGUE(1);
     doReturnNonLocal();
+    RELOAD_PC();
     DISPATCH_NOGC();
 
 LABEL_BC_RETURN_SELF: {
@@ -363,22 +378,26 @@ LABEL_BC_RETURN_SELF: {
     assert(GetFrame()->GetContext() == nullptr &&
            "RETURN_SELF is not allowed in blocks");
     popFrameAndPushResult(GetFrame()->GetArgumentInCurrentContext(0));
+    RELOAD_PC();
     DISPATCH_NOGC();
 }
 
 LABEL_BC_RETURN_FIELD_0:
     PROLOGUE(1);
     doReturnFieldWithIndex(0);
+    RELOAD_PC();
     DISPATCH_NOGC();
 
 LABEL_BC_RETURN_FIELD_1:
     PROLOGUE(1);
     doReturnFieldWithIndex(1);
+    RELOAD_PC();
     DISPATCH_NOGC();
 
 LABEL_BC_RETURN_FIELD_2:
     PROLOGUE(1);
     doReturnFieldWithIndex(2);
+    RELOAD_PC();
     DISPATCH_NOGC();
 
 LABEL_BC_INC:
@@ -400,27 +419,27 @@ LABEL_BC_DEC:
 
 LABEL_BC_INC_FIELD:
     PROLOGUE(2);
-    doIncField(currentBytecodes[bytecodeIndexGlobal - 1]);
+    doIncField(pc[-1]);
     DISPATCH_NOGC();
 
 LABEL_BC_INC_FIELD_PUSH:
     PROLOGUE(2);
-    doIncFieldPush(currentBytecodes[bytecodeIndexGlobal - 1]);
+    doIncFieldPush(pc[-1]);
     DISPATCH_NOGC();
 
 LABEL_BC_JUMP: {
-    uint8_t const offset = currentBytecodes[bytecodeIndexGlobal + 1];
-    bytecodeIndexGlobal += offset;
+    uint8_t const offset = pc[1];
+    pc += offset;
 }
     DISPATCH_NOGC();
 
 LABEL_BC_JUMP_ON_FALSE_POP: {
     vm_oop_t val = GetFrame()->Top();
     if (val == load_ptr(falseObject)) {
-        uint8_t const offset = currentBytecodes[bytecodeIndexGlobal + 1];
-        bytecodeIndexGlobal += offset;
+        uint8_t const offset = pc[1];
+        pc += offset;
     } else {
-        bytecodeIndexGlobal += 3;
+        pc += 3;
     }
     GetFrame()->PopVoid();
 }
@@ -429,10 +448,10 @@ LABEL_BC_JUMP_ON_FALSE_POP: {
 LABEL_BC_JUMP_ON_TRUE_POP: {
     vm_oop_t val = GetFrame()->Top();
     if (val == load_ptr(trueObject)) {
-        uint8_t const offset = currentBytecodes[bytecodeIndexGlobal + 1];
-        bytecodeIndexGlobal += offset;
+        uint8_t const offset = pc[1];
+        pc += offset;
     } else {
-        bytecodeIndexGlobal += 3;
+        pc += 3;
     }
     GetFrame()->PopVoid();
 }
@@ -441,12 +460,12 @@ LABEL_BC_JUMP_ON_TRUE_POP: {
 LABEL_BC_JUMP_ON_FALSE_TOP_NIL: {
     vm_oop_t val = GetFrame()->Top();
     if (val == load_ptr(falseObject)) {
-        uint8_t const offset = currentBytecodes[bytecodeIndexGlobal + 1];
-        bytecodeIndexGlobal += offset;
+        uint8_t const offset = pc[1];
+        pc += offset;
         GetFrame()->SetTopNoBarrier(load_ptr(nilObject));
     } else {
         GetFrame()->PopVoid();
-        bytecodeIndexGlobal += 3;
+        pc += 3;
     }
 }
     DISPATCH_NOGC();
@@ -454,12 +473,12 @@ LABEL_BC_JUMP_ON_FALSE_TOP_NIL: {
 LABEL_BC_JUMP_ON_TRUE_TOP_NIL: {
     vm_oop_t val = GetFrame()->Top();
     if (val == load_ptr(trueObject)) {
-        uint8_t const offset = currentBytecodes[bytecodeIndexGlobal + 1];
-        bytecodeIndexGlobal += offset;
+        uint8_t const offset = pc[1];
+        pc += offset;
         GetFrame()->SetTopNoBarrier(load_ptr(nilObject));
     } else {
         GetFrame()->PopVoid();
-        bytecodeIndexGlobal += 3;
+        pc += 3;
     }
 }
     DISPATCH_NOGC();
@@ -467,10 +486,10 @@ LABEL_BC_JUMP_ON_TRUE_TOP_NIL: {
 LABEL_BC_JUMP_ON_NOT_NIL_POP: {
     vm_oop_t val = GetFrame()->Top();
     if (val != load_ptr(nilObject)) {
-        uint8_t const offset = currentBytecodes[bytecodeIndexGlobal + 1];
-        bytecodeIndexGlobal += offset;
+        uint8_t const offset = pc[1];
+        pc += offset;
     } else {
-        bytecodeIndexGlobal += 3;
+        pc += 3;
     }
     GetFrame()->PopVoid();
 }
@@ -479,10 +498,10 @@ LABEL_BC_JUMP_ON_NOT_NIL_POP: {
 LABEL_BC_JUMP_ON_NIL_POP: {
     vm_oop_t val = GetFrame()->Top();
     if (val == load_ptr(nilObject)) {
-        uint8_t const offset = currentBytecodes[bytecodeIndexGlobal + 1];
-        bytecodeIndexGlobal += offset;
+        uint8_t const offset = pc[1];
+        pc += offset;
     } else {
-        bytecodeIndexGlobal += 3;
+        pc += 3;
     }
     GetFrame()->PopVoid();
 }
@@ -491,12 +510,12 @@ LABEL_BC_JUMP_ON_NIL_POP: {
 LABEL_BC_JUMP_ON_NOT_NIL_TOP_TOP: {
     vm_oop_t val = GetFrame()->Top();
     if (val != load_ptr(nilObject)) {
-        uint8_t const offset = currentBytecodes[bytecodeIndexGlobal + 1];
-        bytecodeIndexGlobal += offset;
+        uint8_t const offset = pc[1];
+        pc += offset;
         // GetFrame()->SetTop(val);
     } else {
         GetFrame()->PopVoid();
-        bytecodeIndexGlobal += 3;
+        pc += 3;
     }
 }
     DISPATCH_NOGC();
@@ -504,38 +523,38 @@ LABEL_BC_JUMP_ON_NOT_NIL_TOP_TOP: {
 LABEL_BC_JUMP_ON_NIL_TOP_TOP: {
     vm_oop_t val = GetFrame()->Top();
     if (val == load_ptr(nilObject)) {
-        uint8_t const offset = currentBytecodes[bytecodeIndexGlobal + 1];
-        bytecodeIndexGlobal += offset;
+        uint8_t const offset = pc[1];
+        pc += offset;
         // GetFrame()->SetTop(val);
     } else {
         GetFrame()->PopVoid();
-        bytecodeIndexGlobal += 3;
+        pc += 3;
     }
 }
     DISPATCH_NOGC();
 
 LABEL_BC_JUMP_IF_GREATER: {
     if (checkIsGreater()) {
-        bytecodeIndexGlobal += currentBytecodes[bytecodeIndexGlobal + 1];
+        pc += pc[1];
         GetFrame()->Pop();
         GetFrame()->Pop();
     } else {
-        bytecodeIndexGlobal += 3;
+        pc += 3;
     }
 }
     DISPATCH_NOGC();
 
 LABEL_BC_JUMP_BACKWARD: {
-    uint8_t const offset = currentBytecodes[bytecodeIndexGlobal + 1];
-    bytecodeIndexGlobal -= offset;
+    uint8_t const offset = pc[1];
+    pc -= offset;
 }
     DISPATCH_NOGC();
 
 LABEL_BC_JUMP2: {
     uint16_t const offset =
-        ComputeOffset(currentBytecodes[bytecodeIndexGlobal + 1],
-                      currentBytecodes[bytecodeIndexGlobal + 2]);
-    bytecodeIndexGlobal += offset;
+        ComputeOffset(pc[1],
+                      pc[2]);
+    pc += offset;
 }
     DISPATCH_NOGC();
 
@@ -543,11 +562,11 @@ LABEL_BC_JUMP2_ON_FALSE_POP: {
     vm_oop_t val = GetFrame()->Top();
     if (val == load_ptr(falseObject)) {
         uint16_t const offset =
-            ComputeOffset(currentBytecodes[bytecodeIndexGlobal + 1],
-                          currentBytecodes[bytecodeIndexGlobal + 2]);
-        bytecodeIndexGlobal += offset;
+            ComputeOffset(pc[1],
+                          pc[2]);
+        pc += offset;
     } else {
-        bytecodeIndexGlobal += 3;
+        pc += 3;
     }
     GetFrame()->PopVoid();
 }
@@ -557,11 +576,11 @@ LABEL_BC_JUMP2_ON_TRUE_POP: {
     vm_oop_t val = GetFrame()->Top();
     if (val == load_ptr(trueObject)) {
         uint16_t const offset =
-            ComputeOffset(currentBytecodes[bytecodeIndexGlobal + 1],
-                          currentBytecodes[bytecodeIndexGlobal + 2]);
-        bytecodeIndexGlobal += offset;
+            ComputeOffset(pc[1],
+                          pc[2]);
+        pc += offset;
     } else {
-        bytecodeIndexGlobal += 3;
+        pc += 3;
     }
     GetFrame()->PopVoid();
 }
@@ -571,13 +590,13 @@ LABEL_BC_JUMP2_ON_FALSE_TOP_NIL: {
     vm_oop_t val = GetFrame()->Top();
     if (val == load_ptr(falseObject)) {
         uint16_t const offset =
-            ComputeOffset(currentBytecodes[bytecodeIndexGlobal + 1],
-                          currentBytecodes[bytecodeIndexGlobal + 2]);
-        bytecodeIndexGlobal += offset;
+            ComputeOffset(pc[1],
+                          pc[2]);
+        pc += offset;
         GetFrame()->SetTopNoBarrier(load_ptr(nilObject));
     } else {
         GetFrame()->PopVoid();
-        bytecodeIndexGlobal += 3;
+        pc += 3;
     }
 }
     DISPATCH_NOGC();
@@ -586,13 +605,13 @@ LABEL_BC_JUMP2_ON_TRUE_TOP_NIL: {
     vm_oop_t val = GetFrame()->Top();
     if (val == load_ptr(trueObject)) {
         uint16_t const offset =
-            ComputeOffset(currentBytecodes[bytecodeIndexGlobal + 1],
-                          currentBytecodes[bytecodeIndexGlobal + 2]);
-        bytecodeIndexGlobal += offset;
+            ComputeOffset(pc[1],
+                          pc[2]);
+        pc += offset;
         GetFrame()->SetTopNoBarrier(load_ptr(nilObject));
     } else {
         GetFrame()->PopVoid();
-        bytecodeIndexGlobal += 3;
+        pc += 3;
     }
 }
     DISPATCH_NOGC();
@@ -601,11 +620,11 @@ LABEL_BC_JUMP2_ON_NOT_NIL_POP: {
     vm_oop_t val = GetFrame()->Top();
     if (val != load_ptr(nilObject)) {
         uint16_t const offset =
-            ComputeOffset(currentBytecodes[bytecodeIndexGlobal + 1],
-                          currentBytecodes[bytecodeIndexGlobal + 2]);
-        bytecodeIndexGlobal += offset;
+            ComputeOffset(pc[1],
+                          pc[2]);
+        pc += offset;
     } else {
-        bytecodeIndexGlobal += 3;
+        pc += 3;
     }
     GetFrame()->PopVoid();
 }
@@ -615,11 +634,11 @@ LABEL_BC_JUMP2_ON_NIL_POP: {
     vm_oop_t val = GetFrame()->Top();
     if (val == load_ptr(nilObject)) {
         uint16_t const offset =
-            ComputeOffset(currentBytecodes[bytecodeIndexGlobal + 1],
-                          currentBytecodes[bytecodeIndexGlobal + 2]);
-        bytecodeIndexGlobal += offset;
+            ComputeOffset(pc[1],
+                          pc[2]);
+        pc += offset;
     } else {
-        bytecodeIndexGlobal += 3;
+        pc += 3;
     }
     GetFrame()->PopVoid();
 }
@@ -629,13 +648,13 @@ LABEL_BC_JUMP2_ON_NOT_NIL_TOP_TOP: {
     vm_oop_t val = GetFrame()->Top();
     if (val != load_ptr(nilObject)) {
         uint16_t const offset =
-            ComputeOffset(currentBytecodes[bytecodeIndexGlobal + 1],
-                          currentBytecodes[bytecodeIndexGlobal + 2]);
-        bytecodeIndexGlobal += offset;
+            ComputeOffset(pc[1],
+                          pc[2]);
+        pc += offset;
         // GetFrame()->SetTop(val);
     } else {
         GetFrame()->PopVoid();
-        bytecodeIndexGlobal += 3;
+        pc += 3;
     }
 }
     DISPATCH_NOGC();
@@ -644,35 +663,35 @@ LABEL_BC_JUMP2_ON_NIL_TOP_TOP: {
     vm_oop_t val = GetFrame()->Top();
     if (val == load_ptr(nilObject)) {
         uint16_t const offset =
-            ComputeOffset(currentBytecodes[bytecodeIndexGlobal + 1],
-                          currentBytecodes[bytecodeIndexGlobal + 2]);
-        bytecodeIndexGlobal += offset;
+            ComputeOffset(pc[1],
+                          pc[2]);
+        pc += offset;
         // GetFrame()->SetTop(val);
     } else {
         GetFrame()->PopVoid();
-        bytecodeIndexGlobal += 3;
+        pc += 3;
     }
 }
     DISPATCH_NOGC();
 
 LABEL_BC_JUMP2_IF_GREATER: {
     if (checkIsGreater()) {
-        bytecodeIndexGlobal +=
-            ComputeOffset(currentBytecodes[bytecodeIndexGlobal + 1],
-                          currentBytecodes[bytecodeIndexGlobal + 2]);
+        pc +=
+            ComputeOffset(pc[1],
+                          pc[2]);
         GetFrame()->Pop();
         GetFrame()->Pop();
     } else {
-        bytecodeIndexGlobal += 3;
+        pc += 3;
     }
 }
     DISPATCH_NOGC();
 
 LABEL_BC_JUMP2_BACKWARD: {
     uint16_t const offset =
-        ComputeOffset(currentBytecodes[bytecodeIndexGlobal + 1],
-                      currentBytecodes[bytecodeIndexGlobal + 2]);
-    bytecodeIndexGlobal -= offset;
+        ComputeOffset(pc[1],
+                      pc[2]);
+    pc -= offset;
 }
     DISPATCH_NOGC();
 }
@@ -682,17 +701,11 @@ VMFrame* Interpreter::PushNewFrame(VMMethod* method) {
     return GetFrame();
 }
 
+// Doesn't save or restore the bytecode index: Start() saves it before
+// anything that can switch frames, and reloads it afterwards.
 void Interpreter::SetFrame(VMFrame* frm) {
-    if (frame != nullptr) {
-        frame->SetBytecodeIndex(bytecodeIndexGlobal);
-    }
-
     frame = frm;
-
-    // update cached values
     method = frm->GetMethod();
-    bytecodeIndexGlobal = frm->GetBytecodeIndex();
-    currentBytecodes = method->GetBytecodes();
 }
 
 vm_oop_t Interpreter::GetSelf() {
@@ -763,7 +776,6 @@ void Interpreter::triggerDoesNotUnderstand(VMSymbol* signature) {
     som_int_t const additionalStackSlots =
         3 - (som_int_t)GetFrame()->RemainingStackSize();
     if (additionalStackSlots > 0) {
-        GetFrame()->SetBytecodeIndex(bytecodeIndexGlobal);
         // copy current frame into a bigger one and replace the current frame
         SetFrame(VMFrame::EmergencyFrameFrom(GetFrame(), additionalStackSlots));
     }
@@ -776,10 +788,7 @@ void Interpreter::doDup() {
     GetFrame()->Push(elem);
 }
 
-void Interpreter::doPushLocal(size_t bytecodeIndex) {
-    uint8_t const bc1 = method->GetBytecode(bytecodeIndex + 1);
-    uint8_t const bc2 = method->GetBytecode(bytecodeIndex + 2);
-
+void Interpreter::doPushLocal(uint8_t bc1, uint8_t bc2) {
     assert((bc1 != 0 || bc2 != 0) && "should have been BC_PUSH_LOCAL_0");
     assert((bc1 != 1 || bc2 != 0) && "should have been BC_PUSH_LOCAL_1");
     assert((bc1 != 2 || bc2 != 0) && "should have been BC_PUSH_LOCAL_2");
@@ -794,10 +803,7 @@ void Interpreter::doPushLocalWithIndex(uint8_t localIndex) {
     GetFrame()->Push(local);
 }
 
-void Interpreter::doPushArgument(size_t bytecodeIndex) {
-    uint8_t const argIndex = method->GetBytecode(bytecodeIndex + 1);
-    uint8_t const contextLevel = method->GetBytecode(bytecodeIndex + 2);
-
+void Interpreter::doPushArgument(uint8_t argIndex, uint8_t contextLevel) {
     assert((argIndex != 0 || contextLevel != 0) &&
            "should have been BC_PUSH_SELF");
     assert((argIndex != 1 || contextLevel != 0) &&
@@ -810,8 +816,7 @@ void Interpreter::doPushArgument(size_t bytecodeIndex) {
     GetFrame()->Push(argument);
 }
 
-void Interpreter::doPushField(size_t bytecodeIndex) {
-    uint8_t const fieldIndex = method->GetBytecode(bytecodeIndex + 1);
+void Interpreter::doPushField(uint8_t fieldIndex) {
     assert(fieldIndex != 0 && fieldIndex != 1 &&
            "should have been BC_PUSH_FIELD_0|1");
 
@@ -846,8 +851,8 @@ void Interpreter::doReturnFieldWithIndex(uint8_t fieldIndex) {
     popFrameAndPushResult(o);
 }
 
-void Interpreter::doPushBlock(size_t bytecodeIndex) {
-    vm_oop_t block = method->GetConstant(bytecodeIndex);
+void Interpreter::doPushBlock(uint8_t constantIndex) {
+    vm_oop_t block = method->GetConstantWithIndex(constantIndex);
     auto* blockMethod = static_cast<VMInvokable*>(block);
 
     uint8_t const numOfArgs = blockMethod->GetNumberOfArguments();
@@ -855,16 +860,18 @@ void Interpreter::doPushBlock(size_t bytecodeIndex) {
     GetFrame()->Push(Universe::NewBlock(blockMethod, GetFrame(), numOfArgs));
 }
 
-void Interpreter::doPushGlobal(size_t bytecodeIndex) {
+// Returns false if the global is unknown, and Start() has to send
+// #unknownGlobal:.
+bool Interpreter::doPushGlobal(uint8_t constantIndex) {
     auto* globalName =
-        static_cast<VMSymbol*>(method->GetConstant(bytecodeIndex));
+        static_cast<VMSymbol*>(method->GetConstantWithIndex(constantIndex));
     vm_oop_t global = Universe::GetGlobal(globalName);
 
-    if (global != nullptr) {
-        GetFrame()->Push(global);
-    } else {
-        SendUnknownGlobal(globalName);
+    if (global == nullptr) {
+        return false;
     }
+    GetFrame()->Push(global);
+    return true;
 }
 
 void Interpreter::SendUnknownGlobal(VMSymbol* globalName) {
@@ -876,7 +883,6 @@ void Interpreter::SendUnknownGlobal(VMSymbol* globalName) {
     som_int_t const additionalStackSlots =
         2 - (som_int_t)GetFrame()->RemainingStackSize();
     if (additionalStackSlots > 0) {
-        GetFrame()->SetBytecodeIndex(bytecodeIndexGlobal);
         // copy current frame into a bigger one and replace the current
         // frame
         SetFrame(VMFrame::EmergencyFrameFrom(GetFrame(), additionalStackSlots));
@@ -889,10 +895,7 @@ void Interpreter::doPop() {
     GetFrame()->Pop();
 }
 
-void Interpreter::doPopLocal(size_t bytecodeIndex) {
-    uint8_t const bc1 = method->GetBytecode(bytecodeIndex + 1);
-    uint8_t const bc2 = method->GetBytecode(bytecodeIndex + 2);
-
+void Interpreter::doPopLocal(uint8_t bc1, uint8_t bc2) {
     vm_oop_t o = GetFrame()->Pop();
 
     GetFrame()->SetLocal(bc1, bc2, o);
@@ -903,16 +906,12 @@ void Interpreter::doPopLocalWithIndex(uint8_t localIndex) {
     GetFrame()->SetLocal(localIndex, o);
 }
 
-void Interpreter::doPopArgument(size_t bytecodeIndex) {
-    uint8_t const bc1 = method->GetBytecode(bytecodeIndex + 1);
-    uint8_t const bc2 = method->GetBytecode(bytecodeIndex + 2);
-
+void Interpreter::doPopArgument(uint8_t bc1, uint8_t bc2) {
     vm_oop_t o = GetFrame()->Pop();
     GetFrame()->SetArgument(bc1, bc2, o);
 }
 
-void Interpreter::doPopField(size_t bytecodeIndex) {
-    uint8_t const fieldIndex = method->GetBytecode(bytecodeIndex + 1);
+void Interpreter::doPopField(uint8_t fieldIndex) {
     doPopFieldWithIndex(fieldIndex);
 }
 
@@ -927,9 +926,9 @@ void Interpreter::doPopFieldWithIndex(uint8_t fieldIndex) {
     }
 }
 
-void Interpreter::doSend(size_t bytecodeIndex) {
+void Interpreter::doSend(uint8_t constantIndex) {
     auto* signature =
-        static_cast<VMSymbol*>(method->GetConstant(bytecodeIndex));
+        static_cast<VMSymbol*>(method->GetConstantWithIndex(constantIndex));
 
     uint8_t const numOfArgs = Signature::GetNumberOfArguments(signature);
 
@@ -945,9 +944,9 @@ void Interpreter::doSend(size_t bytecodeIndex) {
     send(signature, receiverClass);
 }
 
-void Interpreter::doUnarySend(size_t bytecodeIndex) {
+void Interpreter::doUnarySend(uint8_t constantIndex) {
     auto* signature =
-        static_cast<VMSymbol*>(method->GetConstant(bytecodeIndex));
+        static_cast<VMSymbol*>(method->GetConstantWithIndex(constantIndex));
 
     const int numOfArgs = 1;
 
@@ -971,9 +970,9 @@ void Interpreter::doUnarySend(size_t bytecodeIndex) {
     }
 }
 
-void Interpreter::doSuperSend(size_t bytecodeIndex) {
+void Interpreter::doSuperSend(uint8_t constantIndex) {
     auto* signature =
-        static_cast<VMSymbol*>(method->GetConstant(bytecodeIndex));
+        static_cast<VMSymbol*>(method->GetConstantWithIndex(constantIndex));
 
     VMFrame const* const ctxt = GetFrame()->GetOuterContext();
     VMMethod const* const realMethod = ctxt->GetMethod();
@@ -1031,7 +1030,6 @@ void Interpreter::doReturnNonLocal() {
         som_int_t const additionalStackSlots =
             2 - (som_int_t)GetFrame()->RemainingStackSize();
         if (additionalStackSlots > 0) {
-            GetFrame()->SetBytecodeIndex(bytecodeIndexGlobal);
             // copy current frame into a bigger one, and replace it
             SetFrame(
                 VMFrame::EmergencyFrameFrom(GetFrame(), additionalStackSlots));
@@ -1173,10 +1171,8 @@ void Interpreter::WalkGlobals(walk_heap_fn walk) {
 }
 
 void Interpreter::startGC() {
-    GetFrame()->SetBytecodeIndex(bytecodeIndexGlobal);
     GetHeap<HEAP_CLS>()->FullGC();
     method = GetFrame()->GetMethod();
-    currentBytecodes = method->GetBytecodes();
 }
 
 VMMethod* Interpreter::GetMethod() {
@@ -1186,4 +1182,3 @@ VMMethod* Interpreter::GetMethod() {
 uint8_t* Interpreter::GetBytecodes() {
     return method->GetBytecodes();
 }
-

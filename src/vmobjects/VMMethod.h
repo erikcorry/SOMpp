@@ -144,12 +144,15 @@ public:
     void SetHolderAll(VMClass* hld) const;
 
     [[nodiscard]] inline vm_oop_t GetConstant(size_t bytecodeIndex) const {
-        const uint8_t bc = bytecodes[bytecodeIndex + 1];
-        if (unlikely(bc >= GetNumberOfIndexableFields())) {
+        return GetConstantWithIndex(bytecodes[bytecodeIndex + 1]);
+    }
+
+    [[nodiscard]] inline vm_oop_t GetConstantWithIndex(uint8_t index) const {
+        if (unlikely(index >= GetNumberOfIndexableFields())) {
             ErrorPrint("Error: Constant index out of range\n");
             return nullptr;
         }
-        return GetIndexableField(bc);
+        return GetIndexableField(index);
     }
 
     [[nodiscard]] inline uint8_t GetBytecode(size_t indx) const {

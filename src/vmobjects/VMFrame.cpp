@@ -33,7 +33,6 @@
 #ifndef FRUCTUS
 #include "../compiler/Disassembler.h"
 #endif
-#include "../interpreter/Interpreter.h"
 #include "../memory/Heap.h"
 #include "../misc/defs.h"
 #include "../vm/Globals.h"
@@ -271,5 +270,4 @@ std::string VMFrame::AsDebugString() const {
 
 void VMFrame::ResetBytecodeIndex() {
     bytecodeIndex = 0;
-    GetInterpreter()->ResetBytecodeIndex(this);
 }
