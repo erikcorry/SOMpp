@@ -345,6 +345,17 @@ add_test(
   NAME som-tests
   COMMAND SOM++ -cp ${ROOT_DIR}/Smalltalk ${ROOT_DIR}/TestSuite/TestHarness.som)
 
+# -gc-stress is only available in debug builds
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  add_test(
+    NAME    unittests-gc-stress
+    COMMAND unittests -gc-stress -cp ${ROOT_DIR}/Smalltalk:${ROOT_DIR}/TestSuite/BasicInterpreterTests ${ROOT_DIR}/Examples/Hello.som)
+
+  add_test(
+    NAME som-tests-gc-stress
+    COMMAND SOM++ -gc-stress -cp ${ROOT_DIR}/Smalltalk ${ROOT_DIR}/TestSuite/TestHarness.som)
+endif()
+
 add_test(
   NAME benchmark-richards
   COMMAND SOM++ -cp ${ROOT_DIR}/Smalltalk:${ROOT_DIR}/Examples/Benchmarks/Richards ${ROOT_DIR}/Examples/Benchmarks/BenchmarkHarness.som Richards 1 1)
