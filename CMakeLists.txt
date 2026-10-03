@@ -83,12 +83,11 @@ if(FRUCTUS)
   # hashes with murmur3 on the target
   set(USE_VECTOR_PRIMITIVES FALSE CACHE BOOL "" FORCE)
   set(FRUCTUS_HEAP_SIZE 16384 CACHE STRING "Size of the SOM heap in bytes")
-  add_definitions(-DFRUCTUS -D_GLIBCXX_INCLUDE_NEXT_C_HEADERS
+  add_definitions(-DFRUCTUS
                   -DFRUCTUS_HEAP_SIZE=${FRUCTUS_HEAP_SIZE})
   add_compile_options(-fno-exceptions -fno-rtti -ffunction-sections
                       -fdata-sections)
   add_link_options(-Wl,--gc-sections -Wl,-Map=SOM++.map)
-  include_directories(BEFORE ${SRC_DIR}/fructus/include)
 else()
   # fructus-specific replacements of other files
   foreach(SRC_LIST PRIMITIVES_SRC VMOBJECTS_SRC VM_SRC MISC_SRC MEMORY_SRC
