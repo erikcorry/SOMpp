@@ -1,6 +1,5 @@
 #include "VMSafePrimitive.h"
 
-#include <string>
 
 #include "../memory/Heap.h"
 #include "../misc/debug.h"
@@ -68,10 +67,12 @@ VMFrame* VMSafeTernaryPrimitive::Invoke1(VMFrame* /*frame*/) {
     ErrorExit("Unary invoke on binary primitive");
 }
 
+#if DEBUG
 std::string VMSafePrimitive::AsDebugString() const {
     return "SafePrim(" + GetClass()->GetName()->GetStdString() + ">>#" +
            GetSignature()->GetStdString() + ")";
 }
+#endif
 
 AbstractVMObject* VMSafeUnaryPrimitive::CloneForMovingGC() const {
     auto* prim =
@@ -91,13 +92,17 @@ AbstractVMObject* VMSafeTernaryPrimitive::CloneForMovingGC() const {
     return prim;
 }
 
+#ifndef FRUCTUS
 void VMSafePrimitive::InlineInto(MethodGenerationContext& /*mgenc*/,
                                  const Parser& /*parser*/,
                                  bool /*mergeScope*/) {
     ErrorExit(
         "VMPrimitive::InlineInto is not supported, and should not be reached");
 }
+#endif
 
+#ifndef FRUCTUS
 void VMSafePrimitive::Dump(const char* /*indent*/, bool /*printObjects*/) {
     DebugPrint("<primitive>\n");
 }
+#endif

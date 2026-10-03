@@ -1,9 +1,8 @@
 #include "VMBigInteger.h"
 
-#include <cassert>
-#include <cmath>
+#include <assert.h>
+#include <math.h>
 #include <cstdint>
-#include <string>
 
 #include "../memory/Heap.h"
 #include "../misc/defs.h"
@@ -21,9 +20,11 @@ VMClass* VMBigInteger::GetClass() const {
     return load_ptr(integerClass);
 }
 
+#if DEBUG
 std::string VMBigInteger::AsDebugString() const {
     return "Integer(" + embeddedInteger.toString() + ")";
 }
+#endif
 
 #define INVALID_INT_MARKER 9002002002002002002LL
 

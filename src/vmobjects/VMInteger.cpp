@@ -26,7 +26,6 @@
 
 #include "VMInteger.h"
 
-#include <string>
 
 #include "../memory/Heap.h"
 #include "../misc/defs.h"
@@ -42,9 +41,11 @@ VMClass* VMInteger::GetClass() const {
     return load_ptr(integerClass);
 }
 
+#if DEBUG
 std::string VMInteger::AsDebugString() const {
     return "Integer(" + to_string(embeddedInteger) + ")";
 }
+#endif
 
 #define INVALID_INT_MARKER 9002002002002002002
 

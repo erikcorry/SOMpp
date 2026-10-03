@@ -26,11 +26,7 @@
 
 #include "System.h"
 
-#include <cstdint>
-#include <ctime>
-#include <fstream>
-#include <sstream>
-#include <string>
+#include <stdint.h>
 
 #include "../memory/Heap.h"
 #include "../misc/defs.h"
@@ -38,20 +34,16 @@
 #include "../vm/Print.h"
 #include "../vm/Universe.h"
 #include "../vmobjects/ObjectFormats.h"
+#ifndef FRUCTUS
 #include "../vmobjects/VMBigInteger.h"  // NOLINT(misc-include-cleaner)
+#endif
 #include "../vmobjects/VMClass.h"
 #include "../vmobjects/VMFrame.h"
 #include "../vmobjects/VMString.h"
 #include "../vmobjects/VMSymbol.h"
 
-#ifdef __GNUC__
-
+#ifndef FRUCTUS
   #include <sys/time.h>
-
-#else
-
-  #include <misc/gettimeofday.h>
-
 #endif
 
 static vm_oop_t sysGlobal_(vm_oop_t /*unused*/, vm_oop_t rightObj) {
@@ -92,8 +84,7 @@ static vm_oop_t sysExit_(vm_oop_t /*unused*/, vm_oop_t err) {
 
 static vm_oop_t sysPrintString_(vm_oop_t leftObj, vm_oop_t rightObj) {
     auto* arg = static_cast<VMString*>(rightObj);
-    std::string const str = arg->GetStdString();
-    Print(str);
+    PrintChars(arg->GetRawChars(), arg->GetStringLength());
     return leftObj;
 }
 
@@ -104,18 +95,26 @@ static vm_oop_t sysPrintNewline(vm_oop_t leftObj) {
 
 static vm_oop_t sysErrorPrint_(vm_oop_t leftObj, vm_oop_t rightObj) {
     auto* arg = static_cast<VMString*>(rightObj);
-    std::string const str = arg->GetStdString();
-    ErrorPrint(str);
+    ErrorPrintf("%.*s", STR_ARGS(arg));
     return leftObj;
 }
 
 static vm_oop_t sysErrorPrintNewline_(vm_oop_t leftObj, vm_oop_t rightObj) {
     auto* arg = static_cast<VMString*>(rightObj);
-    std::string const str = arg->GetStdString();
-    ErrorPrint(str + "\n");
+    ErrorPrintf("%.*s\n", STR_ARGS(arg));
     return leftObj;
 }
 
+#ifdef FRUCTUS
+// there is no clock yet
+static vm_oop_t sysTime(vm_oop_t /*unused*/) {
+    return NEW_INT(0);
+}
+
+static vm_oop_t sysTicks(vm_oop_t /*unused*/) {
+    return NEW_INT(0);
+}
+#else
 static struct timeval start_time;
 
 static vm_oop_t sysTime(vm_oop_t /*unused*/) {
@@ -141,6 +140,7 @@ static vm_oop_t sysTicks(vm_oop_t /*unused*/) {
 
     return NEW_INT(diff);
 }
+#endif
 
 static vm_oop_t sysFullGC(vm_oop_t /*unused*/) {
     // not safe to do it immediatly, will be done when it is ok, i.e., in the
@@ -149,6 +149,7 @@ static vm_oop_t sysFullGC(vm_oop_t /*unused*/) {
     return load_ptr(trueObject);
 }
 
+#ifndef FRUCTUS
 static vm_oop_t sysLoadFile_(vm_oop_t /*unused*/, vm_oop_t rightObj) {
     auto* fileName = static_cast<VMString*>(rightObj);
 
@@ -162,13 +163,16 @@ static vm_oop_t sysLoadFile_(vm_oop_t /*unused*/, vm_oop_t rightObj) {
     }
     return load_ptr(nilObject);
 }
+#endif
 
 static void printStackTrace(VMFrame* frame) {
     frame->PrintStackTrace();
 }
 
 _System::_System() {
+#ifndef FRUCTUS
     gettimeofday(&start_time, nullptr);
+#endif
 
     Add("global:", &sysGlobal_, false);
     Add("global:put:", &sysGlobalPut, false);
@@ -183,7 +187,9 @@ _System::_System() {
     Add("ticks", &sysTicks, false);
     Add("fullGC", &sysFullGC, false);
 
+#ifndef FRUCTUS
     Add("loadFile:", &sysLoadFile_, false);
+#endif
     Add("printStackTrace", &printStackTrace, false);
 }
 

@@ -1,13 +1,17 @@
 #include "VMTrivialMethod.h"
 
-#include <cassert>
+#include <assert.h>
 #include <cstddef>
-#include <string>
-#include <vector>
 
+#ifndef FRUCTUS
 #include "../compiler/BytecodeGenerator.h"
+#endif
+#ifndef FRUCTUS
 #include "../compiler/MethodGenerationContext.h"
+#endif
+#ifndef FRUCTUS
 #include "../compiler/Variable.h"
+#endif
 #include "../interpreter/Interpreter.h"
 #include "../memory/Heap.h"
 #include "../misc/debug.h"
@@ -19,6 +23,7 @@
 #include "ObjectFormats.h"
 #include "VMFrame.h"
 
+#ifndef FRUCTUS
 VMTrivialMethod* MakeLiteralReturn(VMSymbol* sig, vector<Variable>& arguments,
                                    vm_oop_t literal) {
     auto* result =
@@ -50,6 +55,7 @@ VMTrivialMethod* MakeSetter(VMSymbol* sig, vector<Variable>& arguments,
     recordStat(Allocation, "VMSetter", result->GetObjectSize());
     return result;
 }
+#endif
 
 VMFrame* VMLiteralReturn::Invoke(VMFrame* frame) {
     for (int i = 0; i < numberOfArguments; i += 1) {
@@ -72,20 +78,24 @@ AbstractVMObject* VMLiteralReturn::CloneForMovingGC() const {
     return prim;
 }
 
+#if DEBUG
 std::string VMLiteralReturn::AsDebugString() const {
     return "VMLiteralReturn(" + AS_OBJ(load_ptr(literal))->AsDebugString() +
            ")";
 }
+#endif
 
 void VMLiteralReturn::WalkObjects(walk_heap_fn walk) {
     VMInvokable::WalkObjects(walk);
     literal = walk(literal);
 }
 
+#ifndef FRUCTUS
 void VMLiteralReturn::InlineInto(MethodGenerationContext& mgenc,
                                  const Parser& parser, bool /*mergeScope*/) {
     EmitPUSHCONSTANT(mgenc, parser, load_ptr(literal));
 }
+#endif
 
 VMFrame* VMGlobalReturn::Invoke(VMFrame* frame) {
     for (int i = 0; i < numberOfArguments; i += 1) {
@@ -116,20 +126,24 @@ VMFrame* VMGlobalReturn::Invoke1(VMFrame* frame) {
     return nullptr;
 }
 
+#ifndef FRUCTUS
 void VMGlobalReturn::InlineInto(MethodGenerationContext& mgenc,
                                 const Parser& parser, bool /*mergeScope*/) {
     EmitPUSHGLOBAL(mgenc, parser, load_ptr(globalName));
 }
+#endif
 
 void VMGlobalReturn::WalkObjects(walk_heap_fn walk) {
     VMInvokable::WalkObjects(walk);
     globalName = (GCSymbol*)walk(globalName);
 }
 
+#if DEBUG
 std::string VMGlobalReturn::AsDebugString() const {
     return "VMGlobalReturn(" + AS_OBJ(load_ptr(globalName))->AsDebugString() +
            ")";
 }
+#endif
 
 AbstractVMObject* VMGlobalReturn::CloneForMovingGC() const {
     auto* prim =
@@ -177,10 +191,12 @@ VMFrame* VMGetter::Invoke1(VMFrame* frame) {
     return nullptr;
 }
 
+#ifndef FRUCTUS
 void VMGetter::InlineInto(MethodGenerationContext& mgenc,
                           const Parser& /*parser*/, bool /*mergeScope*/) {
     EmitPushFieldWithIndex(mgenc, fieldIndex);
 }
+#endif
 
 AbstractVMObject* VMGetter::CloneForMovingGC() const {
     auto* prim = new (GetHeap<HEAP_CLS>(), 0 ALLOC_MATURE) VMGetter(*this);
@@ -191,9 +207,11 @@ void VMGetter::WalkObjects(walk_heap_fn walk) {
     VMInvokable::WalkObjects(walk);
 }
 
+#if DEBUG
 std::string VMGetter::AsDebugString() const {
     return "VMGetter(fieldIndex: " + to_string(fieldIndex) + ")";
 }
+#endif
 
 VMFrame* VMSetter::Invoke(VMFrame* frame) {
     vm_oop_t value = nullptr;
@@ -224,10 +242,12 @@ VMFrame* VMSetter::Invoke1(VMFrame* /*unused*/) {
     ErrorExit("VMSetter::Invoke1 should not be reachable");
 }
 
+#ifndef FRUCTUS
 void VMSetter::InlineInto(MethodGenerationContext& /*mgenc*/,
                           const Parser& /*parser*/, bool /*mergeScope*/) {
     ErrorExit("We don't currently support blocks for trivial setters");
 }
+#endif
 
 AbstractVMObject* VMSetter::CloneForMovingGC() const {
     auto* prim = new (GetHeap<HEAP_CLS>(), 0 ALLOC_MATURE) VMSetter(*this);
@@ -238,11 +258,15 @@ void VMSetter::WalkObjects(walk_heap_fn walk) {
     VMInvokable::WalkObjects(walk);
 }
 
+#if DEBUG
 std::string VMSetter::AsDebugString() const {
     return "VMSetter(fieldIndex: " + to_string(fieldIndex) +
            ", argIndex: " + to_string(argIndex) + ")";
 }
+#endif
 
+#ifndef FRUCTUS
 void VMTrivialMethod::Dump(const char* /*indent*/, bool /*printObjects*/) {
     DebugPrint("<trivial method>\n");
 }
+#endif

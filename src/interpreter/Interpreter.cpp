@@ -26,12 +26,10 @@
 
 #include "Interpreter.h"
 
-#include <cassert>
+#include <assert.h>
 #include <cstddef>
 #include <cstdint>
-#include <string>
 
-#include "../compiler/Disassembler.h"
 #include "../interpreter/bytecodes.h"  // NOLINT(misc-include-cleaner) it's required for InterpreterLoop.h
 #include "../memory/Heap.h"
 #include "../misc/defs.h"
@@ -44,7 +42,9 @@
 #include "../vmobjects/ObjectFormats.h"
 #include "../vmobjects/Signature.h"
 #include "../vmobjects/VMArray.h"
+#ifndef FRUCTUS
 #include "../vmobjects/VMBigInteger.h"  // NOLINT(misc-include-cleaner)
+#endif
 #include "../vmobjects/VMBlock.h"
 #include "../vmobjects/VMClass.h"
 #include "../vmobjects/VMDouble.h"
@@ -54,10 +54,6 @@
 #include "../vmobjects/VMObject.h"
 #include "../vmobjects/VMSymbol.h"
 
-const std::string Interpreter::unknownGlobal = "unknownGlobal:";
-const std::string Interpreter::doesNotUnderstand =
-    "doesNotUnderstand:arguments:";
-const std::string Interpreter::escapedBlock = "escapedBlock:";
 
 VMFrame* Interpreter::frame = nullptr;
 VMMethod* Interpreter::method = nullptr;
@@ -67,7 +63,6 @@ VMMethod* Interpreter::method = nullptr;
 size_t Interpreter::bytecodeIndexGlobal;
 uint8_t* Interpreter::currentBytecodes;
 
-template <bool PrintBytecodes>
 vm_oop_t Interpreter::Start() {
 #ifdef BYTECODE_HEATMAP
   #define HEATMAP_INC() method->heatmap[bytecodeIndexGlobal]++
@@ -76,9 +71,6 @@ vm_oop_t Interpreter::Start() {
 #endif
 #define PROLOGUE(bcCount)                 \
     {                                     \
-        if constexpr (PrintBytecodes) {   \
-            disassembleMethod();          \
-        }                                 \
         HEATMAP_INC();                    \
         bytecodeIndexGlobal += (bcCount); \
     }
@@ -691,9 +683,6 @@ LABEL_BC_JUMP2_BACKWARD: {
     DISPATCH_NOGC();
 }
 
-template vm_oop_t Interpreter::Start<true>();
-template vm_oop_t Interpreter::Start<false>();
-
 VMFrame* Interpreter::PushNewFrame(VMMethod* method) {
     SetFrame(Universe::NewFrame(GetFrame(), method));
     return GetFrame();
@@ -1071,9 +1060,11 @@ void Interpreter::doInc() {
     if (IS_SMALL_INT(val)) {
         som_int_t const result = SMALL_INT_VAL(val) + 1;
         val = NEW_INT(result);
+#ifndef FRUCTUS
     } else if (CLASS_OF(val) == load_ptr(doubleClass)) {
         double const d = static_cast<VMDouble*>(val)->GetEmbeddedDouble();
         val = Universe::NewDouble(d + 1.0);
+#endif
     } else {
         ErrorExit("unsupported");
     }
@@ -1091,9 +1082,11 @@ void Interpreter::doDec() {
     if (IS_SMALL_INT(val)) {
         som_int_t const result = SMALL_INT_VAL(val) - 1;
         val = NEW_INT(result);
+#ifndef FRUCTUS
     } else if (CLASS_OF(val) == load_ptr(doubleClass)) {
         double const d = static_cast<VMDouble*>(val)->GetEmbeddedDouble();
         val = Universe::NewDouble(d - 1.0);
+#endif
     } else {
         ErrorExit("unsupported");
     }
@@ -1119,9 +1112,11 @@ void Interpreter::doIncField(uint8_t fieldIndex) {
     if (IS_SMALL_INT(val)) {
         som_int_t const result = SMALL_INT_VAL(val) + 1;
         val = NEW_INT(result);
+#ifndef FRUCTUS
     } else if (CLASS_OF(val) == load_ptr(doubleClass)) {
         double const d = static_cast<VMDouble*>(val)->GetEmbeddedDouble();
         val = Universe::NewDouble(d + 1.0);
+#endif
     } else {
         ErrorExit("unsupported");
     }
@@ -1143,9 +1138,11 @@ void Interpreter::doIncFieldPush(uint8_t fieldIndex) {
     if (IS_SMALL_INT(val)) {
         som_int_t const result = SMALL_INT_VAL(val) + 1;
         val = NEW_INT(result);
+#ifndef FRUCTUS
     } else if (CLASS_OF(val) == load_ptr(doubleClass)) {
         double const d = static_cast<VMDouble*>(val)->GetEmbeddedDouble();
         val = Universe::NewDouble(d + 1.0);
+#endif
     } else {
         ErrorExit("unsupported");
     }
@@ -1196,6 +1193,3 @@ uint8_t* Interpreter::GetBytecodes() {
     return method->GetBytecodes();
 }
 
-void Interpreter::disassembleMethod() {
-    Disassembler::DumpBytecode(GetFrame(), GetMethod(), bytecodeIndexGlobal);
-}

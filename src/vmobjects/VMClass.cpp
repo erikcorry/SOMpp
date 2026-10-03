@@ -26,11 +26,9 @@
 
 #include "VMClass.h"
 
-#include <cassert>
+#include <assert.h>
 #include <cstdint>
-#include <cstring>
-#include <iostream>
-#include <string>
+#include <string.h>
 
 #include "../memory/Heap.h"
 #include "../misc/defs.h"
@@ -91,22 +89,30 @@ PrimInstallResult VMClass::InstallPrimitive(VMInvokable* invokable,
         }
 
         if (invokable->GetSignature() == inv->GetSignature()) {
+#ifdef FRUCTUS
+            // only the Vector primitives replace Smalltalk methods, checked
+            // by bytecode hash, and fructus doesn't use them
+            (void)bytecodeHash;
+            (void)reportHashMismatch;
+            SetInstanceInvokable(i, invokable);
+            return PrimInstallResult::INSTALLED_REPLACED;
+#else
             PrimInstallResult result = PrimInstallResult::NULL_ARG;
             bool hashMismatch = false;
             size_t seenHash = 0;
 
             if (bytecodeHash != 0) {
-                auto* method = dynamic_cast<VMMethod*>(inv);
-                if (method == nullptr) {
+                if (!IsVMMethod((vm_oop_t)inv)) {
                     assert(inv->GetHolder() != nullptr);
-                    ErrorPrint(
+                    ErrorPrintf(
                         "Expected a bytecode method, but found something else "
-                        "for " +
-                        inv->GetHolder()->GetName()->GetStdString() + ">>#" +
-                        inv->GetSignature()->GetStdString());
+                        "for %.*s>>#%.*s",
+                        STR_ARGS(inv->GetHolder()->GetName()),
+                        STR_ARGS(inv->GetSignature()));
                     result = PrimInstallResult::HASH_MISMATCH;
                     hashMismatch = true;
                 } else {
+                    auto* method = static_cast<VMMethod*>(inv);
                     seenHash = method->GetBytecodeHash();
                     if (seenHash == bytecodeHash) {
                         result = PrimInstallResult::INSTALLED_REPLACED;
@@ -122,15 +128,17 @@ PrimInstallResult VMClass::InstallPrimitive(VMInvokable* invokable,
             if (!hashMismatch) {
                 SetInstanceInvokable(i, invokable);
             } else if (reportHashMismatch) {
-                cout << "Warn: Primitive "
-                     << inv->GetHolder()->GetName()->GetStdString() << ">>#"
-                     << invokable->GetSignature()->GetStdString()
-                     << " was not installed.\n"
-                     << "Warn: Bytecode hash did not match.\n"
-                     << "Warn: expected hash: " << bytecodeHash << "\n"
-                     << "Warn: actual hash:   " << seenHash << "\n";
+                ErrorPrintf(
+                    "Warn: Primitive %.*s>>#%.*s was not installed.\n"
+                    "Warn: Bytecode hash did not match.\n"
+                    "Warn: expected hash: %zu\n"
+                    "Warn: actual hash:   %zu\n",
+                    STR_ARGS(inv->GetHolder()->GetName()),
+                    STR_ARGS(invokable->GetSignature()), bytecodeHash,
+                    seenHash);
             }
             return result;
+#endif
         }
     }
     // it's a new invokable so we need to expand the invokables array.
@@ -244,13 +252,14 @@ bool VMClass::HasPrimitives() const {
 }
 
 void VMClass::LoadPrimitives(bool showWarning) {
-    std::string const cname = load_ptr(name)->GetStdString();
+    VMSymbol const* const cname = load_ptr(name);
+    const char* const chars = cname->GetRawChars();
+    size_t const length = cname->GetStringLength();
 
-    if (hasPrimitivesFor(cname)) {
-        PrimitiveLoader::InstallPrimitives(cname, this, false, showWarning);
-        PrimitiveLoader::InstallPrimitives(
-            cname, GetClass(), true, showWarning);
-    }
+    PrimitiveLoader::InstallPrimitives(chars, length, this, false,
+                                       showWarning);
+    PrimitiveLoader::InstallPrimitives(chars, length, GetClass(), true,
+                                       showWarning);
 }
 
 size_t VMClass::numberOfSuperInstanceFields() const {
@@ -260,13 +269,11 @@ size_t VMClass::numberOfSuperInstanceFields() const {
     return 0;
 }
 
-bool VMClass::hasPrimitivesFor(const std::string& cl) {
-    return PrimitiveLoader::SupportsClass(cl);
-}
-
+#if DEBUG
 std::string VMClass::AsDebugString() const {
     return "Class(" + GetName()->GetStdString() + ")";
 }
+#endif
 
 VMObject* VMClass::GetSuperClass() const {
     return load_ptr(superClass);

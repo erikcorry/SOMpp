@@ -26,13 +26,11 @@
 
 #include "Integer.h"
 
-#include <cassert>
-#include <cmath>
+#include <assert.h>
+#include <math.h>
 #include <cstdint>
-#include <cstdlib>
-#include <ctime>
-#include <sstream>
-#include <string>
+#include <stdlib.h>
+#include <time.h>
 
 #include "../lib/InfInt.h"
 #include "../misc/ParseInteger.h"

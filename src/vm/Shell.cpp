@@ -26,10 +26,7 @@
 
 #include "Shell.h"
 
-#include <cstdio>
-#include <iostream>
-#include <sstream>
-#include <string>
+#include <stdio.h>
 
 #include "../vmobjects/ObjectFormats.h"
 #include "../vmobjects/VMClass.h"
@@ -128,11 +125,7 @@ void Shell::Start() {
 
         // Start the Interpreter
 
-        if (dumpBytecodes > 1) {
-            Interpreter::Start<true>();
-        } else {
-            Interpreter::Start<false>();
-        }
+        Interpreter::Start();
 
         // Save the result of the run method
         it = currentFrame->Pop();

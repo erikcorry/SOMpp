@@ -4,7 +4,9 @@
 
 #include "../vm/Symbols.h"
 #include "../vm/Universe.h"
+#ifndef FRUCTUS
 #include "../vmobjects/VMBigInteger.h"
+#endif
 #include "../vmobjects/VMInteger.h"
 #include "../vmobjects/VMObject.h"
 #include "ObjectFormats.h"

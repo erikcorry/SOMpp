@@ -26,10 +26,13 @@
  THE SOFTWARE.
  */
 
-#include <iostream>
+#ifndef FRUCTUS
 #include <queue>
+#endif
 
+#ifndef FRUCTUS
 #include "../compiler/LexicalScope.h"
+#endif
 #include "../vm/Globals.h"
 #include "../vm/Print.h"
 #include "VMInteger.h"
@@ -39,6 +42,7 @@ class MethodGenerationContext;
 class Interpreter;
 class Parser;
 
+#ifndef FRUCTUS
 class Jump {
 public:
     Jump(size_t originalJumpTargetIdx, uint8_t jumpBc, size_t idx)
@@ -52,9 +56,13 @@ public:
     uint8_t jumpBc;
     size_t idx;
 };
+#endif
 
+#ifndef FRUCTUS
 bool operator<(const Jump& a, const Jump& b);
+#endif
 
+#ifndef FRUCTUS
 class BackJump {
 public:
     BackJump(size_t loopBeginIdx, size_t backwardJumpIdx)
@@ -84,6 +92,7 @@ public:
 };
 
 bool operator<(const BackJumpPatch& a, const BackJumpPatch& b);
+#endif
 
 class VMMethod : public VMInvokable {
     friend class Interpreter;
@@ -92,11 +101,16 @@ class VMMethod : public VMInvokable {
 public:
     typedef GCMethod Stored;
 
+#ifdef FRUCTUS
+    VMMethod(VMSymbol* signature, size_t bcCount, size_t numberOfConstants,
+             size_t numLocals, size_t maxStackDepth);
+#else
     VMMethod(VMSymbol* signature, size_t bcCount, size_t numberOfConstants,
              size_t numLocals, size_t maxStackDepth, LexicalScope* lexicalScope,
              BackJump* inlinedLoops);
 
     ~VMMethod() override { delete lexicalScope; }
+#endif
 
     [[nodiscard]] inline size_t GetNumberOfLocals() const {
         return numberOfLocals;
@@ -122,7 +136,9 @@ public:
 
     [[nodiscard]] size_t GetNumberOfBytecodes() const { return bcLength; }
 
+#ifndef FRUCTUS
     [[nodiscard]] size_t GetBytecodeHash() const;
+#endif
 
     void SetHolder(VMClass* hld) override;
     void SetHolderAll(VMClass* hld) const;
@@ -171,8 +187,9 @@ public:
         return indexableFields == (gc_oop_t*)INVALID_GC_POINTER;
     }
 
-    [[nodiscard]] std::string AsDebugString() const override;
+    DECLARE_AS_DEBUG_STRING(override)
 
+#ifndef FRUCTUS
     void InlineInto(MethodGenerationContext& mgenc, const Parser& parser,
                     bool mergeScope = true) final;
 
@@ -181,15 +198,20 @@ public:
         MethodGenerationContext& mgencWithInlined) final;
 
     void MergeScopeInto(MethodGenerationContext& mgenc) override;
+
     const Variable* GetArgument(size_t index, size_t contextLevel) override {
         return lexicalScope->GetArgument(index, contextLevel);
     }
+#endif
 
+#ifndef FRUCTUS
     void Dump(const char* indent, bool printObjects) override;
+#endif
 
     [[nodiscard]] inline uint8_t* GetBytecodes() const { return bytecodes; }
 
 private:
+#ifndef FRUCTUS
     void inlineInto(MethodGenerationContext& mgenc, const Parser& parser);
     std::priority_queue<BackJump> createBackJumpHeap();
 
@@ -201,6 +223,7 @@ private:
     static void patchJumpToCurrentAddress(size_t i,
                                           std::priority_queue<Jump>& jumps,
                                           MethodGenerationContext& mgenc);
+#endif
 
     make_testable(public);
 
@@ -215,8 +238,10 @@ private:
     const size_t numberOfConstants;
 
     make_testable(private);
+#ifndef FRUCTUS
     LexicalScope* lexicalScope;
     BackJump* inlinedLoops;
+#endif
 
 #ifdef UNSAFE_FRAME_OPTIMIZATION
     GCFrame* cachedFrame;

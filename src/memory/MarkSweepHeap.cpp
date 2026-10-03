@@ -1,11 +1,10 @@
 #include "MarkSweepHeap.h"
 
-#include <cassert>
+#include <assert.h>
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
-#include <cstring>
-#include <string>
+#include <stdlib.h>
+#include <string.h>
 
 #include "../memory/Heap.h"
 #include "../vm/IsValidObject.h"
@@ -22,10 +21,9 @@ MarkSweepHeap::MarkSweepHeap(size_t objectSpaceSize)
           reinterpret_cast<char*>(heap) + objectSpaceSize)),
       freeList(new (heap) VMFreeListEntry(objectSpaceSize, nullptr)),
 
-      collectionLimit((uintptr_t)((double)objectSpaceSize * 0.9)) {
+      collectionLimit(objectSpaceSize - objectSpaceSize / 10) {
     if (heap == nullptr) {
-        ErrorPrint("\nFailed to allocate a " + to_string(objectSpaceSize) +
-                   " Byte heap.\n");
+        ErrorPrintf("\nFailed to allocate a %zu Byte heap.\n", objectSpaceSize);
         Quit(-1);
     }
 
@@ -48,8 +46,7 @@ void* MarkSweepHeap::AllocateObject(size_t size) {
 
     findFittingEntry(cur, prev, allocSize);
     if (cur == nullptr) {
-        ErrorPrint("\nFailed to allocate " + to_string(size) +
-                   " bytes in heap.\n");
+        ErrorPrintf("\nFailed to allocate %zu bytes in heap.\n", size);
         Quit(-1);
     }
 

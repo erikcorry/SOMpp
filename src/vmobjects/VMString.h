@@ -28,6 +28,9 @@
 
 #include "AbstractObject.h"
 
+/** printf arguments for a VMString/VMSymbol, used with "%.*s" */
+#define STR_ARGS(s) (int)(s)->GetStringLength(), (s)->GetRawChars()
+
 class VMString : public AbstractVMObject {
 public:
     typedef GCString Stored;
@@ -59,7 +62,9 @@ public:
      */
     [[nodiscard]] inline char* GetRawChars() const { return chars; }
 
+#ifndef FRUCTUS
     [[nodiscard]] std::string GetStdString() const;
+#endif
 
     [[nodiscard]] inline size_t GetStringLength() const { return length; }
 
@@ -82,7 +87,7 @@ public:
         return chars == (char*)INVALID_GC_POINTER;
     }
 
-    [[nodiscard]] std::string AsDebugString() const override;
+    DECLARE_AS_DEBUG_STRING(override)
 
     make_testable(public);
 

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <string>
 
 inline bool ReplacePattern(std::string& str, const char* pattern,
                            const char* replacement) {

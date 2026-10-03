@@ -1,18 +1,34 @@
 #pragma once
 
+#ifndef FRUCTUS
 #include "../compiler/MethodGenerationContext.h"
+#endif
 #include "../vm/Globals.h"
 #include "ObjectFormats.h"
 #include "Signature.h"
 #include "VMInvokable.h"
 #include "VMSymbol.h"
 
+// on fructus, trivial methods are not created by the compiler, and don't keep
+// their arguments for inlining
+#ifdef FRUCTUS
+  #define TRIVIAL_ARGUMENTS_PARAM
+  #define TRIVIAL_ARGUMENTS
+#else
+  #define TRIVIAL_ARGUMENTS_PARAM vector<Variable>&arguments,
+  #define TRIVIAL_ARGUMENTS , arguments
+#endif
+
 class VMTrivialMethod : public VMInvokable {
 public:
     typedef GCTrivialMethod Stored;
 
+#ifdef FRUCTUS
+    explicit VMTrivialMethod(VMSymbol* sig) : VMInvokable(sig) {}
+#else
     VMTrivialMethod(VMSymbol* sig, vector<Variable>& arguments)
         : VMInvokable(sig), arguments(arguments) {}
+#endif
 
     [[nodiscard]] VMClass* GetClass() const final {
         return load_ptr(methodClass);
@@ -20,6 +36,7 @@ public:
 
     [[nodiscard]] bool IsPrimitive() const final { return false; };
 
+#ifndef FRUCTUS
     void MergeScopeInto(MethodGenerationContext& mgenc) final {
         if (!arguments.empty()) {
             mgenc.InlineAsLocals(arguments);
@@ -33,17 +50,23 @@ public:
         }
         return &arguments.at(index);
     }
+#endif
 
     [[nodiscard]] inline uint8_t GetNumberOfArguments() const final {
         return Signature::GetNumberOfArguments(load_ptr(signature));
     }
 
+#ifndef FRUCTUS
     void Dump(const char* indent, bool printObjects) override;
+#endif
 
+#ifndef FRUCTUS
 private:
     vector<Variable> arguments;
+#endif
 };
 
+#ifndef FRUCTUS
 VMTrivialMethod* MakeLiteralReturn(VMSymbol* sig, vector<Variable>& arguments,
                                    vm_oop_t literal);
 VMTrivialMethod* MakeGlobalReturn(VMSymbol* sig, vector<Variable>& arguments,
@@ -52,14 +75,14 @@ VMTrivialMethod* MakeGetter(VMSymbol* sig, vector<Variable>& arguments,
                             size_t fieldIndex);
 VMTrivialMethod* MakeSetter(VMSymbol* sig, vector<Variable>& arguments,
                             size_t fieldIndex, size_t argIndex);
+#endif
 
 class VMLiteralReturn : public VMTrivialMethod {
 public:
     typedef GCLiteralReturn Stored;
 
-    VMLiteralReturn(VMSymbol* sig, vector<Variable>& arguments,
-                    vm_oop_t literal)
-        : VMTrivialMethod(sig, arguments),
+    VMLiteralReturn(VMSymbol* sig, TRIVIAL_ARGUMENTS_PARAM vm_oop_t literal)
+        : VMTrivialMethod(sig TRIVIAL_ARGUMENTS),
           literal(store_with_separate_barrier(literal)),
           numberOfArguments(Signature::GetNumberOfArguments(sig)) {
         write_barrier(this, sig);
@@ -73,8 +96,10 @@ public:
     VMFrame* Invoke(VMFrame* /*frame*/) override;
     VMFrame* Invoke1(VMFrame* /*frame*/) override;
 
+#ifndef FRUCTUS
     void InlineInto(MethodGenerationContext& mgenc, const Parser& parser,
                     bool mergeScope = true) final;
+#endif
 
     [[nodiscard]] AbstractVMObject* CloneForMovingGC() const final;
 
@@ -89,7 +114,7 @@ public:
         return literal == INVALID_GC_POINTER;
     }
 
-    [[nodiscard]] std::string AsDebugString() const final;
+    DECLARE_AS_DEBUG_STRING(final)
 
 private:
     gc_oop_t literal;
@@ -100,9 +125,8 @@ class VMGlobalReturn : public VMTrivialMethod {
 public:
     typedef GCGlobalReturn Stored;
 
-    VMGlobalReturn(VMSymbol* sig, vector<Variable>& arguments,
-                   VMSymbol* globalName)
-        : VMTrivialMethod(sig, arguments),
+    VMGlobalReturn(VMSymbol* sig, TRIVIAL_ARGUMENTS_PARAM VMSymbol* globalName)
+        : VMTrivialMethod(sig TRIVIAL_ARGUMENTS),
           globalName(store_with_separate_barrier(globalName)),
           numberOfArguments(Signature::GetNumberOfArguments(sig)) {
         write_barrier(this, sig);
@@ -116,8 +140,10 @@ public:
     VMFrame* Invoke(VMFrame* /*frame*/) override;
     VMFrame* Invoke1(VMFrame* /*frame*/) override;
 
+#ifndef FRUCTUS
     void InlineInto(MethodGenerationContext& mgenc, const Parser& parser,
                     bool mergeScope = true) final;
+#endif
 
     [[nodiscard]] AbstractVMObject* CloneForMovingGC() const final;
 
@@ -132,7 +158,7 @@ public:
         return globalName == (GCSymbol*)INVALID_GC_POINTER;
     }
 
-    [[nodiscard]] std::string AsDebugString() const final;
+    DECLARE_AS_DEBUG_STRING(final)
 
 private:
     GCSymbol* globalName;
@@ -143,8 +169,8 @@ class VMGetter : public VMTrivialMethod {
 public:
     typedef GCGetter Stored;
 
-    VMGetter(VMSymbol* sig, vector<Variable>& arguments, size_t fieldIndex)
-        : VMTrivialMethod(sig, arguments), fieldIndex(fieldIndex),
+    VMGetter(VMSymbol* sig, TRIVIAL_ARGUMENTS_PARAM size_t fieldIndex)
+        : VMTrivialMethod(sig TRIVIAL_ARGUMENTS), fieldIndex(fieldIndex),
           numberOfArguments(Signature::GetNumberOfArguments(sig)) {
         write_barrier(this, sig);
     }
@@ -156,8 +182,10 @@ public:
     VMFrame* Invoke(VMFrame* /*frame*/) override;
     VMFrame* Invoke1(VMFrame* /*frame*/) override;
 
+#ifndef FRUCTUS
     void InlineInto(MethodGenerationContext& mgenc, const Parser& parser,
                     bool mergeScope = true) final;
+#endif
 
     [[nodiscard]] AbstractVMObject* CloneForMovingGC() const final;
 
@@ -169,7 +197,7 @@ public:
 
     void WalkObjects(walk_heap_fn /*walk*/) override;
 
-    [[nodiscard]] std::string AsDebugString() const final;
+    DECLARE_AS_DEBUG_STRING(final)
 
 private:
     size_t fieldIndex;
@@ -180,9 +208,9 @@ class VMSetter : public VMTrivialMethod {
 public:
     typedef GCSetter Stored;
 
-    VMSetter(VMSymbol* sig, vector<Variable>& arguments, size_t fieldIndex,
+    VMSetter(VMSymbol* sig, TRIVIAL_ARGUMENTS_PARAM size_t fieldIndex,
              size_t argIndex)
-        : VMTrivialMethod(sig, arguments), fieldIndex(fieldIndex),
+        : VMTrivialMethod(sig TRIVIAL_ARGUMENTS), fieldIndex(fieldIndex),
           argIndex(argIndex),
           numberOfArguments(Signature::GetNumberOfArguments(sig)) {
         write_barrier(this, sig);
@@ -195,8 +223,10 @@ public:
     VMFrame* Invoke(VMFrame* /*frame*/) override;
     VMFrame* Invoke1(VMFrame* /*unused*/) override;
 
+#ifndef FRUCTUS
     void InlineInto(MethodGenerationContext& mgenc, const Parser& parser,
                     bool mergeScope = true) final;
+#endif
 
     [[nodiscard]] AbstractVMObject* CloneForMovingGC() const final;
 
@@ -208,7 +238,7 @@ public:
 
     void WalkObjects(walk_heap_fn /*walk*/) override;
 
-    [[nodiscard]] std::string AsDebugString() const final;
+    DECLARE_AS_DEBUG_STRING(final)
 
 private:
     make_testable(public);

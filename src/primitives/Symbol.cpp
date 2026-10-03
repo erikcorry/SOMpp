@@ -26,7 +26,6 @@
 
 #include "Symbol.h"
 
-#include <string>
 
 #include "../vm/Universe.h"
 #include "../vmobjects/ObjectFormats.h"
@@ -36,8 +35,7 @@
 static vm_oop_t symAsString(vm_oop_t rcvr) {
     auto* sym = static_cast<VMSymbol*>(rcvr);
 
-    std::string const str = sym->GetStdString();
-    return Universe::NewString(str);
+    return Universe::NewString(sym->GetStringLength(), sym->GetRawChars());
 }
 
 _Symbol::_Symbol() {

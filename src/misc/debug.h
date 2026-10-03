@@ -27,9 +27,11 @@
  */
 
 #include <cstdarg>
-#include <cstdio>
+#include <stdio.h>
 
+#ifndef FRUCTUS
 #include "../compiler/MethodGenerationContext.h"
+#endif
 #include "../vmobjects/ObjectFormats.h"
 
 #define FprintfPass(f, x)         \
@@ -97,8 +99,12 @@ static inline void DebugTrace(const char* fmt, ...) {
 #undef FprintfPass
 #undef DebugPass
 
+#ifndef FRUCTUS
 std::string DebugGetClassName(vm_oop_t /*obj*/);
 std::string DebugGetClassName(gc_oop_t /*obj*/);
 void DebugDumpMethod(VMInvokable* method);
 void DebugDumpMethodWithObjects(VMInvokable* method);
+#endif
+#ifndef FRUCTUS
 void DebugDumpMethod(MethodGenerationContext* mgenc);
+#endif

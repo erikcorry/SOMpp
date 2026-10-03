@@ -26,7 +26,6 @@
 
 #include "VMDouble.h"
 
-#include <string>
 
 #include "../memory/Heap.h"
 #include "../misc/defs.h"
@@ -42,9 +41,11 @@ VMClass* VMDouble::GetClass() const {
     return load_ptr(doubleClass);
 }
 
+#if DEBUG
 std::string VMDouble::AsDebugString() const {
     return "Double(" + to_string(embeddedDouble) + ")";
 }
+#endif
 
 #define INVALID_DBL_MARKER 9007000000000990
 

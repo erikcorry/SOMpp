@@ -26,16 +26,20 @@
 
 #include "Heap.h"
 
-#include <cstring>
+#include <string.h>
 
 #include "../misc/defs.h"
 #include "../vm/Print.h"
+#ifndef FRUCTUS
 #include "CopyingHeap.h"         // NOLINT(misc-include-cleaner)
 #include "DebugCopyingHeap.h"    // NOLINT(misc-include-cleaner)
 #include "DebugMarkSweepHeap.h"  // NOLINT(misc-include-cleaner)
 #include "GenerationalHeap.h"    // NOLINT(misc-include-cleaner)
+#endif
 #include "MarkSweepHeap.h"       // NOLINT(misc-include-cleaner)
+#ifndef FRUCTUS
 #include "PagedMarkSweepHeap.h"  // NOLINT(misc-include-cleaner)
+#endif
 
 #if DEBUG
 bool gcStressMode = false;

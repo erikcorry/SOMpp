@@ -36,7 +36,7 @@ public:
     void WalkObjects(walk_heap_fn /*unused*/) override;
     [[nodiscard]] VMEvaluationPrimitive* CloneForMovingGC() const override;
 
-    [[nodiscard]] std::string AsDebugString() const override;
+    DECLARE_AS_DEBUG_STRING(override)
 
     [[nodiscard]] inline size_t GetObjectSize() const override {
         return sizeof(VMEvaluationPrimitive);
@@ -51,14 +51,18 @@ public:
 
     VMFrame* Invoke(VMFrame* frm) override;
     VMFrame* Invoke1(VMFrame* frm) override;
+#ifndef FRUCTUS
     void InlineInto(MethodGenerationContext& mgenc, const Parser& parser,
                     bool mergeScope = true) final;
+#endif
 
     [[nodiscard]] inline uint8_t GetNumberOfArguments() const final {
         return numberOfArguments;
     }
 
+#ifndef FRUCTUS
     void Dump(const char* indent, bool printObjects) override;
+#endif
 
 private:
     static VMSymbol* computeSignatureString(size_t argc);

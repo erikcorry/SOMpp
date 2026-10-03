@@ -1,7 +1,7 @@
 #include "Murmur3Hash.h"
 
 #include <cstdint>
-#include <cstring>
+#include <string.h>
 
 static inline uint32_t murmur_32_scramble(uint32_t k) {
     k *= 0xcc9e2d51;
@@ -17,7 +17,7 @@ uint32_t murmur3_32(const uint8_t* key, size_t len, uint32_t seed) {
     uint32_t k = 0;
 
     for (size_t i = len >> 2U; i != 0U; i--) {
-        std::memcpy(&k, key, sizeof(uint32_t));
+        memcpy(&k, key, sizeof(uint32_t));
         key += sizeof(uint32_t);
         h ^= murmur_32_scramble(k);
         h = (h << 13U) | (h >> 19U);

@@ -1,12 +1,7 @@
 #include "Statistics.h"
 
 #include <cstdint>
-#include <fstream>
-#include <iomanip>
-#include <ios>
 #include <map>
-#include <ostream>
-#include <string>
 
 using namespace std;
 

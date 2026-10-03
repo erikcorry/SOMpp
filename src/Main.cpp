@@ -23,14 +23,13 @@
  */
 
 #include <cstdint>
-#include <iostream>
 
 #include "misc/defs.h"
 #include "vm/Print.h"
 #include "vm/Universe.h"
 
-int32_t main(int32_t argc, char** argv) {
-    cout << "This is SOM++" << '\n';
+int main(int argc, char** argv) {
+    Print("This is SOM++\n");
 
     Universe::Start(argc, argv);
 

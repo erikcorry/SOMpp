@@ -26,9 +26,7 @@
  THE SOFTWARE.
  */
 
-#include <cstdlib>
-#include <set>
-#include <vector>
+#include <stdlib.h>
 
 #include "../misc/defs.h"
 #include "../vmobjects/ObjectFormats.h"

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cassert>
+#include <assert.h>
 
 #include "../misc/defs.h"
 #include "../vm/IsValidObject.h"

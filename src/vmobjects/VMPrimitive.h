@@ -67,8 +67,10 @@ public:
         return nullptr;
     };
 
+#ifndef FRUCTUS
     void InlineInto(MethodGenerationContext& mgenc, const Parser& parser,
                     bool mergeScope = true) final;
+#endif
 
     [[nodiscard]] bool IsPrimitive() const override { return true; };
 
@@ -81,13 +83,15 @@ public:
         return !prim.IsValid();
     }
 
-    [[nodiscard]] std::string AsDebugString() const override;
+    DECLARE_AS_DEBUG_STRING(override)
 
     [[nodiscard]] inline uint8_t GetNumberOfArguments() const final {
         return Signature::GetNumberOfArguments(load_ptr(signature));
     }
 
+#ifndef FRUCTUS
     void Dump(const char* indent, bool printObjects) override;
+#endif
 
 private:
     make_testable(public);

@@ -28,10 +28,11 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
-#include <string>
+#include <string.h>
 
+#ifndef FRUCTUS
 #include "../compiler/Disassembler.h"
+#endif
 #include "../interpreter/Interpreter.h"
 #include "../memory/Heap.h"
 #include "../misc/defs.h"
@@ -161,10 +162,13 @@ void VMFrame::WalkObjects(walk_heap_fn walk) {
     }
 }
 
+#ifndef FRUCTUS
 void VMFrame::PrintBytecode() const {
     Disassembler::DumpMethod(GetMethod(), "  ");
 }
+#endif
 
+#if DEBUG
 static void print_oop(gc_oop_t vmo) {
     if (vmo == nullptr) {
         Print("nullptr\n");
@@ -218,6 +222,7 @@ void VMFrame::PrintStack() const {
         i++;
     }
 }
+#endif
 
 void VMFrame::SetLocal(uint8_t index, uint8_t contextLevel, vm_oop_t value) {
     VMFrame* context = GetContextLevel(contextLevel);
@@ -235,9 +240,13 @@ void VMFrame::PrintStackTrace() const {
     if (meth->GetHolder() == load_ptr(nilObject)) {
         Print("nil");
     } else {
-        Print(meth->GetHolder()->GetName()->GetStdString());
+        VMSymbol const* name = meth->GetHolder()->GetName();
+        PrintChars(name->GetRawChars(), name->GetStringLength());
     }
-    Print(">>#" + meth->GetSignature()->GetStdString() + "\n");
+    VMSymbol const* sig = meth->GetSignature();
+    Print(">>#");
+    PrintChars(sig->GetRawChars(), sig->GetStringLength());
+    Print("\n");
     if (previousFrame != nullptr) {
         load_ptr(previousFrame)->PrintStackTrace();
     }
@@ -254,9 +263,11 @@ void VMFrame::CopyArgumentsFrom(VMFrame* frame) {
     }
 }
 
+#if DEBUG
 std::string VMFrame::AsDebugString() const {
     return "VMFrame(" + GetMethod()->AsDebugString() + ")";
 }
+#endif
 
 void VMFrame::ResetBytecodeIndex() {
     bytecodeIndex = 0;

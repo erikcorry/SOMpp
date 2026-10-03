@@ -67,6 +67,36 @@ file(GLOB PRIMITIVESCORE_SRC ${PRIMITIVESCORE_DIR}/*.cpp)
 
 file(GLOB UNITTEST_SRC    ${UNITTEST_DIR}/*.cpp)
 
+if(FRUCTUS)
+  # The 16-bit fructus target: no SOM compiler (the class library is prepared
+  # on the host), no floats, no big integers, only the mark-sweep GC.
+  set(COMPILER_SRC "")
+  list(FILTER MEMORY_SRC INCLUDE REGEX "/(Heap|MarkSweepHeap|MarkSweepCollector)\\.cpp$")
+  list(FILTER PRIMITIVES_SRC EXCLUDE REGEX "/(Double|Integer|Vector)\\.cpp$")
+  list(FILTER VMOBJECTS_SRC EXCLUDE REGEX "/(VMDouble|VMBigInteger)\\.cpp$")
+  list(FILTER VM_SRC EXCLUDE REGEX "/(Statistics|Shell)\\.cpp$")
+  list(FILTER MISC_SRC EXCLUDE REGEX "/(Timer|Murmur3Hash)\\.cpp$")
+
+  set(GC_TYPE "MARK_SWEEP" CACHE STRING "" FORCE)
+  set(USE_TAGGING TRUE CACHE BOOL "" FORCE)
+  # Vector's methods stay in Smalltalk; this also avoids checking bytecode
+  # hashes with murmur3 on the target
+  set(USE_VECTOR_PRIMITIVES FALSE CACHE BOOL "" FORCE)
+  set(FRUCTUS_HEAP_SIZE 16384 CACHE STRING "Size of the SOM heap in bytes")
+  add_definitions(-DFRUCTUS -D_GLIBCXX_INCLUDE_NEXT_C_HEADERS
+                  -DFRUCTUS_HEAP_SIZE=${FRUCTUS_HEAP_SIZE})
+  add_compile_options(-fno-exceptions -fno-rtti -ffunction-sections
+                      -fdata-sections)
+  add_link_options(-Wl,--gc-sections -Wl,-Map=SOM++.map)
+  include_directories(BEFORE ${SRC_DIR}/fructus/include)
+else()
+  # fructus-specific replacements of other files
+  foreach(SRC_LIST PRIMITIVES_SRC VMOBJECTS_SRC VM_SRC MISC_SRC MEMORY_SRC
+          INTERPRETER_SRC)
+    list(FILTER ${SRC_LIST} EXCLUDE REGEX "Fructus\\.cpp$")
+  endforeach()
+endif()
+
 set(GC_TYPE "GENERATIONAL" CACHE STRING
   "Select the type of GC to be used: COPYING, MARK_SWEEP, PAGED_MARK_SWEEP, DEBUG_MARK_SWEEP, GENERATIONAL")
 

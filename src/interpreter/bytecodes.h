@@ -26,7 +26,7 @@
  THE SOFTWARE.
  */
 
-#include <cassert>
+#include <assert.h>
 
 #include "../misc/defs.h"
 

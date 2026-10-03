@@ -49,7 +49,7 @@ public:
     void MarkObjectAsInvalid() override;
     [[nodiscard]] bool IsMarkedInvalid() const override;
 
-    [[nodiscard]] std::string AsDebugString() const override;
+    DECLARE_AS_DEBUG_STRING(override)
 
     make_testable(public);
 

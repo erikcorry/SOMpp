@@ -26,7 +26,7 @@
 
 #include "ClassGenerationContext.h"
 
-#include <cassert>
+#include <assert.h>
 #include <cstddef>
 #include <cstdint>
 #include <string>

@@ -26,7 +26,6 @@
  THE SOFTWARE.
  */
 
-#include <vector>
 
 #include "../misc/defs.h"
 #include "../vm/Globals.h"
@@ -79,11 +78,9 @@ public:
     void LoadPrimitives(bool showWarning);
     [[nodiscard]] VMClass* CloneForMovingGC() const override;
 
-    [[nodiscard]] std::string AsDebugString() const override;
+    DECLARE_AS_DEBUG_STRING(override)
 
 private:
-    static bool hasPrimitivesFor(const std::string& cl);
-    void setPrimitives(const std::string& cname, bool classSide);
     [[nodiscard]] size_t numberOfSuperInstanceFields() const;
 
     static const size_t VMClassNumberOfFields;

@@ -1,8 +1,8 @@
 #include "Variable.h"
 
-#include <cassert>
+#include <assert.h>
 #include <cstddef>
-#include <cstdio>
+#include <stdio.h>
 #include <string>
 
 #include "../vm/Print.h"

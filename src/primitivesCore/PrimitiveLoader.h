@@ -26,46 +26,37 @@
  THE SOFTWARE.
  */
 
-#include <map>
+#include <stddef.h>
 
+#include "../misc/SimpleVector.h"
 #include "../misc/defs.h"
 #include "Primitives.h"
 
 class PrimitiveContainer;
 
-/// Core class for primitive loading.
-// In order to implement new primitive libraries, you can use this class.
-//
-// Libraries have to take care of initializing any needed data or data
-// structures. When using the PrimitiveLoader class that is the the std::map
-// primitiveObjects. Initialize it by calling the AddPrimitiveObject method, in
-// order to map the name of the smalltalk class to the corresponding
-// PrimitiveContainer object.
 class PrimitiveLoader {
 public:
     PrimitiveLoader();
     virtual ~PrimitiveLoader();
-    void AddPrimitiveObject(const std::string& name, PrimitiveContainer* prim);
 
-    static bool SupportsClass(const std::string& name);
-
-    static void InstallPrimitives(const std::string& cname,
-                                  VMClass* clazz,
-                                  bool classSide,
+    static bool SupportsClass(const char* name, size_t length);
+    static void InstallPrimitives(const char* name, size_t length,
+                                  VMClass* clazz, bool classSide,
                                   bool showWarning);
 
-    static PrimitiveLoader* GetInstance();
-    PrimitiveContainer* GetObject(const std::string& name);
-
 private:
-    void installPrimitives(const std::string& cname,
-                           VMClass* clazz,
-                           bool classSide,
-                           bool showWarning);
+    struct Entry {
+        const char* name;  // a string literal
+        PrimitiveContainer* container;
+    };
 
-    bool supportsClass(const std::string& name);
+    // created on first use, because static constructors are not run on all
+    // targets
+    static PrimitiveLoader* GetInstance();
 
-    std::map<std::string, PrimitiveContainer*> primitiveObjects;
+    void addPrimitiveObject(const char* name, PrimitiveContainer* prim);
+    PrimitiveContainer* getObject(const char* name, size_t length);
 
-    static PrimitiveLoader loader;
+    SimpleVector<Entry> primitiveObjects;
+    static PrimitiveLoader* loader;
 };

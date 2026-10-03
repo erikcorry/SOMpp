@@ -26,33 +26,38 @@
 
 #include "Universe.h"
 
-#include <cassert>
+#include <assert.h>
 #include <cstdint>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <iostream>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#ifndef FRUCTUS
 #include <map>
-#include <sstream>
-#include <string>
 #include <utility>
 #include <vector>
 
 #include "../compiler/Disassembler.h"
 #include "../compiler/LexicalScope.h"
 #include "../compiler/SourcecodeCompiler.h"
+#endif
 #include "../interpreter/bytecodes.h"
+#ifndef FRUCTUS
 #include "../lib/InfInt.h"
+#endif
 #include "../memory/Heap.h"
 #include "../misc/defs.h"
 #include "../vm/Statistics.h"
 #include "../vmobjects/IntegerBox.h"
 #include "../vmobjects/ObjectFormats.h"
 #include "../vmobjects/VMArray.h"
+#ifndef FRUCTUS
 #include "../vmobjects/VMBigInteger.h"
+#endif
 #include "../vmobjects/VMBlock.h"
 #include "../vmobjects/VMClass.h"
+#ifndef FRUCTUS
 #include "../vmobjects/VMDouble.h"
+#endif
 #include "../vmobjects/VMEvaluationPrimitive.h"
 #include "../vmobjects/VMFrame.h"
 #include "../vmobjects/VMInteger.h"
@@ -64,7 +69,9 @@
 #include "Globals.h"
 #include "IsValidObject.h"
 #include "Print.h"
+#ifndef FRUCTUS
 #include "Shell.h"
+#endif
 #include "Statistics.h"
 #include "Symbols.h"
 
@@ -78,9 +85,29 @@ uint8_t dumpBytecodes;
 uint8_t gcVerbosity;
 bool abortOnCoreLibHashMismatch = false;
 
+#ifdef FRUCTUS
+SimpleVector<Universe::Global> Universe::globals;
+GCClass* Universe::blockClassesByNoOfArgs[MAX_BLOCK_ARGS + 1];
+
+/*
+ * The class library, prepared on the host, because there is no compiler on
+ * fructus. This is still to be designed: for now it only installs the
+ * primitives, as a loaded image will need that, too.
+ */
+static void LoadImage() {
+    GCClass* const classes[] = {objectClass, classClass,  metaClassClass,
+                                nilClass,    arrayClass,  vectorClass,
+                                methodClass, symbolClass, integerClass,
+                                primitiveClass, stringClass};
+    for (GCClass* cls : classes) {
+        load_ptr(cls)->LoadPrimitives(false);
+    }
+}
+#else
 map<GCSymbol*, gc_oop_t> Universe::globals;
 map<uint8_t, GCClass*> Universe::blockClassesByNoOfArgs;
 vector<std::string> Universe::classPath;
+#endif
 size_t Universe::heapSize;
 
 void Universe::Start(int32_t argc, char** argv) {
@@ -94,14 +121,17 @@ void Universe::BasicInit() {
 }
 
 void Universe::Shutdown() {
+#ifndef FRUCTUS
     if (gcVerbosity > 0) {
         ErrorPrint("Time spent in GC: [" +
                    to_string(Timer::GCTimer.GetTotalTime()) + "] msec\n");
     }
 
     Statistics::OutputStatistics();
+#endif
 }
 
+#ifndef FRUCTUS
 static void printVmConfig() {
     // NOLINTBEGIN(misc-redundant-expression)
     if (GC_TYPE == GENERATIONAL) {
@@ -256,7 +286,7 @@ void Universe::printUsageAndExit(char* executable) {
     cout << "where options include:\n";
     cout << "    -cp  <directories separated by " << pathSeparator << ">\n";
     cout << "         set search path for application classes\n";
-    cout << "    -d   enable disassembling (twice for tracing)\n";
+    cout << "    -d   enable disassembling\n";
     cout << "    -cfg print VM configuration\n";
     cout << "    -prim-hash-check check that method replacements have expected "
             "hash.\n";
@@ -276,20 +306,27 @@ void Universe::printUsageAndExit(char* executable) {
 
     Quit(ERR_SUCCESS);
 }
+#endif
 
 VMMethod* Universe::createBootstrapMethod(VMClass* holder,
                                           uint8_t numArgsOfMsgSend) {
+#ifdef FRUCTUS
+    VMMethod* bootstrapMethod =
+        NewMethod(SymbolFor("bootstrap"), 1, 0, 0, numArgsOfMsgSend);
+#else
     vector<BackJump> inlinedLoops;
     auto* bootStrapScope = new LexicalScope(nullptr, {}, {});
     VMMethod* bootstrapMethod =
         NewMethod(SymbolFor("bootstrap"), 1, 0, 0, numArgsOfMsgSend,
                   bootStrapScope, inlinedLoops);
+#endif
 
     bootstrapMethod->SetBytecode(0, BC_HALT);
     bootstrapMethod->SetHolder(holder);
     return bootstrapMethod;
 }
 
+#ifndef FRUCTUS
 vm_oop_t Universe::interpret(const std::string& className,
                              const std::string& methodName) {
     // This method assumes that SOM++ was already initialized by executing a
@@ -311,15 +348,10 @@ vm_oop_t Universe::interpret(const std::string& className,
 
     return interpretMethod(clazz, initialize, nullptr);
 }
+#endif
 
 vm_oop_t Universe::interpretMethod(VMObject* receiver, VMInvokable* initialize,
                                    VMArray* argumentsArray) {
-    /* only trace bootstrap if the number of cmd-line "-d"s is > 2 */
-    uint8_t const trace = 2 - dumpBytecodes;
-    if (!(trace > 0)) {
-        dumpBytecodes = 1;
-    }
-
     VMMethod* bootstrapMethod = createBootstrapMethod(load_ptr(systemClass), 2);
 
     VMFrame* bootstrapFrame = Interpreter::PushNewFrame(bootstrapMethod);
@@ -336,17 +368,23 @@ vm_oop_t Universe::interpretMethod(VMObject* receiver, VMInvokable* initialize,
 
     initialize->Invoke(bootstrapFrame);
 
-    // reset "-d" indicator
-    if (!(trace > 0)) {
-        dumpBytecodes = 2 - trace;
-    }
-
-    if (dumpBytecodes > 1) {
-        return Interpreter::Start<true>();
-    }
-    return Interpreter::Start<false>();
+    return Interpreter::Start();
 }
 
+#ifdef FRUCTUS
+void Universe::initialize(int32_t /*argc*/, char** /*argv*/) {
+    heapSize = FRUCTUS_HEAP_SIZE;
+    Heap<HEAP_CLS>::InitializeHeap(heapSize);
+
+    VMObject* systemObject = InitializeGlobals();
+
+    VMInvokable* initialize =
+        load_ptr(systemClass)->LookupInvokable(SymbolFor("initialize:"));
+
+    // there are no command line arguments
+    interpretMethod(systemObject, initialize, NewArray(0));
+}
+#else
 void Universe::initialize(int32_t _argc, char** _argv) {
     Statistics::Initialize();
 
@@ -397,6 +435,7 @@ void Universe::initialize(int32_t _argc, char** _argv) {
     }
 #endif
 }
+#endif
 
 Universe::~Universe() {
     // check done inside
@@ -461,6 +500,9 @@ VMObject* Universe::InitializeGlobals() {
     InitializeSymbols();
     obtain_vtables_of_known_classes(load_ptr(symbolSelf));
 
+#ifdef FRUCTUS
+    LoadImage();
+#else
     LoadSystemClass(load_ptr(objectClass));
     LoadSystemClass(load_ptr(classClass));
     LoadSystemClass(load_ptr(metaClassClass));
@@ -473,6 +515,7 @@ VMObject* Universe::InitializeGlobals() {
     LoadSystemClass(load_ptr(primitiveClass));
     LoadSystemClass(load_ptr(stringClass));
     LoadSystemClass(load_ptr(doubleClass));
+#endif
 
     blockClass = store_root(LoadClass(SymbolFor("Block")));
 
@@ -508,6 +551,47 @@ VMClass* Universe::GetBlockClass() {
     return load_ptr(blockClass);
 }
 
+#ifdef FRUCTUS
+VMClass* Universe::GetBlockClassWithArgs(uint8_t numberOfArguments) {
+    Assert(numberOfArguments <= MAX_BLOCK_ARGS);
+    GCClass* const cached = blockClassesByNoOfArgs[numberOfArguments];
+    if (cached != nullptr) {
+        return load_ptr(cached);
+    }
+
+    char name[8];
+    snprintf(name, sizeof(name), "Block%d", (int)numberOfArguments);
+    auto* result = static_cast<VMClass*>(GetGlobal(SymbolFor(name)));
+    if (result == nullptr) {
+        ErrorExit("Block class not found");
+    }
+
+    result->InstallPrimitive(new (GetHeap<HEAP_CLS>(), 0)
+                                 VMEvaluationPrimitive(numberOfArguments),
+                             0, false);
+
+    blockClassesByNoOfArgs[numberOfArguments] = store_root(result);
+    return result;
+}
+
+Universe::Global* Universe::findGlobal(VMSymbol* name) {
+    for (auto& g : globals) {
+        if (load_ptr(g.name) == name) {
+            return &g;
+        }
+    }
+    return nullptr;
+}
+
+vm_oop_t Universe::GetGlobal(VMSymbol* name) {
+    Global const* g = findGlobal(name);
+    return g == nullptr ? nullptr : load_ptr(g->value);
+}
+
+bool Universe::HasGlobal(VMSymbol* name) {
+    return findGlobal(name) != nullptr;
+}
+#else
 VMClass* Universe::GetBlockClassWithArgs(uint8_t numberOfArguments) {
     auto const it = blockClassesByNoOfArgs.find(numberOfArguments);
     if (it != blockClassesByNoOfArgs.end()) {
@@ -544,10 +628,10 @@ bool Universe::HasGlobal(VMSymbol* name) {
     return it != globals.end();
 }
 
+#endif
+
 void Universe::InitializeSystemClass(VMClass* systemClass, VMClass* superClass,
                                      const char* name) {
-    std::string const s_name(name);
-
     if (superClass != nullptr) {
         systemClass->SetSuperClass(superClass);
         VMClass* sysClassClass = systemClass->GetClass();
@@ -566,10 +650,9 @@ void Universe::InitializeSystemClass(VMClass* systemClass, VMClass* superClass,
     systemClass->SetInstanceInvokables(NewArray(0));
     sysClassClass->SetInstanceInvokables(NewArray(0));
 
-    systemClass->SetName(SymbolFor(s_name));
-    ostringstream Str;
-    Str << s_name << " class";
-    std::string const classClassName(Str.str());
+    systemClass->SetName(SymbolFor(name));
+    char classClassName[32];
+    snprintf(classClassName, sizeof(classClassName), "%s class", name);
     sysClassClass->SetName(SymbolFor(classClassName));
 
     SetGlobal(systemClass->GetName(), systemClass);
@@ -582,6 +665,10 @@ VMClass* Universe::LoadClass(VMSymbol* name) {
         return result;
     }
 
+#ifdef FRUCTUS
+    // all classes come with the image
+    return (VMClass*)load_ptr(nilObject);
+#else
     result = LoadClassBasic(name, nullptr);
 
     if (result == nullptr) {
@@ -596,8 +683,10 @@ VMClass* Universe::LoadClass(VMSymbol* name) {
     SetGlobal(name, result);
 
     return result;
+#endif
 }
 
+#ifndef FRUCTUS
 VMClass* Universe::LoadClassBasic(VMSymbol* name, VMClass* systemClass) {
     std::string const sName = name->GetStdString();
     VMClass* result = nullptr;
@@ -640,6 +729,7 @@ void Universe::LoadSystemClass(VMClass* systemClass) {
         result->LoadPrimitives(false);
     }
 }
+#endif
 
 // Should create a new instance of Vector
 VMVector* Universe::NewVector(size_t size, VMClass* cls) {
@@ -712,6 +802,7 @@ VMArray* Universe::NewExpandedArrayFromArray(size_t size, VMArray* array) {
     return result;
 }
 
+#ifndef FRUCTUS
 VMArray* Universe::NewArrayFromStrings(const vector<std::string>& strings) {
     VMArray* result = NewArray(strings.size());
     size_t j = 0;
@@ -755,6 +846,7 @@ VMArray* Universe::NewArrayList(std::vector<vm_oop_t>& list) {
     }
     return result;
 }
+#endif
 
 VMBlock* Universe::NewBlock(VMInvokable* method, VMFrame* context,
                             uint8_t arguments) {
@@ -783,10 +875,12 @@ VMClass* Universe::NewClass(VMClass* classOfClass) {
     return result;
 }
 
+#ifndef FRUCTUS
 VMDouble* Universe::NewDouble(double value) {
     recordStat(Allocation, "VMDouble", sizeof(VMDouble));
     return new (GetHeap<HEAP_CLS>(), 0) VMDouble(value);
 }
+#endif
 
 VMFrame* Universe::NewFrame(VMFrame* previousFrame, VMMethod* method) {
     VMFrame* result = nullptr;
@@ -842,6 +936,7 @@ VMInteger* Universe::NewInteger(som_int_t value) {
     return new (GetHeap<HEAP_CLS>(), 0) VMInteger(value);
 }
 
+#ifndef FRUCTUS
 vm_oop_t Universe::NewInt(InfInt&& value) {
     if (value.isWithinSmallIntRange()) {
         return NEW_INT(value.toInt64());
@@ -857,6 +952,7 @@ VMBigInteger* Universe::NewBigIntegerFromStr(const char* value,
 VMBigInteger* Universe::NewBigIntegerFromInt(int64_t value) {
     return new (GetHeap<HEAP_CLS>(), 0) VMBigInteger(value);
 }
+#endif
 
 VMClass* Universe::NewMetaclassClass() {
     auto* result = new (GetHeap<HEAP_CLS>(), 0) VMClass;
@@ -902,6 +998,20 @@ void Universe::WalkGlobals(walk_heap_fn walk) {
     }
 #endif
 
+#ifdef FRUCTUS
+    for (auto& g : globals) {
+        g.name = static_cast<GCSymbol*>(walk(g.name));
+        g.value = walk(g.value);
+    }
+
+    WalkSymbols(walk);
+
+    for (auto& bc : blockClassesByNoOfArgs) {
+        if (bc != nullptr) {
+            bc = static_cast<GCClass*>(walk(bc));
+        }
+    }
+#else
     // walk all entries in globals map
     map<GCSymbol*, gc_oop_t> globs = globals;
     globals.clear();
@@ -922,10 +1032,23 @@ void Universe::WalkGlobals(walk_heap_fn walk) {
          bcIter++) {
         bcIter->second = static_cast<GCClass*>(walk(bcIter->second));
     }
+#endif
 
     Interpreter::WalkGlobals(walk);
 }
 
+#ifdef FRUCTUS
+VMMethod* Universe::NewMethod(VMSymbol* signature, size_t numberOfBytecodes,
+                              size_t numberOfConstants, size_t numLocals,
+                              size_t maxStackDepth) {
+    // method needs space for the bytecodes and the pointers to the constants
+    size_t const additionalBytes = PADDED_SIZE(
+        numberOfBytecodes + (numberOfConstants * sizeof(VMObject*)));
+    return new (GetHeap<HEAP_CLS>(), additionalBytes)
+        VMMethod(signature, numberOfBytecodes, numberOfConstants, numLocals,
+                 maxStackDepth);
+}
+#else
 VMMethod* Universe::NewMethod(VMSymbol* signature, size_t numberOfBytecodes,
                               size_t numberOfConstants, size_t numLocals,
                               size_t maxStackDepth, LexicalScope* lexicalScope,
@@ -957,9 +1080,16 @@ VMMethod* Universe::NewMethod(VMSymbol* signature, size_t numberOfBytecodes,
     recordStat(Allocation, "VMMethod", result->GetObjectSize());
     return result;
 }
+#endif
 
+#ifndef FRUCTUS
 VMString* Universe::NewString(const std::string& str) {
     return NewString(str.length(), str.c_str());
+}
+#endif
+
+VMString* Universe::NewString(const char* str) {
+    return NewString(strlen(str), str);
 }
 
 VMString* Universe::NewString(const size_t length, const char* str) {
@@ -982,5 +1112,14 @@ VMClass* Universe::NewSystemClass() {
 }
 
 void Universe::SetGlobal(VMSymbol* name, vm_oop_t val) {
+#ifdef FRUCTUS
+    Global* g = findGlobal(name);
+    if (g != nullptr) {
+        g->value = store_root(val);
+    } else {
+        globals.push_back({store_root(name), store_root(val)});
+    }
+#else
     globals[store_root(name)] = store_root(val);
+#endif
 }

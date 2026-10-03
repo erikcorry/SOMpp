@@ -46,10 +46,12 @@ public:
         return false;
     }
 
+#if DEBUG
     [[nodiscard]] inline std::string AsDebugString() const override {
         ErrorPrint("this object doesn't support AsDebugString\n");
         return "";
     }
+#endif
 
     void* operator new(size_t size, AbstractVMObject* unusedObject) {
         assert(size >= sizeof(VMFreeListEntry));
@@ -68,7 +70,7 @@ public:
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Winvalid-offsetof"
         static_assert(
-            offsetof(VMFreeListEntry, gcField) == 8,
+            offsetof(VMFreeListEntry, gcField) == sizeof(void*),
             "VMFreeListEntry must have the same layout as AbstractVMObject");
 #pragma GCC diagnostic pop
     }
@@ -83,7 +85,7 @@ public:
     static constexpr size_t MIN_ALLOC_SIZE = sizeof(VMFreeListEntry);
 
     inline static size_t GetAllocationSize(size_t requestedSize) {
-        return max(requestedSize, MIN_ALLOC_SIZE);
+        return requestedSize > MIN_ALLOC_SIZE ? requestedSize : MIN_ALLOC_SIZE;
     }
 
 private:

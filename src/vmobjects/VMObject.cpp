@@ -26,10 +26,9 @@
 
 #include "VMObject.h"
 
-#include <cassert>
+#include <assert.h>
 #include <cstddef>
-#include <cstring>
-#include <string>
+#include <string.h>
 
 #include "../memory/Heap.h"
 #include "../misc/defs.h"
@@ -100,6 +99,7 @@ bool VMObject::IsMarkedInvalid() const {
     return clazz == INVALID_GC_POINTER;
 }
 
+#if DEBUG
 std::string VMObject::AsDebugString() const {
     if (this == load_ptr(nilObject)) {
         return "nilObject";
@@ -112,3 +112,4 @@ std::string VMObject::AsDebugString() const {
     }
     return "Object(" + GetClass()->GetName()->GetStdString() + ")";
 }
+#endif

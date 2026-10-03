@@ -26,13 +26,17 @@
  THE SOFTWARE.
  */
 
-#include <map>
-#include <vector>
+#ifndef FRUCTUS
+  #include <map>
+  #include <vector>
+
+  #include "../lib/InfInt.h"
+  #include "../misc/Timer.h"
+#endif
 
 #include "../interpreter/Interpreter.h"
-#include "../lib/InfInt.h"
 #include "../memory/Heap.h"
-#include "../misc/Timer.h"
+#include "../misc/SimpleVector.h"
 #include "../misc/defs.h"
 #include "../vmobjects/ObjectFormats.h"
 #include "Print.h"
@@ -51,10 +55,12 @@ public:
     static void Start(int32_t argc, char** argv);
     static void BasicInit();
 
+#ifndef FRUCTUS
     static vm_oop_t interpret(const std::string& className,
                               const std::string& methodName);
 
     static void setupClassPath(const std::string& cp);
+#endif
 
     static void Assert(bool /*value*/);
 
@@ -64,6 +70,7 @@ public:
     static VMArray* NewExpandedArrayFromArray(size_t size, VMArray* array);
     static VMVector* NewVector(size_t /*size*/, VMClass* cls);
 
+#ifndef FRUCTUS
     static VMArray* NewArrayList(std::vector<vm_oop_t>& list);
     static VMArray* NewArrayList(std::vector<VMInvokable*>& list);
     static VMArray* NewArrayList(std::vector<VMSymbol*>& list);
@@ -71,31 +78,46 @@ public:
     static VMArray* NewArrayFromStrings(const vector<std::string>& /*strings*/);
     static VMArray* NewArrayOfSymbolsFromStrings(
         const vector<std::string>& /*strings*/);
+#endif
 
     static VMBlock* NewBlock(VMInvokable* method, VMFrame* context,
                              uint8_t arguments);
     static VMClass* NewClass(VMClass* /*classOfClass*/);
     static VMFrame* NewFrame(VMFrame* /*previousFrame*/, VMMethod* /*method*/);
+#ifdef FRUCTUS
+    static VMMethod* NewMethod(VMSymbol* /*signature*/,
+                               size_t numberOfBytecodes,
+                               size_t numberOfConstants, size_t numLocals,
+                               size_t maxStackDepth);
+#else
     static VMMethod* NewMethod(VMSymbol* /*signature*/,
                                size_t numberOfBytecodes,
                                size_t numberOfConstants, size_t numLocals,
                                size_t maxStackDepth,
                                LexicalScope* /*lexicalScope*/,
                                vector<BackJump>& inlinedLoops);
+#endif
     static VMObject* NewInstance(VMClass* /*classOfInstance*/);
     static VMObject* NewInstanceWithoutFields();
     static VMInteger* NewInteger(som_int_t /*value*/);
 
+#ifndef FRUCTUS
     static vm_oop_t NewInt(InfInt&& /*value*/);
 
     static VMBigInteger* NewBigIntegerFromInt(int64_t /*value*/);
     static VMBigInteger* NewBigIntegerFromStr(const char* /*value*/,
                                               bool /* negateValue */);
+#endif
     static void WalkGlobals(walk_heap_fn /*walk*/);
+#ifndef FRUCTUS
     static VMDouble* NewDouble(double /*value*/);
+#endif
     static VMClass* NewMetaclassClass();
+#ifndef FRUCTUS
     static VMString* NewString(const std::string& str);
+#endif
     static VMString* NewString(size_t length, const char* str);
+    static VMString* NewString(const char* str);
     static VMClass* NewSystemClass();
 
     static void InitializeSystemClass(VMClass* /*systemClass*/,
@@ -110,10 +132,12 @@ public:
     static VMClass* GetBlockClassWithArgs(uint8_t numberOfArguments);
 
     static VMClass* LoadClass(VMSymbol* /*name*/);
+#ifndef FRUCTUS
     static void LoadSystemClass(VMClass* /*systemClass*/);
     static VMClass* LoadClassBasic(VMSymbol* /*name*/,
                                    VMClass* /*systemClass*/);
     static VMClass* LoadShellClass(std::string& /*stmt*/);
+#endif
 
     Universe() = default;
     ~Universe();
@@ -124,21 +148,36 @@ private:
     static vm_oop_t interpretMethod(VMObject* receiver, VMInvokable* initialize,
                                     VMArray* argumentsArray);
 
+#ifndef FRUCTUS
     static vector<std::string> handleArguments(int32_t argc, char** argv);
     static bool getClassPathExt(vector<std::string>& tokens,
                                 const std::string& arg);
+#endif
 
     static VMMethod* createBootstrapMethod(VMClass* holder,
                                            uint8_t numArgsOfMsgSend);
 
+#ifndef FRUCTUS
     static void addClassPath(const std::string& cp);
     static void printUsageAndExit(char* executable);
+#endif
 
     static void initialize(int32_t _argc, char** _argv);
 
     static size_t heapSize;
-    static map<GCSymbol*, gc_oop_t> globals;
+#ifdef FRUCTUS
+    struct Global {
+        GCSymbol* name;
+        gc_oop_t value;
+    };
+    static Global* findGlobal(VMSymbol* name);
 
+    static SimpleVector<Global> globals;
+    static constexpr uint8_t MAX_BLOCK_ARGS = 4;
+    static GCClass* blockClassesByNoOfArgs[MAX_BLOCK_ARGS + 1];
+#else
+    static map<GCSymbol*, gc_oop_t> globals;
     static map<uint8_t, GCClass*> blockClassesByNoOfArgs;
     static vector<std::string> classPath;
+#endif
 };

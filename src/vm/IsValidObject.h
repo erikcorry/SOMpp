@@ -6,9 +6,13 @@
 bool IsValidObject(vm_oop_t obj);
 
 bool IsVMInteger(vm_oop_t obj);
+#ifndef FRUCTUS
 bool IsVMBigInteger(vm_oop_t obj);
 bool IsVMDouble(vm_oop_t obj);
+#endif
 bool IsVMMethod(vm_oop_t obj);
+/** Any kind of method or primitive. */
+bool IsVMInvokable(vm_oop_t obj);
 bool IsVMSymbol(vm_oop_t obj);
 bool IsLiteralReturn(vm_oop_t obj);
 bool IsGlobalReturn(vm_oop_t obj);

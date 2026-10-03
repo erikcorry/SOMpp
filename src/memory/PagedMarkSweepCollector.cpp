@@ -1,6 +1,6 @@
 #include "PagedMarkSweepCollector.h"
 
-#include <cassert>
+#include <assert.h>
 #include <cstddef>
 #include <utility>
 #include <vector>

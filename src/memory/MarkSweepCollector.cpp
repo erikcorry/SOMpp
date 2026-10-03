@@ -1,9 +1,9 @@
 #include "MarkSweepCollector.h"
 
-#include <cassert>
+#include <assert.h>
 #include <cstddef>
-#include <vector>
 
+#include "../misc/SimpleVector.h"
 #include "../misc/debug.h"
 #include "../vm/IsValidObject.h"
 #include "../vm/Universe.h"
@@ -14,7 +14,7 @@
 #include "MarkSweepHeap.h"
 
 static size_t markedBytes = 0;
-static std::vector<AbstractVMObject*> markStack;
+static SimpleVector<AbstractVMObject*> markStack;
 
 static gc_oop_t mark_object(gc_oop_t oop) {
     if (IS_TAGGED(oop)) {
@@ -37,13 +37,17 @@ static gc_oop_t mark_object(gc_oop_t oop) {
 void MarkSweepCollector::Collect() {
     DebugLog("MarkSweep Collect\n");
 
+#ifndef FRUCTUS
     Timer::GCTimer.Resume();
+#endif
     heap->resetGCTrigger();
 
     markReachableObjects();
     heap->sweep();
 
+#ifndef FRUCTUS
     Timer::GCTimer.Halt();
+#endif
 }
 
 void MarkSweepCollector::markReachableObjects() {

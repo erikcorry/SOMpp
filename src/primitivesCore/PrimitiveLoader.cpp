@@ -26,13 +26,14 @@
 
 #include "PrimitiveLoader.h"
 
-#include <map>
-#include <string>
+#include <string.h>
 
 #include "../primitives/Array.h"
 #include "../primitives/Block.h"
 #include "../primitives/Class.h"
+#ifndef FRUCTUS
 #include "../primitives/Double.h"
+#endif
 #include "../primitives/Integer.h"
 #include "../primitives/Method.h"
 #include "../primitives/Object.h"
@@ -40,72 +41,71 @@
 #include "../primitives/String.h"
 #include "../primitives/Symbol.h"
 #include "../primitives/System.h"
-#include "../primitives/Vector.h"
+#if USE_VECTOR_PRIMITIVES
+  #include "../primitives/Vector.h"
+#endif
 #include "../vmobjects/ObjectFormats.h"
 #include "PrimitiveContainer.h"
 
-PrimitiveLoader PrimitiveLoader::loader;
+PrimitiveLoader* PrimitiveLoader::loader = nullptr;
 
 PrimitiveLoader* PrimitiveLoader::GetInstance() {
-    return &loader;
+    if (loader == nullptr) {
+        loader = new PrimitiveLoader();
+    }
+    return loader;
 }
 
 PrimitiveLoader::PrimitiveLoader() {
-    AddPrimitiveObject("Array", new _Array());
-    AddPrimitiveObject("Vector", new _Vector());
-    AddPrimitiveObject("Block", new _Block());
-    AddPrimitiveObject("Class", new _Class());
-    AddPrimitiveObject("Double", new _Double());
-    AddPrimitiveObject("Integer", new _Integer());
-    AddPrimitiveObject("Method", new _Method());
-    AddPrimitiveObject("Object", new _Object());
-    AddPrimitiveObject("Primitive", new _Primitive());
-    AddPrimitiveObject("String", new _String());
-    AddPrimitiveObject("Symbol", new _Symbol());
-    AddPrimitiveObject("System", new _System());
+    addPrimitiveObject("Array", new _Array());
+#if USE_VECTOR_PRIMITIVES
+    addPrimitiveObject("Vector", new _Vector());
+#endif
+    addPrimitiveObject("Block", new _Block());
+    addPrimitiveObject("Class", new _Class());
+#ifndef FRUCTUS
+    addPrimitiveObject("Double", new _Double());
+#endif
+    addPrimitiveObject("Integer", new _Integer());
+    addPrimitiveObject("Method", new _Method());
+    addPrimitiveObject("Object", new _Object());
+    addPrimitiveObject("Primitive", new _Primitive());
+    addPrimitiveObject("String", new _String());
+    addPrimitiveObject("Symbol", new _Symbol());
+    addPrimitiveObject("System", new _System());
 }
 
 PrimitiveLoader::~PrimitiveLoader() {
     for (const auto& p : primitiveObjects) {
-        delete p.second;
+        delete p.container;
     }
+    primitiveObjects.Free();
 }
 
-PrimitiveContainer* PrimitiveLoader::GetObject(const std::string& name) {
-    auto it = primitiveObjects.find(name);
-    if (it != primitiveObjects.end()) {
-        return it->second;
+void PrimitiveLoader::addPrimitiveObject(const char* name,
+                                         PrimitiveContainer* prim) {
+    primitiveObjects.push_back({name, prim});
+}
+
+PrimitiveContainer* PrimitiveLoader::getObject(const char* name,
+                                               size_t length) {
+    for (const auto& p : primitiveObjects) {
+        if (strncmp(p.name, name, length) == 0 && p.name[length] == '\0') {
+            return p.container;
+        }
     }
     return nullptr;
 }
 
-void PrimitiveLoader::AddPrimitiveObject(const std::string& name,
-                                         PrimitiveContainer* prim) {
-    primitiveObjects[name] = prim;
+bool PrimitiveLoader::SupportsClass(const char* name, size_t length) {
+    return GetInstance()->getObject(name, length) != nullptr;
 }
 
-bool PrimitiveLoader::supportsClass(const std::string& name) {
-    return primitiveObjects.find(name) != primitiveObjects.end();
-}
-
-bool PrimitiveLoader::SupportsClass(const std::string& name) {
-    return loader.supportsClass(name);
-}
-
-void PrimitiveLoader::InstallPrimitives(const std::string& cname,
-                                        VMClass* clazz,
-                                        bool classSide,
+void PrimitiveLoader::InstallPrimitives(const char* name, size_t length,
+                                        VMClass* clazz, bool classSide,
                                         bool showWarning) {
-    loader.installPrimitives(cname, clazz, classSide, showWarning);
-}
-
-void PrimitiveLoader::installPrimitives(const std::string& cname,
-                                        VMClass* clazz,
-                                        bool classSide,
-                                        bool showWarning) {
-    if (primitiveObjects.find(cname) == primitiveObjects.end()) {
-        return;
+    PrimitiveContainer* container = GetInstance()->getObject(name, length);
+    if (container != nullptr) {
+        container->InstallPrimitives(clazz, classSide, showWarning);
     }
-
-    primitiveObjects[cname]->InstallPrimitives(clazz, classSide, showWarning);
 }

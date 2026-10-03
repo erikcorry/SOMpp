@@ -46,6 +46,7 @@ public:
 
     virtual VMFrame* Invoke(VMFrame*) = 0;
     virtual VMFrame* Invoke1(VMFrame*) = 0;
+#ifndef FRUCTUS
     virtual void InlineInto(MethodGenerationContext& mgenc,
                             const Parser& parser, bool mergeScope = true) = 0;
     virtual void MergeScopeInto(
@@ -56,7 +57,10 @@ public:
         uint8_t removedCtxLevel,
         MethodGenerationContext&
             mgencWithInlined) { /* NOOP for everything but VMMethods */ }
+#endif
+#ifndef FRUCTUS
     virtual const Variable* GetArgument(size_t /*unused*/, size_t /*unused*/);
+#endif
 
     [[nodiscard]] virtual uint8_t GetNumberOfArguments() const = 0;
 
@@ -77,7 +81,9 @@ public:
         holder = (GCClass*)INVALID_GC_POINTER;
     }
 
+#ifndef FRUCTUS
     virtual void Dump(const char* indent, bool printObjects) = 0;
+#endif
 
 protected:
     make_testable(public);

@@ -27,8 +27,7 @@
 #include "VMSymbol.h"
 
 #include <cstdint>
-#include <cstring>
-#include <string>
+#include <string.h>
 
 #include "../memory/Heap.h"
 #include "../misc/defs.h"
@@ -75,9 +74,11 @@ void VMSymbol::WalkObjects(walk_heap_fn walk) {
     }
 }
 
+#if DEBUG
 std::string VMSymbol::AsDebugString() const {
     return "Symbol(" + GetStdString() + ")";
 }
+#endif
 
 void VMSymbol::UpdateCachedInvokable(VMClass* cls, VMInvokable* invo) {
     store_ptr(cachedInvokable[nextCachePos], invo);

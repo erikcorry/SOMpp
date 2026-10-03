@@ -26,10 +26,9 @@
 
 #include "VMEvaluationPrimitive.h"
 
-#include <cassert>
+#include <assert.h>
 #include <cstddef>
 #include <cstdint>
-#include <string>
 
 #include "../memory/Heap.h"
 #include "../misc/debug.h"
@@ -66,18 +65,15 @@ VMSymbol* VMEvaluationPrimitive::computeSignatureString(size_t argc) {
 #define COLON_S ":"
     assert(argc > 0);
 
-    std::string signatureString;
-
-    // Compute the signature string
-    if (argc == 1) {
-        signatureString += VALUE_S;
-    } else {
-        signatureString += VALUE_S;
-        signatureString += COLON_S;
+    // value, value:, value:with:, value:with:with:, ...
+    char signatureString[VALUE_LEN + 1 + (WITH_LEN * 8) + 1];
+    strcpy(signatureString, VALUE_S);
+    if (argc > 1) {
+        strcat(signatureString, COLON_S);
         --argc;
         while (--argc != 0) {
             // Add extra value: selector elements if necessary
-            signatureString += WITH_S;
+            strcat(signatureString, WITH_S);
         }
     }
 
@@ -119,9 +115,11 @@ VMFrame* VMEvaluationPrimitive::Invoke1(VMFrame* frm) {
     return nullptr;
 }
 
+#if DEBUG
 std::string VMEvaluationPrimitive::AsDebugString() const {
     return "VMEvaluationPrimitive(" + to_string(numberOfArguments) + ")";
 }
+#endif
 
 #define INVALID_INT_MARKER 0xFF
 
@@ -134,6 +132,7 @@ bool VMEvaluationPrimitive::IsMarkedInvalid() const {
     return numberOfArguments == INVALID_INT_MARKER;
 }
 
+#ifndef FRUCTUS
 void VMEvaluationPrimitive::InlineInto(MethodGenerationContext& /*mgenc*/,
                                        const Parser& /*parser*/,
                                        bool /*mergeScope*/) {
@@ -141,8 +140,11 @@ void VMEvaluationPrimitive::InlineInto(MethodGenerationContext& /*mgenc*/,
         "VMEvaluationPrimitive::InlineInto is not supported, and should not be "
         "reached");
 }
+#endif
 
+#ifndef FRUCTUS
 void VMEvaluationPrimitive::Dump(const char* /*indent*/,
                                  bool /*printObjects*/) {
     DebugPrint("<primitive>\n");
 }
+#endif

@@ -26,11 +26,11 @@
 
 #include "Parser.h"
 
-#include <cassert>
-#include <cctype>
+#include <assert.h>
+#include <ctype.h>
 #include <cstdint>
-#include <cstdlib>
-#include <cstring>
+#include <stdlib.h>
+#include <string.h>
 #include <iostream>
 #include <list>
 #include <string>

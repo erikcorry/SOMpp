@@ -26,9 +26,8 @@
  THE SOFTWARE.
  */
 
-#include <iostream>
-#include <map>
 
+#include "../misc/SimpleVector.h"
 #include "../misc/defs.h"
 #include "Primitives.h"
 
@@ -39,7 +38,12 @@
 class PrimitiveContainer {
 public:
     PrimitiveContainer() = default;
-    virtual ~PrimitiveContainer() = default;
+    virtual ~PrimitiveContainer() {
+        framePrims.Free();
+        unaryPrims.Free();
+        binaryPrims.Free();
+        ternaryPrims.Free();
+    }
 
     void InstallPrimitives(VMClass* clazz, bool classSide, bool showWarning);
 
@@ -66,14 +70,20 @@ public:
              TernaryPrimitiveRoutine /*routine*/, size_t hash2);
 
 private:
-    std::map<std::string, std::pair<FramePrim, FramePrim>> framePrims;
-    std::map<std::string, std::pair<UnaryPrim, UnaryPrim>> unaryPrims;
-    std::map<std::string, std::pair<BinaryPrim, BinaryPrim>> binaryPrims;
-    std::map<std::string, std::pair<TernaryPrim, TernaryPrim>> ternaryPrims;
+    template <class PrimT>
+    struct Entry {
+        const char* name;  // a string literal
+        PrimT prim1;
+        PrimT prim2;  // not valid, if there's only one implementation
+    };
+
+    SimpleVector<Entry<FramePrim>> framePrims;
+    SimpleVector<Entry<UnaryPrim>> unaryPrims;
+    SimpleVector<Entry<BinaryPrim>> binaryPrims;
+    SimpleVector<Entry<TernaryPrim>> ternaryPrims;
 
     template <class PrimT>
-    bool installPrimitives(
-        bool classSide, bool showWarning, VMClass* clazz,
-        std::map<std::string, std::pair<PrimT, PrimT>>& prims,
-        VMInvokable* (*makePrimFn)(VMSymbol* sig, PrimT));
+    bool installPrimitives(bool classSide, bool showWarning, VMClass* clazz,
+                           SimpleVector<Entry<PrimT>>& prims,
+                           VMInvokable* (*makePrimFn)(VMSymbol* sig, PrimT));
 };

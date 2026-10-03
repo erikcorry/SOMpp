@@ -31,7 +31,9 @@
 #include "../vm/Universe.h"
 #include "../vmobjects/ObjectFormats.h"
 #include "../vmobjects/VMArray.h"
+#ifndef FRUCTUS
 #include "../vmobjects/VMBigInteger.h"  // NOLINT(misc-include-cleaner)
+#endif
 #include "../vmobjects/VMFrame.h"
 
 static vm_oop_t arrAt(vm_oop_t leftObj, vm_oop_t idx) {

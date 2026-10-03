@@ -1,6 +1,6 @@
 #include "GenerationalCollector.h"
 
-#include <cassert>
+#include <assert.h>
 #include <cstddef>
 #include <vector>
 

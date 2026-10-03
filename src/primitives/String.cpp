@@ -26,18 +26,19 @@
 
 #include "String.h"
 
-#include <cctype>
+#include <ctype.h>
 #include <cstdint>
-#include <cstdio>
-#include <cstring>
-#include <string>
+#include <stdio.h>
+#include <string.h>
 
 #include "../misc/defs.h"
 #include "../vm/Globals.h"
 #include "../vm/Symbols.h"
 #include "../vm/Universe.h"
 #include "../vmobjects/ObjectFormats.h"
+#ifndef FRUCTUS
 #include "../vmobjects/VMBigInteger.h"  // NOLINT(misc-include-cleaner)
+#endif
 #include "../vmobjects/VMFrame.h"
 #include "../vmobjects/VMString.h"
 #include "../vmobjects/VMSymbol.h"  // NOLINT(misc-include-cleaner) it's required to make the types complete
@@ -45,21 +46,23 @@
 static vm_oop_t strConcatenate_(vm_oop_t leftObj, vm_oop_t rightObj) {
     auto* arg = static_cast<VMString*>(rightObj);
     auto* self = static_cast<VMString*>(leftObj);
-    // TODO(smarr): if this really needs to be optimized, than, well, then,
-    // NewString should allow to construct it correctly and simply copy
-    // from both input strings
-    std::string const a = arg->GetStdString();
-    std::string const s = self->GetStdString();
+    size_t const selfLength = self->GetStringLength();
+    size_t const argLength = arg->GetStringLength();
+    char* const buffer = (char*)malloc(selfLength + argLength);
+    if (buffer == nullptr) {
+        ErrorExit("out of memory");
+    }
+    memcpy(buffer, self->GetRawChars(), selfLength);
+    memcpy(buffer + selfLength, arg->GetRawChars(), argLength);
 
-    std::string const result = s + a;
-
-    return Universe::NewString(result);
+    VMString* result = Universe::NewString(selfLength + argLength, buffer);
+    free(buffer);
+    return result;
 }
 
 static vm_oop_t strAsSymbol(vm_oop_t rcvr) {
     auto* self = static_cast<VMString*>(rcvr);
-    std::string const result = self->GetStdString();
-    return SymbolFor(result);
+    return SymbolFor(self->GetRawChars(), self->GetStringLength());
 }
 
 static vm_oop_t strHashcode(vm_oop_t rcvr) {
@@ -106,13 +109,14 @@ static vm_oop_t strPrimSubstringFromTo(vm_oop_t rcvr,
                                        vm_oop_t start,
                                        vm_oop_t end) {
     auto* self = static_cast<VMString*>(rcvr);
-    std::string const str = self->GetStdString();
-
     som_int_t const s = SMALL_INT_VAL(start) - 1;
     som_int_t const e = SMALL_INT_VAL(end) - 1;
+    som_int_t const length = (som_int_t)self->GetStringLength();
 
-    std::string const result = str.substr(s, e - s + 1);
-    return Universe::NewString(result);
+    if (s < 0 || s > length || e < s - 1 || e >= length) {
+        return Universe::NewString("Error - index out of bounds");
+    }
+    return Universe::NewString(e - s + 1, self->GetRawChars() + s);
 }
 
 static vm_oop_t strCharAt(vm_oop_t rcvr, vm_oop_t indexPtr) {

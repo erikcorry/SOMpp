@@ -26,8 +26,7 @@
 
 #include "VMString.h"
 
-#include <cstring>
-#include <string>
+#include <string.h>
 
 #include "../memory/Heap.h"
 #include "../misc/defs.h"
@@ -52,13 +51,17 @@ VMClass* VMString::GetClass() const {
     return load_ptr(stringClass);
 }
 
+#ifndef FRUCTUS
 std::string VMString::GetStdString() const {
     if (chars == nullptr) {
         return {""};
     }
     return {chars, length};
 }
+#endif
 
+#if DEBUG
 std::string VMString::AsDebugString() const {
     return "String(" + GetStdString() + ")";
 }
+#endif

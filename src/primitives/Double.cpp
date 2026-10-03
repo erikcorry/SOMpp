@@ -26,11 +26,8 @@
 
 #include "Double.h"
 
-#include <cmath>
+#include <math.h>
 #include <cstdint>
-#include <iostream>
-#include <sstream>
-#include <string>
 
 #include "../vm/Globals.h"
 #include "../vm/Print.h"

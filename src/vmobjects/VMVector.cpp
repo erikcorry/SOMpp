@@ -1,10 +1,9 @@
 #include "../vmobjects/VMVector.h"
 
-#include <cassert>
+#include <assert.h>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
-#include <string>
+#include <string.h>
 
 #include "../interpreter/Interpreter.h"
 #include "../misc/defs.h"
@@ -212,9 +211,11 @@ vm_oop_t VMVector::copyStorageArray() {
 vm_oop_t VMVector::IndexOutOfBounds(size_t maxSize, size_t indexAccessed) {
     // VMSafe*Primitive::Invoke will push it right back to the same frame
     VMFrame* frame = Interpreter::GetFrame();
-    vm_oop_t errorMsg = Universe::NewString(
-        "Vector[1.." + std::to_string(maxSize) + "]: Index " +
-        std::to_string(indexAccessed) + " out of bounds");
+    char message[64];
+    snprintf(message, sizeof(message),
+             "Vector[1..%zu]: Index %zu out of bounds", maxSize,
+             indexAccessed);
+    vm_oop_t errorMsg = Universe::NewString(message);
     vm_oop_t args[1] = {errorMsg};
     this->Send("error:", args, 1);
     return frame->Pop();

@@ -88,7 +88,7 @@ public:
     void CopyIndexableFieldsTo(VMArray* /*to*/) const;
     [[nodiscard]] VMArray* CloneForMovingGC() const override;
 
-    [[nodiscard]] std::string AsDebugString() const override;
+    DECLARE_AS_DEBUG_STRING(override)
 
 private:
     static const size_t VMArrayNumberOfFields;

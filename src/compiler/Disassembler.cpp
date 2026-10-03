@@ -27,8 +27,8 @@
 #include "Disassembler.h"
 
 #include <cstdint>
-#include <cstdio>
-#include <cstring>
+#include <stdio.h>
+#include <string.h>
 
 #include "../interpreter/bytecodes.h"
 #include "../misc/debug.h"

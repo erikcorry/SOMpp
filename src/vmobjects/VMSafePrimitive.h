@@ -16,20 +16,24 @@ public:
 
     [[nodiscard]] bool IsPrimitive() const final { return true; };
 
+#ifndef FRUCTUS
     void InlineInto(MethodGenerationContext& mgenc, const Parser& parser,
                     bool mergeScope = true) final;
+#endif
 
     static VMInvokable* GetSafeUnary(VMSymbol* sig, UnaryPrim prim);
     static VMInvokable* GetSafeBinary(VMSymbol* sig, BinaryPrim prim);
     static VMInvokable* GetSafeTernary(VMSymbol* sig, TernaryPrim prim);
 
-    [[nodiscard]] std::string AsDebugString() const final;
+    DECLARE_AS_DEBUG_STRING(final)
 
     [[nodiscard]] inline uint8_t GetNumberOfArguments() const final {
         return Signature::GetNumberOfArguments(load_ptr(signature));
     }
 
+#ifndef FRUCTUS
     void Dump(const char* indent, bool printObjects) override;
+#endif
 };
 
 class VMSafeUnaryPrimitive : public VMSafePrimitive {

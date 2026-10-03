@@ -186,8 +186,12 @@ public:
     void WalkObjects(walk_heap_fn /*unused*/) override;
     [[nodiscard]] VMFrame* CloneForMovingGC() const override;
 
+#if DEBUG
     void PrintStack() const;
+#endif
+#ifndef FRUCTUS
     void PrintBytecode() const;
+#endif
 
     [[nodiscard]] size_t RemainingStackSize() const {
         // - 1 because the stack pointer points at the top entry,
@@ -198,7 +202,7 @@ public:
         return size - 1;
     }
 
-    [[nodiscard]] std::string AsDebugString() const override;
+    DECLARE_AS_DEBUG_STRING(override)
 
     make_testable(public);
 

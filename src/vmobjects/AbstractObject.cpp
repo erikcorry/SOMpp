@@ -9,7 +9,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <string>
 
 #include "../interpreter/Interpreter.h"
 #include "../vm/Symbols.h"
@@ -19,7 +18,7 @@
 #include "VMInvokable.h"
 #include "VMSymbol.h"
 
-void AbstractVMObject::Send(const std::string& selectorString,
+void AbstractVMObject::Send(const char* selectorString,
                             vm_oop_t* arguments, size_t argc) {
     VMFrame* frame = Interpreter::GetFrame();
     VMSymbol* selector = SymbolFor(selectorString);

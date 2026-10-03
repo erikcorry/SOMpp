@@ -26,7 +26,6 @@
 
 #include "VMBlock.h"
 
-#include <string>
 
 #include "../memory/Heap.h"
 #include "../misc/defs.h"
@@ -59,6 +58,8 @@ VMEvaluationPrimitive* VMBlock::GetEvaluationPrimitive(int numberOfArguments) {
         VMEvaluationPrimitive(numberOfArguments);
 }
 
+#if DEBUG
 std::string VMBlock::AsDebugString() const {
     return "Block(" + load_ptr(blockMethod)->AsDebugString() + ")";
 }
+#endif

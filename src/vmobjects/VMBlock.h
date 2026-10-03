@@ -43,7 +43,7 @@ public:
 
     [[nodiscard]] VMBlock* CloneForMovingGC() const override;
 
-    [[nodiscard]] std::string AsDebugString() const override;
+    DECLARE_AS_DEBUG_STRING(override)
 
     static VMEvaluationPrimitive* GetEvaluationPrimitive(
         int /*numberOfArguments*/);

@@ -39,7 +39,7 @@ public:
     void MarkObjectAsInvalid() override;
     [[nodiscard]] bool IsMarkedInvalid() const override;
 
-    [[nodiscard]] std::string AsDebugString() const override;
+    DECLARE_AS_DEBUG_STRING(override)
 
     /* primitive operations */
     [[nodiscard]] vm_oop_t Add(som_int_t /*value*/) const;

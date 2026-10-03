@@ -6,16 +6,19 @@
  *  Created on: 10.03.2011
  *      Author: christian
  */
-#include <cassert>
+#include <assert.h>
 #include <cstddef>
-#include <iostream>
 
+#ifndef FRUCTUS
 #include "../memory/CopyingHeap.h"
 #include "../memory/DebugCopyingHeap.h"
 #include "../memory/DebugMarkSweepHeap.h"
 #include "../memory/GenerationalHeap.h"
+#endif
 #include "../memory/MarkSweepHeap.h"
+#ifndef FRUCTUS
 #include "../memory/PagedMarkSweepHeap.h"
+#endif
 #include "../misc/defs.h"
 #include "../vm/Print.h"
 #include "ObjectFormats.h"
@@ -31,7 +34,7 @@ public:
     [[nodiscard]] virtual som_int_t GetHash() const = 0;
     [[nodiscard]] virtual VMClass* GetClass() const = 0;
     [[nodiscard]] virtual AbstractVMObject* CloneForMovingGC() const = 0;
-    void Send(const std::string& selectorString, vm_oop_t* arguments,
+    void Send(const char* selectorString, vm_oop_t* arguments,
               size_t argc);
 
     /** Size in bytes of the object. */
@@ -40,7 +43,9 @@ public:
     virtual void MarkObjectAsInvalid() = 0;
     [[nodiscard]] virtual bool IsMarkedInvalid() const = 0;
 
+#if DEBUG
     [[nodiscard]] virtual std::string AsDebugString() const = 0;
+#endif
 
     AbstractVMObject() = default;
     ~AbstractVMObject() override = default;

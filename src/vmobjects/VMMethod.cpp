@@ -26,24 +26,36 @@
 
 #include "VMMethod.h"
 
-#include <cassert>
+#include <assert.h>
 #include <cstdint>
-#include <cstdio>
-#include <cstring>
+#include <stdio.h>
+#include <string.h>
+#ifndef FRUCTUS
 #include <queue>
-#include <string>
+#endif
 
+#ifndef FRUCTUS
 #include "../compiler/BytecodeGenerator.h"
 #include "../compiler/Disassembler.h"
+#endif
+#ifndef FRUCTUS
 #include "../compiler/LexicalScope.h"
+#endif
+#ifndef FRUCTUS
 #include "../compiler/MethodGenerationContext.h"
+#endif
+#ifndef FRUCTUS
 #include "../compiler/Variable.h"
+#endif
 #include "../interpreter/Interpreter.h"
 #include "../interpreter/bytecodes.h"
 #include "../memory/Heap.h"
+#ifndef FRUCTUS
 #include "../misc/Murmur3Hash.h"
+#endif
 #include "../misc/defs.h"
 #include "../vm/Globals.h"
+#include "../vm/IsValidObject.h"
 #include "../vm/Print.h"
 #include "../vm/Universe.h"  // NOLINT(misc-include-cleaner) it's required to make the types complete
 #include "ObjectFormats.h"
@@ -53,6 +65,17 @@
 #include "VMObject.h"
 #include "VMSymbol.h"
 
+#ifdef FRUCTUS
+VMMethod::VMMethod(VMSymbol* signature, size_t bcCount,
+                   size_t numberOfConstants, size_t numLocals,
+                   size_t maxStackDepth)
+    : VMInvokable(signature), numberOfLocals(numLocals),
+      maximumNumberOfStackElements(maxStackDepth), bcLength(bcCount),
+      numberOfArguments(signature == nullptr
+                            ? 0
+                            : Signature::GetNumberOfArguments(signature)),
+      numberOfConstants(numberOfConstants) {
+#else
 VMMethod::VMMethod(VMSymbol* signature, size_t bcCount,
                    size_t numberOfConstants, size_t numLocals,
                    size_t maxStackDepth, LexicalScope* lexicalScope,
@@ -64,6 +87,7 @@ VMMethod::VMMethod(VMSymbol* signature, size_t bcCount,
                             : Signature::GetNumberOfArguments(signature)),
       numberOfConstants(numberOfConstants), lexicalScope(lexicalScope),
       inlinedLoops(inlinedLoops) {
+#endif
 #ifdef UNSAFE_FRAME_OPTIMIZATION
     cachedFrame = nullptr;
 #endif
@@ -162,18 +186,20 @@ void VMMethod::SetHolderAll(VMClass* hld) const {
     for (size_t i = 0; i < numIndexableFields; ++i) {
         vm_oop_t o = GetIndexableField(i);
         if (!IS_TAGGED(o)) {
-            auto* vmi = dynamic_cast<VMInvokable*>(AS_OBJ(o));
-            if (vmi != nullptr) {
-                vmi->SetHolder(hld);
+            if (IsVMInvokable(o)) {
+                static_cast<VMInvokable*>(AS_OBJ(o))->SetHolder(hld);
             }
         }
     }
 }
 
+#ifndef FRUCTUS
 void VMMethod::Dump(const char* indent, bool printObjects) {
     Disassembler::DumpMethod(this, indent, printObjects);
 }
+#endif
 
+#if DEBUG
 std::string VMMethod::AsDebugString() const {
     VMClass const* const holder = GetHolder();
     std::string holder_str;
@@ -185,7 +211,9 @@ std::string VMMethod::AsDebugString() const {
     return "Method(" + holder_str + ">>#" + GetSignature()->GetStdString() +
            ")";
 }
+#endif
 
+#ifndef FRUCTUS
 void VMMethod::InlineInto(MethodGenerationContext& mgenc, const Parser& parser,
                           bool mergeScope) {
     if (mergeScope) {
@@ -698,11 +726,15 @@ void VMMethod::AdaptAfterOuterInlined(
         lexicalScope->DropInlinedScope();
     }
 }
+#endif
 
+#ifndef FRUCTUS
 bool operator<(const Jump& a, const Jump& b) {
     return a.originalJumpTargetIdx > b.originalJumpTargetIdx;
 }
+#endif
 
+#ifndef FRUCTUS
 bool operator<(const BackJump& a, const BackJump& b) {
     return a.loopBeginIdx > b.loopBeginIdx;
 }
@@ -710,12 +742,17 @@ bool operator<(const BackJump& a, const BackJump& b) {
 bool operator<(const BackJumpPatch& a, const BackJumpPatch& b) {
     return a.backwardsJumpIdx > b.backwardsJumpIdx;
 }
+#endif
 
+#ifndef FRUCTUS
 void VMMethod::MergeScopeInto(MethodGenerationContext& mgenc) {
     assert(lexicalScope != nullptr);
     mgenc.MergeIntoScope(*lexicalScope);
 }
+#endif
 
+#ifndef FRUCTUS
 size_t VMMethod::GetBytecodeHash() const {
     return murmur3_32(bytecodes, bcLength, 0x00000000);
 }
+#endif

@@ -1,6 +1,6 @@
 #include "Primitive.h"
 
-#include <cassert>
+#include <assert.h>
 #include <cstddef>
 
 #include "../vmobjects/ObjectFormats.h"

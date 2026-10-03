@@ -26,7 +26,7 @@
  THE SOFTWARE.
  */
 
-#include <cassert>
+#include <assert.h>
 #include <cstdint>
 
 const uint8_t Bytecode::bytecodeLengths[] = {

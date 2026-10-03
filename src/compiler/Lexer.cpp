@@ -25,10 +25,10 @@
  */
 #include "Lexer.h"
 
-#include <cassert>
-#include <cctype>
+#include <assert.h>
+#include <ctype.h>
 #include <cstdint>
-#include <cstring>
+#include <string.h>
 #include <istream>
 #include <string>
 

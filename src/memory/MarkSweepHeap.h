@@ -17,7 +17,6 @@
  */
 
 #include <cstddef>
-#include <vector>
 
 #include "../misc/defs.h"
 #include "Heap.h"

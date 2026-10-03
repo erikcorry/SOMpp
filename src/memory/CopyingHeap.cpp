@@ -1,9 +1,8 @@
 #include "CopyingHeap.h"
 
-#include <cassert>
-#include <cstdlib>
-#include <cstring>
-#include <string>
+#include <assert.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "../misc/defs.h"  // NOLINT(misc-include-cleaner)
 #include "../vm/Print.h"

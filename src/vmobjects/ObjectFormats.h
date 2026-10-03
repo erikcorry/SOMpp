@@ -71,7 +71,13 @@ VMTAGGED_INTEGER_WITHIN_RANGE_CHECK(T value) {
     }
 }
 
-#if ADDITIONAL_ALLOCATION
+#ifdef FRUCTUS
+  // there are no big integers, so this is an error, see IntegerOverflow()
+  #define TAG_INTEGER(X)                                 \
+      ((VMTAGGED_INTEGER_WITHIN_RANGE_CHECK(X))          \
+           ? ((vm_oop_t)((((uintptr_t)(X)) << 1U) | 1U)) \
+           : IntegerOverflow())
+#elif ADDITIONAL_ALLOCATION
   #define TAG_INTEGER(X)                                                   \
       ((VMTAGGED_INTEGER_WITHIN_RANGE_CHECK(X) && Universe::NewInteger(0)) \
            ? ((vm_oop_t)((((uintptr_t)(X)) << 1U) | 1U))                   \
@@ -89,9 +95,15 @@ VMTAGGED_INTEGER_WITHIN_RANGE_CHECK(T value) {
   #define NEW_INT(X) (TAG_INTEGER((X)))
   #define IS_TAGGED(X) ((bool)((uintptr_t)(X) & 1U))
   #define IS_SMALL_INT(X) IS_TAGGED(X)
-  #define IS_BIG_INT(X) IsVMBigInteger(X)
+  #ifdef FRUCTUS
+    // there are no big integers and no doubles
+    #define IS_BIG_INT(X) false
+    #define IS_DOUBLE(X) false
+  #else
+    #define IS_BIG_INT(X) IsVMBigInteger(X)
+    #define IS_DOUBLE(X) IsVMDouble(X)
+  #endif
   #define AS_BIG_INT(X) (static_cast<VMBigInteger*>(X))
-  #define IS_DOUBLE(X) IsVMDouble(X)
   #define AS_DOUBLE(X) (static_cast<VMDouble*>(X)->GetEmbeddedDouble())
   #define CLASS_OF(X)                        \
       (IS_TAGGED(X) ? load_ptr(integerClass) \
@@ -167,6 +179,11 @@ public:
 // an oop_t can refer to tagged integers as well as normal AbstractVMObjects
 typedef VMOop* vm_oop_t;
 typedef GCOop* gc_oop_t;
+
+#ifdef FRUCTUS
+/** There are no big integers, so a result that doesn't fit is an error. */
+__attribute__((noreturn)) vm_oop_t IntegerOverflow();
+#endif
 
 /**
  We need to distinguish between pointers that need to be handled with a

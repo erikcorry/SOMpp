@@ -1,10 +1,9 @@
 #include "DebugCopyingHeap.h"
 
 #include <algorithm>
-#include <cassert>
+#include <assert.h>
 #include <cstddef>
-#include <cstdlib>
-#include <string>
+#include <stdlib.h>
 
 #include "../vm/Print.h"
 #include "../vmobjects/AbstractObject.h"

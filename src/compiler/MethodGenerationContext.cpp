@@ -27,10 +27,10 @@
 #include "MethodGenerationContext.h"
 
 #include <algorithm>
-#include <cassert>
+#include <assert.h>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
+#include <stdio.h>
 #include <limits>
 #include <string>
 #include <tuple>

@@ -1,8 +1,7 @@
 #include "PagedMarkSweepHeap.h"
 
-#include <cstdlib>
-#include <cstring>
-#include <string>
+#include <stdlib.h>
+#include <string.h>
 #include <vector>
 
 #include "../memory/Heap.h"

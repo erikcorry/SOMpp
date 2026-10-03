@@ -26,9 +26,7 @@
  THE SOFTWARE.
  */
 #include <cstddef>
-#include <cstring>
-#include <iostream>
-#include <vector>
+#include <string.h>
 
 #include "../misc/defs.h"
 #include "../vm/IsValidObject.h"
@@ -133,24 +131,25 @@ public:
     void MarkObjectAsInvalid() override;
     [[nodiscard]] bool IsMarkedInvalid() const final;
 
-    [[nodiscard]] std::string AsDebugString() const override;
+    DECLARE_AS_DEBUG_STRING(override)
 
     static void AssertVMObjectStructure() {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Winvalid-offsetof"
+        constexpr size_t word = sizeof(void*);
         static_assert(
-            offsetof(VMObject, gcField) == 8,
-            "vtable ptr should push gcField to offset 8 on 64-bit systems. If "
+            offsetof(VMObject, gcField) == word,
+            "vtable ptr should push gcField to offset 1 word. If "
             "this fails, please update the offsets in the VMObject structure "
             "at the top of this file accordingly.");
-        static_assert(offsetof(VMObject, hash) == 16,
-                      "hash should be at offset 16");
-        static_assert(offsetof(VMObject, totalObjectSize) == 24,
-                      "totalObjectSize should be at offset 24");
-        static_assert(offsetof(VMObject, numberOfFields) == 32,
-                      "numberOfFields should be at offset 32");
-        static_assert(offsetof(VMObject, clazz) == 40,
-                      "clazz should be at offset 40");
+        static_assert(offsetof(VMObject, hash) == 2 * word,
+                      "hash should be at offset 2 words");
+        static_assert(offsetof(VMObject, totalObjectSize) == 3 * word,
+                      "totalObjectSize should be at offset 3 words");
+        static_assert(offsetof(VMObject, numberOfFields) == 4 * word,
+                      "numberOfFields should be at offset 4 words");
+        static_assert(offsetof(VMObject, clazz) == 5 * word,
+                      "clazz should be at offset 5 words");
 #pragma GCC diagnostic pop
     }
 

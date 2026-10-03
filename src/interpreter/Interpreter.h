@@ -48,7 +48,6 @@
 
 class Interpreter {
 public:
-    template <bool PrintBytecodes>
     static vm_oop_t Start();
 
     static VMFrame* PushNewFrame(VMMethod* method);
@@ -81,12 +80,12 @@ private:
     static size_t bytecodeIndexGlobal;
     static uint8_t* currentBytecodes;
 
-    static const std::string unknownGlobal;
-    static const std::string doesNotUnderstand;
-    static const std::string escapedBlock;
+    static constexpr const char* unknownGlobal = "unknownGlobal:";
+    static constexpr const char* doesNotUnderstand =
+        "doesNotUnderstand:arguments:";
+    static constexpr const char* escapedBlock = "escapedBlock:";
 
     static void startGC();
-    static void disassembleMethod();
 
     static VMFrame* popFrame();
     static void popFrameAndPushResult(vm_oop_t result);

@@ -1,15 +1,18 @@
 #include "IsValidObject.h"
 
-#include <cassert>
-#include <vector>
+#include <assert.h>
 
+#ifndef FRUCTUS
 #include "../compiler/Variable.h"
+#endif
 #include "../memory/Heap.h"
 #include "../misc/defs.h"
 #include "../vmobjects/AbstractObject.h"
 #include "../vmobjects/ObjectFormats.h"
 #include "../vmobjects/VMArray.h"
+#ifndef FRUCTUS
 #include "../vmobjects/VMBigInteger.h"
+#endif
 #include "../vmobjects/VMBlock.h"
 #include "../vmobjects/VMClass.h"  // NOLINT(misc-include-cleaner) it's required to make the types complete
 #include "../vmobjects/VMDouble.h"
@@ -137,6 +140,7 @@ bool IsVMInteger(vm_oop_t obj) {
     return get_vtable(AS_OBJ(obj)) == vt_integer;
 }
 
+#ifndef FRUCTUS
 bool IsVMDouble(vm_oop_t obj) {
     assert(vt_double != nullptr);
     return get_vtable(AS_OBJ(obj)) == vt_double;
@@ -146,10 +150,23 @@ bool IsVMBigInteger(vm_oop_t obj) {
     assert(vt_big_integer != nullptr);
     return get_vtable(AS_OBJ(obj)) == vt_big_integer;
 }
+#endif
 
 bool IsVMMethod(vm_oop_t obj) {
     assert(vt_method != nullptr);
     return get_vtable(AS_OBJ(obj)) == vt_method;
+}
+
+bool IsVMInvokable(vm_oop_t obj) {
+    if (IS_TAGGED(obj)) {
+        return false;
+    }
+    void* vt = get_vtable(AS_OBJ(obj));
+    return vt == vt_method || vt == vt_primitive ||
+           vt == vt_safe_un_primitive || vt == vt_safe_bin_primitive ||
+           vt == vt_safe_ter_primitive || vt == vt_eval_primitive ||
+           vt == vt_literal_return || vt == vt_global_return ||
+           vt == vt_getter || vt == vt_setter;
 }
 
 bool IsVMSymbol(vm_oop_t obj) {
@@ -197,8 +214,10 @@ void obtain_vtables_of_known_classes(VMSymbol* someValidSymbol) {
 
     vt_class = get_vtable(load_ptr(symbolClass));
 
+#ifndef FRUCTUS
     auto* dbl = new (GetHeap<HEAP_CLS>(), 0) VMDouble(0.0);
     vt_double = get_vtable(dbl);
+#endif
 
     auto* ev = new (GetHeap<HEAP_CLS>(), 0) VMEvaluationPrimitive(1);
     vt_eval_primitive = get_vtable(ev);
@@ -206,12 +225,18 @@ void obtain_vtables_of_known_classes(VMSymbol* someValidSymbol) {
     auto* i = new (GetHeap<HEAP_CLS>(), 0) VMInteger(0);
     vt_integer = get_vtable(i);
 
+#ifndef FRUCTUS
     auto* bi =
         new (GetHeap<HEAP_CLS>(), 0) VMBigInteger("4611686018427387904", false);
     vt_big_integer = get_vtable(bi);
+#endif
 
+#ifdef FRUCTUS
+    auto* mth = new (GetHeap<HEAP_CLS>(), 0) VMMethod(nullptr, 0, 0, 0, 0);
+#else
     auto* mth = new (GetHeap<HEAP_CLS>(), 0)
         VMMethod(nullptr, 0, 0, 0, 0, nullptr, nullptr);
+#endif
     vt_method = get_vtable(mth);
     vt_object = get_vtable(load_ptr(nilObject));
 
@@ -234,19 +259,25 @@ void obtain_vtables_of_known_classes(VMSymbol* someValidSymbol) {
         VMSafeTernaryPrimitive(someValidSymbol, TernaryPrim());
     vt_safe_ter_primitive = get_vtable(sbp3);
 
+#ifdef FRUCTUS
+  #define V
+#else
     vector<Variable> v;
+  #define V v,
+#endif
     auto* lr = new (GetHeap<HEAP_CLS>(), 0)
-        VMLiteralReturn(someValidSymbol, v, someValidSymbol);
+        VMLiteralReturn(someValidSymbol, V someValidSymbol);
     vt_literal_return = get_vtable(lr);
 
     auto* gr = new (GetHeap<HEAP_CLS>(), 0)
-        VMGlobalReturn(someValidSymbol, v, someValidSymbol);
+        VMGlobalReturn(someValidSymbol, V someValidSymbol);
     vt_global_return = get_vtable(gr);
 
-    auto* get = new (GetHeap<HEAP_CLS>(), 0) VMGetter(someValidSymbol, v, 0);
+    auto* get = new (GetHeap<HEAP_CLS>(), 0) VMGetter(someValidSymbol, V 0);
     vt_getter = get_vtable(get);
 
-    auto* set = new (GetHeap<HEAP_CLS>(), 0) VMSetter(someValidSymbol, v, 0, 0);
+    auto* set = new (GetHeap<HEAP_CLS>(), 0) VMSetter(someValidSymbol, V 0, 0);
+#undef V
     vt_setter = get_vtable(set);
 
     auto* str = new (GetHeap<HEAP_CLS>(), 0) VMString(0, nullptr);

@@ -26,7 +26,6 @@
 
 #include "VMPrimitive.h"
 
-#include <string>
 
 #include "../memory/Heap.h"
 #include "../misc/debug.h"
@@ -64,17 +63,23 @@ bool VMPrimitive::IsEmpty() const {
     return prim.pointer == &emptyRoutine;
 }
 
+#ifndef FRUCTUS
 void VMPrimitive::InlineInto(MethodGenerationContext& /*mgenc*/,
                              const Parser& /*parser*/, bool /*mergeScope*/) {
     ErrorExit(
         "VMPrimitive::InlineInto is not supported, and should not be reached");
 }
+#endif
 
+#if DEBUG
 std::string VMPrimitive::AsDebugString() const {
     return "Primitive(" + GetClass()->GetName()->GetStdString() + ">>#" +
            GetSignature()->GetStdString() + ")";
 }
+#endif
 
+#ifndef FRUCTUS
 void VMPrimitive::Dump(const char* /*indent*/, bool /*printObjects*/) {
     DebugPrint("<primitive>\n");
 }
+#endif

@@ -1,10 +1,10 @@
 #include "CopyingCollector.h"
 
-#include <cassert>
+#include <assert.h>
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
-#include <cstring>
+#include <stdlib.h>
+#include <string.h>
 
 #include "../memory/Heap.h"
 #include "../misc/debug.h"

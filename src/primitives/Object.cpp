@@ -33,7 +33,9 @@
 #include "../vm/Universe.h"  // NOLINT(misc-include-cleaner) it's required to make the types complete
 #include "../vmobjects/ObjectFormats.h"
 #include "../vmobjects/VMArray.h"
+#ifndef FRUCTUS
 #include "../vmobjects/VMBigInteger.h"  // NOLINT(misc-include-cleaner)
+#endif
 #include "../vmobjects/VMClass.h"  // NOLINT(misc-include-cleaner) it's required to make the types complete
 #include "../vmobjects/VMFrame.h"
 #include "../vmobjects/VMInvokable.h"

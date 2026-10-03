@@ -27,8 +27,7 @@
  */
 
 #include <cstdint>
-#include <cstdio>
-#include <string>
+#include <stdio.h>
 
 // Macro Debugging
 #define VALUE_TO_STRING(x) #x
@@ -168,6 +167,18 @@ typedef PagedMarkSweepHeap HEAP_CLS;
   #ifndef DEBUG
     #define DEBUG false
   #endif
+#endif
+
+/**
+ * AsDebugString() is only available in debug builds. Subclasses of
+ * AbstractVMObject declare it with DECLARE_AS_DEBUG_STRING(override) or
+ * DECLARE_AS_DEBUG_STRING(final), and define it inside #if DEBUG.
+ */
+#if DEBUG
+  #define DECLARE_AS_DEBUG_STRING(SPECIFIER) \
+      [[nodiscard]] std::string AsDebugString() const SPECIFIER;
+#else
+  #define DECLARE_AS_DEBUG_STRING(SPECIFIER)
 #endif
 
 //

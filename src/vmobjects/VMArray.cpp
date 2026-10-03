@@ -26,10 +26,9 @@
 
 #include "../vmobjects/VMArray.h"
 
-#include <cassert>
+#include <assert.h>
 #include <cstddef>
-#include <cstring>
-#include <string>
+#include <string.h>
 
 #include "../memory/Heap.h"
 #include "../misc/defs.h"
@@ -70,9 +69,11 @@ VMArray* VMArray::CloneForMovingGC() const {
 }
 
 void VMArray::IndexOutOfBounds(size_t idx) const {
-    ErrorExit(("Array index out of bounds: Accessing " + to_string(idx) +
-               ", but array size is only " + to_string(numberOfFields) + "\n")
-                  .c_str());
+    ErrorPrintf(
+        "Array index out of bounds: Accessing %zu, but array size is only "
+        "%zu\n",
+        idx, numberOfFields);
+    ErrorExit("Array index out of bounds");
 }
 
 void VMArray::CopyIndexableFieldsTo(VMArray* to) const {
@@ -82,6 +83,8 @@ void VMArray::CopyIndexableFieldsTo(VMArray* to) const {
     }
 }
 
+#if DEBUG
 std::string VMArray::AsDebugString() const {
     return "Array(" + to_string(GetNumberOfIndexableFields()) + ")";
 }
+#endif

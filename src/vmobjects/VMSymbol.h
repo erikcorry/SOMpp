@@ -26,7 +26,6 @@
  THE SOFTWARE.
  */
 
-#include <iostream>
 
 #include "../misc/defs.h"
 #include "ObjectFormats.h"
@@ -43,7 +42,7 @@ public:
     [[nodiscard]] VMSymbol* CloneForMovingGC() const override;
     [[nodiscard]] VMClass* GetClass() const override;
 
-    [[nodiscard]] std::string AsDebugString() const override;
+    DECLARE_AS_DEBUG_STRING(override)
 
     void WalkObjects(walk_heap_fn /*unused*/) override;
 

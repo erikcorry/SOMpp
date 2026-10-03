@@ -1,7 +1,7 @@
 
 #include "DebugCopyingCollector.h"
 
-#include <cassert>
+#include <assert.h>
 #include <cstddef>
 #include <cstdint>
 

@@ -1,8 +1,11 @@
 #pragma once
 
+#ifdef FRUCTUS
+  #define recordStat(feature, ...)
+#else
+
 #include <cstdint>
 #include <map>
-#include <string>
 #include <utility>
 
 #include "../vmobjects/VMClass.h"
@@ -83,3 +86,5 @@ private:
     static std::map<std::string, int64_t> receiverTypes;
     static std::map<std::string, struct receiverStatData> callStats;
 };
+
+#endif  // FRUCTUS
