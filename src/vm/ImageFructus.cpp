@@ -5,6 +5,7 @@
 
 #include <stddef.h>
 
+#include "../interpreter/SendSite.h"
 #include "../memory/Heap.h"
 #include "../vmobjects/ObjectFormats.h"
 #include "../vmobjects/VMArray.h"
@@ -163,12 +164,13 @@ void FructusImage::CheckLayout() {
 
     CHECK_FIELD(VMSymbol, numberOfArgumentsOfSignature,
                 VMSymbol_numberOfArgumentsOfSignature);
-    CHECK_FIELD(VMSymbol, cachedClass_invokable,
-                VMSymbol_cachedClass_invokable);
-    CHECK_FIELD(VMSymbol, nextCachePos, VMSymbol_nextCachePos);
-    CHECK_FIELD(VMSymbol, cachedInvokable, VMSymbol_cachedInvokable);
     CHECK_FIELD(VMSymbol, length, VMSymbol_length);
     CHECK_SIZE(VMSymbol, L::VMSymbol_size);
+
+    static_assert(SendSite::numberOfArguments == L::SendSite_numberOfArguments);
+    static_assert(SendSite::target == L::SendSite_target);
+    static_assert(SendSite::receiverClass == L::SendSite_receiverClass);
+    static_assert(SendSite::length == L::SendSite_length);
 
     CHECK_FIELD(VMInvokable, gcField, gcField);
     CHECK_FIELD(VMInvokable, signature, VMInvokable_signature);

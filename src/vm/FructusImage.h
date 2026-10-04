@@ -19,6 +19,10 @@
  *    symbols stay unique. There is no symbol table, and no symbols are made
  *    at run time.
  *  - Each class adds a global to the som_globals section.
+ *  - A method of a class is the global symbol <class label>.<mangled
+ *    selector>, for the super sends in other files. The sends carry their
+ *    inline caches, see interpreter/SendSite.h: they are unlinked, but a
+ *    super send is linked already, since it doesn't depend on the receiver.
  *  - A primitive is an object in the image like a method, which refers to
  *    its routine by name, see primitives/FructusPrimitives.h. Nothing is
  *    installed at run time.
@@ -72,12 +76,9 @@ constexpr size_t VMString_chars = 6;
 constexpr size_t VMString_size = 8;
 
 /** A symbol isn't an object: no vtable or GC field, see VMSymbol.h. */
-constexpr size_t VMSymbol_cachedClass_invokable = 0;
-constexpr size_t VMSymbol_nextCachePos = 6;
-constexpr size_t VMSymbol_cachedInvokable = 8;
-constexpr size_t VMSymbol_numberOfArgumentsOfSignature = 14;
-constexpr size_t VMSymbol_length = 15;
-constexpr size_t VMSymbol_size = 16;
+constexpr size_t VMSymbol_numberOfArgumentsOfSignature = 0;
+constexpr size_t VMSymbol_length = 1;
+constexpr size_t VMSymbol_size = 2;
 constexpr size_t VMSymbol_maxLength = 255;
 
 constexpr size_t VMInvokable_signature = 4;
@@ -108,6 +109,12 @@ constexpr size_t VMSetter_fieldIndex = 8;
 constexpr size_t VMSetter_argIndex = 10;
 constexpr size_t VMSetter_numberOfArguments = 12;
 constexpr size_t VMSetter_size = 14;
+
+/** A send bytecode and its inline cache, see interpreter/SendSite.h. */
+constexpr size_t SendSite_numberOfArguments = 1;
+constexpr size_t SendSite_target = 2;
+constexpr size_t SendSite_receiverClass = 4;
+constexpr size_t SendSite_length = 6;
 
 /** VMPrimitive and VMSafe*Primitive: a Prim, which is just a routine. */
 constexpr size_t VMPrimitive_prim = 8;

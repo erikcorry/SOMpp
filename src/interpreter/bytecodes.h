@@ -142,6 +142,8 @@ inline uint16_t ComputeOffset(uint8_t byte1, uint8_t byte2) {
     return ((uint16_t)byte1) | (uint16_t)(((uint16_t)byte2) << 8U);
 }
 
+/** A send, which carries an inline cache, see SendSite.h. */
+bool IsSendBytecode(uint8_t bc);
 bool IsJumpBytecode(uint8_t bc);
 uint8_t IsPushConstBytecode(uint8_t bc);
 uint8_t IsPushFieldBytecode(uint8_t bc);

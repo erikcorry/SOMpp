@@ -15,6 +15,7 @@
 #include <string>
 #include <vector>
 
+#include "../interpreter/SendSite.h"
 #include "../interpreter/bytecodes.h"
 #include "../primitives/FructusPrimitives.h"
 #include "../vm/FructusImage.h"
@@ -250,6 +251,9 @@ public:
     /** Write the local objects and symbols that were referred to. */
     void Finish();
 
+    /** The file has the methods of `cls` and its metaclass. */
+    void SetOwner(VMClass* cls) { owner = cls; }
+
     /** The assembler expression for a reference to `obj`. */
     std::string Ref(vm_oop_t obj);
 
@@ -273,7 +277,10 @@ private:
     void writeGlobalReturn(VMGlobalReturn* inv, const std::string& label);
     void writeGetter(VMGetter* inv, const std::string& label);
     void writeSetter(VMSetter* inv, const std::string& label);
-    void writeBytecodes(ObjectWriter& w, size_t offset, VMMethod* method);
+    void writeBytecodes(ObjectWriter& w, size_t offset, VMMethod* method,
+                        const std::vector<uint8_t>& fructusBytecodes);
+    void writeSendSite(ObjectWriter& w, size_t offset, VMMethod* method,
+                       size_t index);
     std::string describe(VMInvokable* inv);
 
     ImageWriter& image;
@@ -281,6 +288,8 @@ private:
     std::map<AbstractVMObject*, std::string> localLabels;
     std::deque<AbstractVMObject*> pending;
     std::map<std::string, VMSymbol*> symbols;  // by label, for stable output
+    std::set<AbstractVMObject*> globals;
+    VMClass* owner = nullptr;
 };
 
 class FructusImage::ImageWriter {
@@ -307,6 +316,16 @@ public:
         return classArrays.find(obj) != classArrays.end();
     }
 
+    /**
+     * The global label of a method of a class, and the class, or nullptr if
+     * `obj` isn't one. Super sends refer to them from other files.
+     */
+    const std::pair<std::string, VMClass*>* ClassInvokable(
+        AbstractVMObject* obj) const {
+        auto const it = classInvokables.find(obj);
+        return it == classInvokables.end() ? nullptr : &it->second;
+    }
+
     /** The fructus primitive `prim` stands for, or nullptr if there's none. */
     const PrimitiveSpec* PrimitiveFor(VMPrimitive* prim) const {
         auto const it = primitives.find(prim);
@@ -330,6 +349,8 @@ private:
     std::map<AbstractVMObject*, std::string> classLabels;
     std::map<VMPrimitive*, const PrimitiveSpec*> primitives;
     std::set<AbstractVMObject*> classArrays;
+    std::map<AbstractVMObject*, std::pair<std::string, VMClass*>>
+        classInvokables;
 };
 
 FructusImage::AsmFile::AsmFile(ImageWriter& image, const std::string& path,
@@ -376,6 +397,17 @@ std::string FructusImage::AsmFile::Ref(vm_oop_t obj) {
     if (it != localLabels.end()) {
         return it->second;
     }
+    if (const auto* inv = image.ClassInvokable(o)) {
+        VMClass* holder = inv->second;
+        if (owner == nullptr ||
+            (holder != owner && holder != owner->GetClass())) {
+            return inv->first;  // in the file of its class
+        }
+        localLabels[o] = inv->first;
+        globals.insert(o);
+        pending.push_back(o);
+        return inv->first;
+    }
     std::string label = ".Lo" + std::to_string(localLabels.size());
     localLabels[o] = label;
     pending.push_back(o);
@@ -392,6 +424,9 @@ void FructusImage::AsmFile::Finish() {
         AbstractVMObject* obj = pending.front();
         pending.pop_front();
         out << "\n";
+        if (globals.count(obj) != 0) {
+            out << "\t.globl\t" << localLabels[obj] << "\n";
+        }
         write(obj, localLabels[obj]);
     }
 
@@ -512,11 +547,6 @@ void FructusImage::AsmFile::writeSymbol(VMSymbol* sym, const std::string& label)
     out << "\t.balign\t2\n" << label << ":\t; Symbol #" << Printable(sym)
         << "\n";
     ObjectWriter w(out, label);
-    w.Raw(L::VMSymbol_cachedClass_invokable, 3 * L::word,
-          "\t.short\t0, 0, 0\t; cachedClass_invokable\n");
-    w.Word(L::VMSymbol_nextCachePos, 0, "nextCachePos");
-    w.Raw(L::VMSymbol_cachedInvokable, 3 * L::word,
-          "\t.short\t0, 0, 0\t; cachedInvokable\n");
     w.Byte(L::VMSymbol_numberOfArgumentsOfSignature,
            sym->numberOfArgumentsOfSignature, "numberOfArgumentsOfSignature");
     w.Byte(L::VMSymbol_length, (uint8_t)length, "length");
@@ -543,7 +573,14 @@ void FructusImage::AsmFile::writeInvokableHeader(ObjectWriter& w, VMInvokable* i
 void FructusImage::AsmFile::writeMethod(VMMethod* method, const std::string& label) {
     ObjectWriter w(out, label);
     size_t const numberOfConstants = method->numberOfConstants;
-    size_t const bcLength = method->bcLength;
+    // the sends are shorter on fructus
+    std::vector<uint8_t> const fructusBytecodes = method->ResizeSendSites(
+        L::SendSite_length, [method](size_t i, uint8_t* site) {
+            site[0] = method->bytecodes[i];
+            site[L::SendSite_numberOfArguments] =
+                method->bytecodes[i + SendSite::numberOfArguments];
+        });
+    size_t const bcLength = fructusBytecodes.size();
     size_t const bytecodes = L::VMMethod_size + numberOfConstants * L::word;
 
     writeInvokableHeader(w, method, Vtable("8VMMethod"), "Method");
@@ -566,15 +603,21 @@ void FructusImage::AsmFile::writeMethod(VMMethod* method, const std::string& lab
                Ref(load_ptr(method->indexableFields[i])),
                "constant " + std::to_string(i));
     }
-    writeBytecodes(w, bytecodes, method);
+    writeBytecodes(w, bytecodes, method, fructusBytecodes);
     w.End(L::VMMethod_size +
           L::PaddedSize(bcLength + numberOfConstants * L::word));
 }
 
-void FructusImage::AsmFile::writeBytecodes(ObjectWriter& w, size_t offset,
-                             VMMethod* method) {
+/**
+ * The bytecodes as ResizeSendSites() made them for fructus, with the inline
+ * caches of the sends, which are at the same bytecode as on the host.
+ */
+void FructusImage::AsmFile::writeBytecodes(
+    ObjectWriter& w, size_t offset, VMMethod* method,
+    const std::vector<uint8_t>& fructusBytecodes) {
     size_t const bcLength = method->bcLength;
     size_t i = 0;
+    size_t n = 0;
     while (i < bcLength) {
         uint8_t const bc = method->bytecodes[i];
         size_t const length = Bytecode::GetBytecodeLength(bc);
@@ -582,17 +625,62 @@ void FructusImage::AsmFile::writeBytecodes(ObjectWriter& w, size_t offset,
             Fail("bad bytecode " + std::to_string(bc) + " in " +
                  describe(method));
         }
+        if (IsSendBytecode(bc)) {
+            writeSendSite(w, offset + n, method, i);
+            i += length;
+            n += L::SendSite_length;
+            continue;
+        }
         std::ostringstream line;
         line << "\t.byte\t";
         for (size_t j = 0; j < length; j++) {
-            line << (j == 0 ? "" : ", ") << (unsigned)method->bytecodes[i + j];
+            line << (j == 0 ? "" : ", ") << (unsigned)fructusBytecodes[n + j];
         }
-        std::string name = Bytecode::GetBytecodeName(bc);
+        std::string name = Bytecode::GetBytecodeName(fructusBytecodes[n]);
         name.erase(name.find_last_not_of(' ') + 1);
         line << "\t; " << name << "\n";
-        w.Raw(offset + i, length, line.str());
+        w.Raw(offset + n, length, line.str());
         i += length;
+        n += length;
     }
+    if (n != fructusBytecodes.size()) {
+        Fail("the bytecodes of " + describe(method) + " don't add up");
+    }
+}
+
+/**
+ * A send, unlinked, see SendSite.h. A super send is linked here, since the
+ * world is closed and it doesn't depend on the receiver.
+ */
+void FructusImage::AsmFile::writeSendSite(ObjectWriter& w, size_t offset,
+                                          VMMethod* method, size_t index) {
+    uint8_t const bc = method->bytecodes[index];
+    uint8_t const numArgs =
+        method->bytecodes[index + SendSite::numberOfArguments];
+    VMSymbol* selector = method->GetSendSelector(index);
+    std::string name = Bytecode::GetBytecodeName(bc);
+    name.erase(name.find_last_not_of(' ') + 1);
+
+    std::string target = Ref(selector);
+    std::string receiverClass = "0";
+    std::string comment = name + " #" + Printable(selector);
+    if (bc == BC_SUPER_SEND) {
+        VMClass* holder = method->GetHolder();
+        auto* super = static_cast<VMClass*>(holder->GetSuperClass());
+        if (VMInvokable* inv = super->LookupInvokable(selector)) {
+            target = Ref(inv);
+            receiverClass = Ref(super);
+            comment += " in " + Printable(super->GetName());
+        } else {
+            comment += ", not understood";
+        }
+    }
+
+    std::ostringstream line;
+    line << "\t.byte\t" << (unsigned)bc << ", " << (unsigned)numArgs << "\t; "
+         << comment << "\n"
+         << "\t.short\t" << target << ", " << receiverClass << "\n";
+    w.Raw(offset, L::SendSite_length, line.str());
 }
 
 void FructusImage::AsmFile::writePrimitive(VMPrimitive* prim,
@@ -838,8 +926,12 @@ void FructusImage::ImageWriter::checkClosedWorld() {
             classArrays.insert(c->GetInstanceInvokables());
             size_t const n = c->GetNumberOfInstanceInvokables();
             for (size_t i = 0; i < n; i++) {
-                if (auto* method =
-                        dynamic_cast<VMMethod*>(c->GetInstanceInvokable(i))) {
+                VMInvokable* inv = c->GetInstanceInvokable(i);
+                classInvokables.emplace(
+                    inv, std::make_pair(ClassLabel(c) + "." +
+                                            Mangle(inv->GetSignature()),
+                                        c));
+                if (auto* method = dynamic_cast<VMMethod*>(inv)) {
                     checkPushes(cls, method);
                 }
             }
@@ -850,6 +942,7 @@ void FructusImage::ImageWriter::checkClosedWorld() {
 void FructusImage::ImageWriter::writeClass(VMClass* cls) {
     std::string const name = cls->GetName()->GetStdString();
     AsmFile file(*this, dir + "/" + name + ".s", name + ".som");
+    file.SetOwner(cls);
 
     std::string const label = ClassLabel(cls);
     file.WriteGlobal(cls, label);

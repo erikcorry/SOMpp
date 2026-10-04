@@ -103,7 +103,9 @@ VMFrame* VMFrame::CloneForMovingGC() const {
 
 #if GC_TYPE == GENERATIONAL || GC_TYPE == COPYING || GC_TYPE == DEBUG_COPYING
     VMMethod const* meth = load_ptr(method);
-    if (meth->GetGCField() != 0 && meth->GetGCField() != MASK_OBJECT_IS_OLD) {
+    // an old method can be seen by the write barrier, when a send in it is
+    // linked, see SendSite.h
+    if (meth->GetGCField() > MASK_BITS_ALL) {
         meth = (VMMethod*)meth->GetGCField();
     }
 //    int64_t numArgs =

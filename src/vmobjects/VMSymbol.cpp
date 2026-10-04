@@ -38,22 +38,10 @@
 #include "VMInvokable.h"
 #include "VMString.h"
 
-#ifdef FRUCTUS
-void VMSymbol::WalkObjects(walk_heap_fn walk) {
-    for (size_t i = 0; i < 3; i++) {
-        if (cachedClass_invokable[i] != nullptr) {
-            cachedClass_invokable[i] =
-                static_cast<GCClass*>(walk(cachedClass_invokable[i]));
-            cachedInvokable[i] =
-                static_cast<GCInvokable*>(walk(cachedInvokable[i]));
-        }
-    }
-}
-#else
+#ifndef FRUCTUS
 VMSymbol::VMSymbol(const size_t length, const char* const str)
-    :  // set the chars-pointer to point at the position of the first character
-      VMString((char*)((intptr_t)&cachedInvokable + (3 * sizeof(VMInvokable*))),
-               length),
+    :  // the chars follow the symbol
+      VMString((char*)(this + 1), length),
       numberOfArgumentsOfSignature(
           Signature::DetermineNumberOfArguments(str, length)) {
     size_t i = 0;
@@ -77,24 +65,9 @@ VMClass* VMSymbol::GetClass() const {
     return load_ptr(symbolClass);
 }
 
-void VMSymbol::WalkObjects(walk_heap_fn walk) {
-    for (size_t i = 0; i < nextCachePos; i++) {
-        cachedClass_invokable[i] =
-            static_cast<GCClass*>(walk(cachedClass_invokable[i]));
-        cachedInvokable[i] =
-            static_cast<GCInvokable*>(walk(cachedInvokable[i]));
-    }
-}
-
-#if DEBUG
+  #if DEBUG
 std::string VMSymbol::AsDebugString() const {
     return "Symbol(" + GetStdString() + ")";
 }
+  #endif
 #endif
-#endif
-
-void VMSymbol::UpdateCachedInvokable(VMClass* cls, VMInvokable* invo) {
-    store_ptr(cachedInvokable[nextCachePos], invo);
-    store_ptr(cachedClass_invokable[nextCachePos], cls);
-    nextCachePos = (nextCachePos + 1) % 3;
-}

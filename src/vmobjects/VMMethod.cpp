@@ -48,6 +48,7 @@
 #include "../compiler/Variable.h"
 #endif
 #include "../interpreter/Interpreter.h"
+#include "../interpreter/SendSite.h"
 #include "../interpreter/bytecodes.h"
 #include "../memory/Heap.h"
 #ifndef FRUCTUS
@@ -138,6 +139,34 @@ void VMMethod::WalkObjects(walk_heap_fn walk) {
             indexableFields[i] = walk(indexableFields[i]);
         }
     }
+
+#ifndef FRUCTUS
+    // the inline caches, see SendSite.h
+    for (size_t i = 0; i < bcLength;
+         i += Bytecode::GetBytecodeLength(bytecodes[i])) {
+        if (!IsSendBytecode(bytecodes[i])) {
+            continue;
+        }
+        uint8_t* site = &bytecodes[i];
+        SendSite::StoreWord(site + SendSite::target,
+                            walk((gc_oop_t)SendSite::GetTarget(site)));
+        if (SendSite::GetReceiverClass(site) != nullptr) {
+            SendSite::StoreWord(
+                site + SendSite::receiverClass,
+                walk((gc_oop_t)SendSite::GetReceiverClass(site)));
+        }
+    }
+#endif
+}
+
+VMSymbol* VMMethod::GetSendSelector(size_t bytecodeIndex) const {
+    const uint8_t* site = &bytecodes[bytecodeIndex];
+    assert(IsSendBytecode(site[0]));
+    void* target = SendSite::GetTarget(site);
+    if (SendSite::GetReceiverClass(site) == nullptr) {
+        return (VMSymbol*)target;
+    }
+    return ((VMInvokable*)target)->GetSignature();
 }
 
 #ifdef UNSAFE_FRAME_OPTIMIZATION
@@ -413,12 +442,12 @@ void VMMethod::inlineInto(MethodGenerationContext& mgenc,
             case BC_SEND_2:
             case BC_SEND_3:
             case BC_SEND_N: {
-                auto* const sym = (VMSymbol*)GetConstant(i);
+                VMSymbol* const sym = GetSendSelector(i);
                 EmitSEND(mgenc, parser, sym);
                 break;
             }
             case BC_SUPER_SEND: {
-                auto* const sym = (VMSymbol*)GetConstant(i);
+                VMSymbol* const sym = GetSendSelector(i);
                 EmitSUPERSEND(mgenc, parser, sym);
                 break;
             }
@@ -744,7 +773,79 @@ void VMMethod::MergeScopeInto(MethodGenerationContext& mgenc) {
 #endif
 
 #ifndef FRUCTUS
+std::vector<uint8_t> VMMethod::ResizeSendSites(
+    size_t siteLength,
+    const std::function<void(size_t, uint8_t*)>& writeSite) const {
+    // where each bytecode goes
+    std::vector<size_t> newIndex(bcLength + 1);
+    size_t n = 0;
+    for (size_t i = 0; i < bcLength;
+         i += Bytecode::GetBytecodeLength(bytecodes[i])) {
+        newIndex[i] = n;
+        n += IsSendBytecode(bytecodes[i])
+                 ? siteLength
+                 : Bytecode::GetBytecodeLength(bytecodes[i]);
+    }
+    newIndex[bcLength] = n;
+
+    std::vector<uint8_t> result(n);
+    for (size_t i = 0; i < bcLength;
+         i += Bytecode::GetBytecodeLength(bytecodes[i])) {
+        uint8_t const bc = bytecodes[i];
+        uint8_t* out = &result[newIndex[i]];
+        if (IsSendBytecode(bc)) {
+            writeSite(i, out);
+            continue;
+        }
+        memcpy(out, &bytecodes[i], Bytecode::GetBytecodeLength(bc));
+        if (!IsJumpBytecode(bc)) {
+            continue;
+        }
+
+        // the offset is from the jump, and the jump only gets shorter, so
+        // it takes the short form if the offset fits in a byte, as
+        // MethodGenerationContext does
+        bool const isLong = bc >= FIRST_DOUBLE_BYTE_JUMP_BYTECODE;
+        bool const isBackward =
+            bc == BC_JUMP_BACKWARD || bc == BC_JUMP2_BACKWARD;
+        size_t const offset = isLong
+                                  ? ComputeOffset(bytecodes[i + 1],
+                                                  bytecodes[i + 2])
+                                  : bytecodes[i + 1];
+        size_t const target = isBackward ? i - offset : i + offset;
+        size_t const newOffset = isBackward
+                                     ? newIndex[i] - newIndex[target]
+                                     : newIndex[target] - newIndex[i];
+        assert(newOffset <= offset);
+        uint8_t const shortBc =
+            isLong ? bc - NUM_SINGLE_BYTE_JUMP_BYTECODES : bc;
+        out[0] = newOffset <= 0xFF ? shortBc
+                                   : shortBc + NUM_SINGLE_BYTE_JUMP_BYTECODES;
+        out[1] = newOffset & 0xFFU;
+        out[2] = newOffset >> 8U;
+    }
+    return result;
+}
+
+/**
+ * The hash of the bytecodes with sends as they were before they had inline
+ * caches, the bytecode and the index of the selector, so that it's the same
+ * however the caches are linked, and the hashes of the primitives still
+ * match.
+ */
 size_t VMMethod::GetBytecodeHash() const {
-    return murmur3_32(bytecodes, bcLength, 0x00000000);
+    std::vector<uint8_t> const bcs =
+        ResizeSendSites(2, [this](size_t i, uint8_t* out) {
+            VMSymbol* selector = GetSendSelector(i);
+            size_t index = 0;
+            while (index < numberOfConstants &&
+                   GetIndexableField(index) != selector) {
+                index++;
+            }
+            assert(index < numberOfConstants);
+            out[0] = bytecodes[i];
+            out[1] = index;
+        });
+    return murmur3_32(bcs.data(), bcs.size(), 0x00000000);
 }
 #endif

@@ -30,6 +30,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "../interpreter/SendSite.h"
 #include "../interpreter/bytecodes.h"  // NOLINT(misc-include-cleaner) it's required for InterpreterLoop.h
 #include "../memory/Heap.h"
 #include "../misc/defs.h"
@@ -346,23 +347,23 @@ LABEL_BC_POP_FIELD_1:
     DISPATCH_NOGC();
 
 LABEL_BC_SEND:
-    PROLOGUE(2);
+    PROLOGUE(SendSite::length);
     SAVE_PC();
-    doSend(pc[-1]);
+    doSend(pc - SendSite::length);
     RELOAD_PC();
     DISPATCH_GC();
 
 LABEL_BC_SEND_1:
-    PROLOGUE(2);
+    PROLOGUE(SendSite::length);
     SAVE_PC();
-    doUnarySend(pc[-1]);
+    doUnarySend(pc - SendSite::length);
     RELOAD_PC();
     DISPATCH_GC();
 
 LABEL_BC_SUPER_SEND:
-    PROLOGUE(2);
+    PROLOGUE(SendSite::length);
     SAVE_PC();
-    doSuperSend(pc[-1]);
+    doSuperSend(pc - SendSite::length);
     RELOAD_PC();
     DISPATCH_GC();
 
@@ -744,16 +745,27 @@ void Interpreter::popFrameAndPushResult(vm_oop_t result) {
     GetFrame()->Push(result);
 }
 
-void Interpreter::send(VMSymbol* signature, VMClass* receiverClass) {
-    recordStat(ReceiverType, receiverClass);
+// The slow path of a send, which looks the selector up, and links the send
+// if it's unlinked, see SendSite.h.
+void Interpreter::sendMiss(uint8_t* site, VMClass* receiverClass) {
+    bool const isUnlinked = SendSite::GetReceiverClass(site) == nullptr;
+    VMSymbol* selector = method->GetSendSelector(site - method->GetBytecodes());
+    VMInvokable* invokable = receiverClass->LookupInvokable(selector);
 
-    VMInvokable* invokable = receiverClass->LookupInvokable(signature);
-
-    if (invokable != nullptr) {
-        recordStat(CallStats, receiverClass, invokable);
-        invokable->Invoke(GetFrame());
+    if (invokable == nullptr) {
+        triggerDoesNotUnderstand(selector);
+        return;
+    }
+    if (isUnlinked) {
+        SendSite::Link(site, invokable, receiverClass);
+        write_barrier(method, invokable);
+        write_barrier(method, receiverClass);
+    }
+    recordStat(CallStats, receiverClass, invokable);
+    if (site[0] == BC_SEND_1) {
+        invokable->Invoke1(GetFrame());
     } else {
-        triggerDoesNotUnderstand(signature);
+        invokable->Invoke(GetFrame());
     }
 }
 
@@ -958,54 +970,46 @@ void Interpreter::doPopFieldWithIndex(uint8_t fieldIndex) {
     }
 }
 
-void Interpreter::doSend(uint8_t constantIndex) {
-    auto* signature =
-        method->GetSymbolWithIndex(constantIndex);
-
-    uint8_t const numOfArgs = Signature::GetNumberOfArguments(signature);
-
-    vm_oop_t receiver = GetFrame()->GetStackElement(numOfArgs - 1);
-
+void Interpreter::doSend(uint8_t* site) {
+    vm_oop_t receiver =
+        GetFrame()->GetStackElement(SendSite::GetNumberOfArguments(site) - 1);
     assert(IsValidObject(receiver));
-    // make sure it is really a class
-    assert(dynamic_cast<VMClass*>(CLASS_OF(receiver)) != nullptr);
-
     VMClass* receiverClass = CLASS_OF(receiver);
-
-    assert(IsValidObject(receiverClass));
-    send(signature, receiverClass);
-}
-
-void Interpreter::doUnarySend(uint8_t constantIndex) {
-    auto* signature =
-        method->GetSymbolWithIndex(constantIndex);
-
-    const int numOfArgs = 1;
-
-    vm_oop_t receiver = frame->GetStackElement(numOfArgs - 1);
-
-    assert(IsValidObject(receiver));
-    // make sure it is really a class
-    assert(dynamic_cast<VMClass*>(CLASS_OF(receiver)) != nullptr);
-
-    VMClass* receiverClass = CLASS_OF(receiver);
-
-    assert(IsValidObject(receiverClass));
     recordStat(ReceiverType, receiverClass);
-    VMInvokable* invokable = receiverClass->LookupInvokable(signature);
 
-    if (invokable != nullptr) {
+    if (receiverClass == SendSite::GetReceiverClass(site)) {
+        auto* invokable = (VMInvokable*)SendSite::GetTarget(site);
         recordStat(CallStats, receiverClass, invokable);
-        invokable->Invoke1(GetFrame());
+        invokable->Invoke(GetFrame());
     } else {
-        triggerDoesNotUnderstand(signature);
+        sendMiss(site, receiverClass);
     }
 }
 
-void Interpreter::doSuperSend(uint8_t constantIndex) {
-    auto* signature =
-        method->GetSymbolWithIndex(constantIndex);
+void Interpreter::doUnarySend(uint8_t* site) {
+    vm_oop_t receiver = GetFrame()->GetStackElement(0);
+    assert(IsValidObject(receiver));
+    VMClass* receiverClass = CLASS_OF(receiver);
+    recordStat(ReceiverType, receiverClass);
 
+    if (receiverClass == SendSite::GetReceiverClass(site)) {
+        auto* invokable = (VMInvokable*)SendSite::GetTarget(site);
+        recordStat(CallStats, receiverClass, invokable);
+        invokable->Invoke1(GetFrame());
+    } else {
+        sendMiss(site, receiverClass);
+    }
+}
+
+void Interpreter::doSuperSend(uint8_t* site) {
+    // a linked super send has its invokable whatever the receiver is
+    if (SendSite::GetReceiverClass(site) != nullptr) {
+        auto* invokable = (VMInvokable*)SendSite::GetTarget(site);
+        invokable->Invoke(GetFrame());
+        return;
+    }
+
+    auto* signature = (VMSymbol*)SendSite::GetTarget(site);
     VMFrame const* const ctxt = GetFrame()->GetOuterContext();
     VMMethod const* const realMethod = ctxt->GetMethod();
     VMClass const* const holder = realMethod->GetHolder();
@@ -1014,6 +1018,9 @@ void Interpreter::doSuperSend(uint8_t constantIndex) {
     auto* invokable = super->LookupInvokable(signature);
 
     if (invokable != nullptr) {
+        SendSite::Link(site, invokable, super);
+        write_barrier(method, invokable);
+        write_barrier(method, super);
         invokable->Invoke(GetFrame());
     } else {
 #ifdef FRUCTUS

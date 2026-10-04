@@ -23,10 +23,9 @@ static gc_oop_t mark_object(gc_oop_t oop) {
     }
 
 #ifdef FRUCTUS
-    // a symbol isn't an object: it has no vtable and isn't marked, see
-    // VMSymbol.h
+    // a symbol isn't an object: it has no vtable or references and isn't
+    // marked, see VMSymbol.h
     if (VMSymbol::IsSymbol(oop)) {
-        reinterpret_cast<VMSymbol*>(oop)->WalkObjects(mark_object);
         return oop;
     }
 #endif

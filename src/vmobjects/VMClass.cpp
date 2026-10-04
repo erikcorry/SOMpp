@@ -199,16 +199,11 @@ void VMClass::SetInstanceInvokable(size_t index, VMInvokable* invokable) {
 VMInvokable* VMClass::LookupInvokable(VMSymbol* name) {
     assert(IsValidObject(this));
 
-    VMInvokable* invokable = name->GetCachedInvokable(this);
-    if (invokable != nullptr) {
-        return invokable;
-    }
-
+    // the sends cache what they find, see SendSite.h
     size_t const numInvokables = GetNumberOfInstanceInvokables();
     for (size_t i = 0; i < numInvokables; ++i) {
-        invokable = GetInstanceInvokable(i);
+        VMInvokable* invokable = GetInstanceInvokable(i);
         if (invokable->GetSignature() == name) {
-            name->UpdateCachedInvokable(this, invokable);
             return invokable;
         }
     }

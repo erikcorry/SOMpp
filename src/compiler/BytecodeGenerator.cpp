@@ -32,6 +32,7 @@
 #include <limits>
 #include <string>
 
+#include "../interpreter/SendSite.h"
 #include "../interpreter/bytecodes.h"
 #include "../vm/Globals.h"
 #include "../vm/IsValidObject.h"
@@ -314,23 +315,38 @@ void EmitPOPFIELD(MethodGenerationContext& mgenc, const Parser& parser,
     EmitPopFieldWithIndex(mgenc, idx);
 }
 
+/**
+ * An unlinked send, see SendSite.h. Nothing is collected while compiling, so
+ * the selector can be in the bytecodes before they are in a method.
+ */
+static void emitSendSite(MethodGenerationContext& mgenc, uint8_t bytecode,
+                         VMSymbol* msg, som_int_t stackEffect) {
+    uint8_t site[SendSite::length];
+    SendSite::Init(site, bytecode, Signature::GetNumberOfArguments(msg), msg);
+    mgenc.AddBytecode(bytecode, stackEffect);
+    for (size_t i = 1; i < SendSite::length; i++) {
+        mgenc.AddBytecodeArgument(site[i]);
+    }
+}
+
 void EmitSEND(MethodGenerationContext& mgenc, const Parser& parser,
               VMSymbol* msg) {
-    const uint8_t idx = mgenc.AddLiteralIfAbsent(msg, parser);
+    // the selector is a literal too, for VMMethod::GetBytecodeHash()
+    mgenc.AddLiteralIfAbsent(msg, parser);
 
     const uint8_t numArgs = Signature::GetNumberOfArguments(msg);
     const som_int_t stackEffect = -numArgs + 1;  // +1 for the result
 
-    Emit2(mgenc, numArgs == 1 ? BC_SEND_1 : BC_SEND, idx, stackEffect);
+    emitSendSite(mgenc, numArgs == 1 ? BC_SEND_1 : BC_SEND, msg, stackEffect);
 }
 
 void EmitSUPERSEND(MethodGenerationContext& mgenc, const Parser& parser,
                    VMSymbol* msg) {
-    const uint8_t idx = mgenc.AddLiteralIfAbsent(msg, parser);
+    mgenc.AddLiteralIfAbsent(msg, parser);
     const uint8_t numArgs = Signature::GetNumberOfArguments(msg);
     const som_int_t stackEffect = -numArgs + 1;  // +1 for the result
 
-    Emit2(mgenc, BC_SUPER_SEND, idx, stackEffect);
+    emitSendSite(mgenc, BC_SUPER_SEND, msg, stackEffect);
 }
 
 void EmitRETURNSELF(MethodGenerationContext& mgenc) {

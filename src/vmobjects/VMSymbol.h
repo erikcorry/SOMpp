@@ -41,9 +41,8 @@ extern "C" const char __stop_som_symbols[];
 /**
  * A symbol on fructus is only for dispatch and field names, and is only in
  * the image, see vm/FructusImage.h. The program can't have one, so it isn't
- * an object: it has no vtable and no GC field, and isn't marked. The GC
- * tests for symbols with IsSymbol() and walks their cache with
- * WalkObjects().
+ * an object: it has no vtable and no GC field, and has no references, so the
+ * GC tests for symbols with IsSymbol() and leaves them alone.
  */
 class VMSymbol {
 public:
@@ -55,9 +54,6 @@ public:
                (const char*)obj < __stop_som_symbols;
     }
 
-    /** Not virtual, see IsSymbol(). */
-    void WalkObjects(walk_heap_fn walk);
-
     [[nodiscard]] size_t GetStringLength() const { return length; }
 
     /** The chars follow the symbol, and aren't null-terminated. */
@@ -66,31 +62,10 @@ public:
     }
 
 private:
-    GCClass* cachedClass_invokable[3];
-    size_t nextCachePos;
-    GCInvokable* cachedInvokable[3];
     uint8_t numberOfArgumentsOfSignature;
     uint8_t length;
 
-    inline VMInvokable* GetCachedInvokable(const VMClass* cls) const {
-        if (cls == load_ptr(cachedClass_invokable[0])) {
-            return load_ptr(cachedInvokable[0]);
-        }
-
-        if (cls == load_ptr(cachedClass_invokable[1])) {
-            return load_ptr(cachedInvokable[1]);
-        }
-
-        if (cls == load_ptr(cachedClass_invokable[2])) {
-            return load_ptr(cachedInvokable[2]);
-        }
-        return nullptr;
-    }
-
-    void UpdateCachedInvokable(VMClass* cls, VMInvokable* invo);
-
     friend class Signature;
-    friend class VMClass;
     friend class FructusImage;
 };
 #else
@@ -105,33 +80,10 @@ public:
 
     DECLARE_AS_DEBUG_STRING(override)
 
-    void WalkObjects(walk_heap_fn /*unused*/) override;
-
 private:
     const uint8_t numberOfArgumentsOfSignature;
-    GCClass* cachedClass_invokable[3]{};
-    size_t nextCachePos{0};
-    GCInvokable* cachedInvokable[3]{};
-
-    inline VMInvokable* GetCachedInvokable(const VMClass* cls) const {
-        if (cls == load_ptr(cachedClass_invokable[0])) {
-            return load_ptr(cachedInvokable[0]);
-        }
-
-        if (cls == load_ptr(cachedClass_invokable[1])) {
-            return load_ptr(cachedInvokable[1]);
-        }
-
-        if (cls == load_ptr(cachedClass_invokable[2])) {
-            return load_ptr(cachedInvokable[2]);
-        }
-        return nullptr;
-    }
-
-    void UpdateCachedInvokable(VMClass* cls, VMInvokable* invo);
 
     friend class Signature;
-    friend class VMClass;
     friend class FructusImage;
 };
 #endif

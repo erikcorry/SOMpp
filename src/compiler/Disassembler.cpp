@@ -30,6 +30,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "../interpreter/SendSite.h"
 #include "../interpreter/bytecodes.h"
 #include "../misc/debug.h"
 #include "../vm/Globals.h"
@@ -312,27 +313,22 @@ void Disassembler::dumpMethod(uint8_t* bytecodes, size_t numberOfBytecodes,
                 break;
             }
             case BC_SEND:
-            case BC_SEND_1: {
-                if (method != nullptr && printObjects) {
-                    auto* name =
-                        static_cast<VMSymbol*>(method->GetConstant(bc_idx));
-                    DebugPrint("(index: %d) signature: %s\n",
-                               bytecodes[bc_idx + 1],
-                               name->GetStdString().c_str());
-                } else {
-                    DebugPrint("(index: %d)\n", bytecodes[bc_idx + 1]);
-                }
-                break;
-            }
+            case BC_SEND_1:
             case BC_SUPER_SEND: {
+                const uint8_t* site = &bytecodes[bc_idx];
+                VMClass const* cls = SendSite::GetReceiverClass(site);
                 if (method != nullptr && printObjects) {
-                    auto* name =
-                        static_cast<VMSymbol*>(method->GetConstant(bc_idx));
-                    DebugPrint("(index: %d) signature: %s\n",
-                               bytecodes[bc_idx + 1],
-                               name->GetStdString().c_str());
+                    DebugPrint("signature: %s%s%s\n",
+                               method->GetSendSelector(bc_idx)
+                                   ->GetStdString()
+                                   .c_str(),
+                               cls == nullptr ? "" : " linked to ",
+                               cls == nullptr
+                                   ? ""
+                                   : cls->GetName()->GetStdString().c_str());
                 } else {
-                    DebugPrint("(index: %d)\n", bytecodes[bc_idx + 1]);
+                    DebugPrint("(arguments: %d)\n",
+                               SendSite::GetNumberOfArguments(site));
                 }
                 break;
             }
@@ -667,10 +663,9 @@ void Disassembler::DumpBytecode(VMFrame* frame, VMMethod* method,
         case BC_SUPER_SEND:
         case BC_SEND:
         case BC_SEND_1: {
-            auto* sel = static_cast<VMSymbol*>(method->GetConstant(bc_idx));
+            VMSymbol* sel = method->GetSendSelector(bc_idx);
 
-            DebugPrint("(index: %d) signature: %s (", BC_1,
-                       sel->GetStdString().c_str());
+            DebugPrint("signature: %s (", sel->GetStdString().c_str());
             // handle primitives, they don't increase call-depth
             vm_oop_t elem = frame->GetStackElement(
                 Signature::GetNumberOfArguments(sel) - 1);

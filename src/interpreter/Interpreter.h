@@ -96,7 +96,7 @@ private:
     VMFrame* popFrame();
     void popFrameAndPushResult(vm_oop_t result);
 
-    void send(VMSymbol* signature, VMClass* receiverClass);
+    void sendMiss(uint8_t* site, VMClass* receiverClass);
 
     void triggerDoesNotUnderstand(VMSymbol* signature);
 
@@ -121,9 +121,9 @@ private:
     void doPopArgument(uint8_t bc1, uint8_t bc2);
     void doPopField(uint8_t fieldIndex);
     void doPopFieldWithIndex(uint8_t fieldIndex);
-    void doSend(uint8_t constantIndex);
-    void doUnarySend(uint8_t constantIndex);
-    void doSuperSend(uint8_t constantIndex);
+    void doSend(uint8_t* site);
+    void doUnarySend(uint8_t* site);
+    void doSuperSend(uint8_t* site);
     void doReturnLocal();
     void doReturnNonLocal();
     void doInc();

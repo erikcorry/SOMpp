@@ -27,7 +27,9 @@
  */
 
 #ifndef FRUCTUS
+#include <functional>
 #include <queue>
+#include <vector>
 #endif
 
 #ifndef FRUCTUS
@@ -139,7 +141,18 @@ public:
 
 #ifndef FRUCTUS
     [[nodiscard]] size_t GetBytecodeHash() const;
+
+    /**
+     * The bytecodes with each send `siteLength` long, and the jumps over
+     * them adjusted. `writeSite(index, site)` writes the send at `index`.
+     */
+    [[nodiscard]] std::vector<uint8_t> ResizeSendSites(
+        size_t siteLength,
+        const std::function<void(size_t, uint8_t*)>& writeSite) const;
 #endif
+
+    /** The selector of the send at `bytecodeIndex`, see SendSite.h. */
+    [[nodiscard]] VMSymbol* GetSendSelector(size_t bytecodeIndex) const;
 
     void SetHolder(VMClass* hld) override;
     void SetHolderAll(VMClass* hld) const;

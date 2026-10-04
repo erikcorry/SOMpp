@@ -29,6 +29,8 @@
 #include <assert.h>
 #include <cstdint>
 
+#include "SendSite.h"
+
 const uint8_t Bytecode::bytecodeLengths[] = {
     1,  // BC_HALT
     1,  // BC_DUP
@@ -62,9 +64,9 @@ const uint8_t Bytecode::bytecodeLengths[] = {
     2,  // BC_POP_FIELD
     1,  // BC_POP_FIELD_0
     1,  // BC_POP_FIELD_1
-    2,  // BC_SEND
-    2,  // BC_SEND_1
-    2,  // BC_SUPER_SEND
+    SendSite::length,  // BC_SEND
+    SendSite::length,  // BC_SEND_1
+    SendSite::length,  // BC_SUPER_SEND
     1,  // BC_RETURN_LOCAL
     1,  // BC_RETURN_NON_LOCAL
     1,  // BC_RETURN_SELF
@@ -170,6 +172,10 @@ const char* Bytecode::bytecodeNames[] = {
     "JUMP2_IF_GREATER",          // 65
     "JUMP2_BACKWARD  ",          // 66
 };
+
+bool IsSendBytecode(uint8_t bc) {
+    return bc == BC_SEND || bc == BC_SEND_1 || bc == BC_SUPER_SEND;
+}
 
 bool IsJumpBytecode(uint8_t bc) {
     static_assert(
