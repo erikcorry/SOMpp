@@ -262,9 +262,10 @@ void Parser::superclass(ClassGenerationContext& cgenc) {
         // We avoid here any kind of dynamic solution to avoid further
         // complexity. However, that makes it static, it is going to make it
         // harder to change the definition of Class and Object
+        // These are the fields of VMClass, in order. The class of a class is
+        // in the object header, not a field.
         vector<std::string> const fieldNamesOfClass{
-            "class", "name", "instanceFields", "instanceInvokables",
-            "superClass"};
+            "name", "instanceFields", "instanceInvokables", "superClass"};
         VMArray* fieldNames =
             Universe::NewArrayOfSymbolsFromStrings(fieldNamesOfClass);
         cgenc.SetClassFieldsOfSuper(fieldNames);
