@@ -111,17 +111,17 @@ _Vector::_Vector() {
     // likely need to be adapted, too.
     // In order to print out hashes use the --hashes flag when executing SOM++
 
-    Add("at:", false, &vecAt, 2955669944, &vecAtAWFY, 3362920797);
-    Add("at:put:", false, &vecAtPut, 2955669944, &vecAtPutAWFY, 3362920797);
+    Add("at:", false, &vecAt, 2775246332, &vecAtAWFY, 3362920797);
+    Add("at:put:", false, &vecAtPut, 2775246332, &vecAtPutAWFY, 3362920797);
 
-    Add("first", &vecFirst, false, 2434835181);
-    Add("last", &vecLast, false, 1610373944);
-    Add("append:", &vecAppend, false, 4139088070);
-    Add("remove", &removeLast, false, 32513925);
-    Add("remove:", &removeObject, false, 549969389);
-    Add("size", &vecSize, false, 21444087);
-    Add("capacity", &capacity, false, 3270502414);
-    Add("asArray", &asArray, false, 962932162);
-    Add("removeFirst", &removeFirst, false, 554020207);
+    Add("first", &vecFirst, false, 2126887990);
+    Add("last", &vecLast, false, 329016330);
+    Add("append:", &vecAppend, false, 4146875313);
+    Add("remove", &removeLast, false, 217172902);
+    Add("remove:", &removeObject, false, 3954114253);
+    Add("size", &vecSize, false, 1238447904);
+    Add("capacity", &capacity, false, 3807813854);
+    Add("asArray", &asArray, false, 4180859127);
+    Add("removeFirst", &removeFirst, false, 3871255612);
     Add("removeAll", &removeAll, false, 1510429688);
 };

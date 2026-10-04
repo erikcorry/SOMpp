@@ -126,6 +126,10 @@ VMTrivialMethod* MethodGenerationContext::assembleLiteralReturn(
         case BC_PUSH_1: {
             return MakeLiteralReturn(signature, arguments, NEW_INT(1));
         }
+        case BC_PUSH_SMALL_INT: {
+            return MakeLiteralReturn(signature, arguments,
+                                     NEW_INT((int8_t)bytecode[1]));
+        }
         case BC_PUSH_NIL: {
             return MakeLiteralReturn(signature, arguments, load_ptr(nilObject));
         }

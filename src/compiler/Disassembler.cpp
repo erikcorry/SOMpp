@@ -201,6 +201,10 @@ void Disassembler::dumpMethod(uint8_t* bytecodes, size_t numberOfBytecodes,
                 // no more details to be printed
                 break;
             }
+            case BC_PUSH_SMALL_INT: {
+                DebugPrint("value: %d\n", (int8_t)bytecodes[bc_idx + 1]);
+                break;
+            }
             case BC_PUSH_LOCAL_0: {
                 DebugPrint("local: 0, context: 0\n");
                 break;
@@ -443,6 +447,10 @@ void Disassembler::DumpBytecode(VMFrame* frame, VMMethod* method,
         case BC_PUSH_1:
         case BC_PUSH_NIL: {
             DebugPrint("\n");
+            break;
+        }
+        case BC_PUSH_SMALL_INT: {
+            DebugPrint("value: %d\n", (int8_t)BC_1);
             break;
         }
         case BC_HALT: {

@@ -97,6 +97,7 @@ vm_oop_t Interpreter::Start() {
                                        &&LABEL_BC_PUSH_CONSTANT,
                                        &&LABEL_BC_PUSH_0,
                                        &&LABEL_BC_PUSH_1,
+                                       &&LABEL_BC_PUSH_SMALL_INT,
                                        &&LABEL_BC_PUSH_NIL,
                                        &&LABEL_BC_PUSH_GLOBAL,
                                        &&LABEL_BC_POP,
@@ -256,6 +257,15 @@ LABEL_BC_PUSH_1:
     } else {
         GetFrame()->Push(NEW_INT(1));
     }
+    DISPATCH_NOGC();
+
+LABEL_BC_PUSH_SMALL_INT:
+    PROLOGUE(2);
+#if USE_TAGGING
+    GetFrame()->PushNoBarrier(NEW_INT((int8_t)pc[-1]));
+#else
+    GetFrame()->Push(NEW_INT((int8_t)pc[-1]));
+#endif
     DISPATCH_NOGC();
 
 LABEL_BC_PUSH_NIL:

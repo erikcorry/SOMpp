@@ -385,6 +385,10 @@ void VMMethod::inlineInto(MethodGenerationContext& mgenc,
                 Emit1(mgenc, bytecode, 1);
                 break;
             }
+            case BC_PUSH_SMALL_INT: {
+                Emit2(mgenc, bytecode, bytecodes[i + 1], 1);
+                break;
+            }
             case BC_POP: {
                 // TODO(smarr): PySOM simply does Emit1
                 //   not sure whether EmitPOP might cause issues if we try to do
@@ -562,6 +566,7 @@ void VMMethod::AdaptAfterOuterInlined(
             case BC_PUSH_CONSTANT:
             case BC_PUSH_0:
             case BC_PUSH_1:
+            case BC_PUSH_SMALL_INT:
             case BC_PUSH_NIL:
             case BC_PUSH_GLOBAL:  // BC_PUSH_GLOBAL doesn't encode context
             case BC_PUSH_FIELD:

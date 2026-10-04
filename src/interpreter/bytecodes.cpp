@@ -50,6 +50,7 @@ const uint8_t Bytecode::bytecodeLengths[] = {
     1 + sizeof(void*),  // BC_PUSH_CONSTANT
     1,  // BC_PUSH_0
     1,  // BC_PUSH_1
+    2,  // BC_PUSH_SMALL_INT
     1,  // BC_PUSH_NIL
     1 + sizeof(void*),  // BC_PUSH_GLOBAL
     1,  // BC_POP
@@ -119,52 +120,53 @@ const char* Bytecode::bytecodeNames[] = {
     "PUSH_CONSTANT   ",          // 15
     "PUSH_0          ",          // 16
     "PUSH_1          ",          // 17
-    "PUSH_NIL        ",          // 18
-    "PUSH_GLOBAL     ",          // 19
-    "POP             ",          // 20
-    "POP_LOCAL       ",          // 21
-    "POP_LOCAL_0     ",          // 22
-    "POP_LOCAL_1     ",          // 23
-    "POP_LOCAL_2     ",          // 24
-    "POP_ARGUMENT    ",          // 25
-    "POP_FIELD       ",          // 26
-    "POP_FIELD_0     ",          // 27
-    "POP_FIELD_1     ",          // 28
-    "SEND            ",          // 29
-    "SEND_1          ",          // 30
-    "SUPER_SEND      ",          // 31
-    "RETURN_LOCAL    ",          // 32
-    "RETURN_NON_LOCAL",          // 33
-    "RETURN_SELF     ",          // 34
-    "RETURN_FIELD_0  ",          // 35
-    "RETURN_FIELD_1  ",          // 36
-    "RETURN_FIELD_2  ",          // 37
-    "INC             ",          // 38
-    "DEC             ",          // 39
-    "INC_FIELD       ",          // 40
-    "INC_FIELD_PUSH  ",          // 41
-    "JUMP            ",          // 42
-    "JUMP_ON_FALSE_POP",         // 43
-    "JUMP_ON_TRUE_POP",          // 44
-    "JUMP_ON_FALSE_TOP_NIL",     // 45
-    "JUMP_ON_TRUE_TOP_NIL",      // 46
-    "JUMP_ON_NOT_NIL_POP",       // 47
-    "JUMP_ON_NIL_POP ",          // 48
-    "JUMP_ON_NOT_NIL_TOP_TOP",   // 49
-    "JUMP_ON_NIL_TOP_TOP",       // 50
-    "JUMP_IF_GREATER ",          // 51
-    "JUMP_BACKWARD   ",          // 52
-    "JUMP2           ",          // 53
-    "JUMP2_ON_FALSE_POP",        // 54
-    "JUMP2_ON_TRUE_POP",         // 55
-    "JUMP2_ON_FALSE_TOP_NIL",    // 56
-    "JUMP2_ON_TRUE_TOP_NIL",     // 57
-    "JUMP2_ON_NOT_NIL_POP",      // 58
-    "JUMP2_ON_NIL_POP ",         // 59
-    "JUMP2_ON_NOT_NIL_TOP_TOP",  // 60
-    "JUMP2_ON_NIL_TOP_TOP",      // 61
-    "JUMP2_IF_GREATER",          // 62
-    "JUMP2_BACKWARD  ",          // 63
+    "PUSH_SMALL_INT  ",          // 18
+    "PUSH_NIL        ",          // 19
+    "PUSH_GLOBAL     ",          // 20
+    "POP             ",          // 21
+    "POP_LOCAL       ",          // 22
+    "POP_LOCAL_0     ",          // 23
+    "POP_LOCAL_1     ",          // 24
+    "POP_LOCAL_2     ",          // 25
+    "POP_ARGUMENT    ",          // 26
+    "POP_FIELD       ",          // 27
+    "POP_FIELD_0     ",          // 28
+    "POP_FIELD_1     ",          // 29
+    "SEND            ",          // 30
+    "SEND_1          ",          // 31
+    "SUPER_SEND      ",          // 32
+    "RETURN_LOCAL    ",          // 33
+    "RETURN_NON_LOCAL",          // 34
+    "RETURN_SELF     ",          // 35
+    "RETURN_FIELD_0  ",          // 36
+    "RETURN_FIELD_1  ",          // 37
+    "RETURN_FIELD_2  ",          // 38
+    "INC             ",          // 39
+    "DEC             ",          // 40
+    "INC_FIELD       ",          // 41
+    "INC_FIELD_PUSH  ",          // 42
+    "JUMP            ",          // 43
+    "JUMP_ON_FALSE_POP",         // 44
+    "JUMP_ON_TRUE_POP",          // 45
+    "JUMP_ON_FALSE_TOP_NIL",     // 46
+    "JUMP_ON_TRUE_TOP_NIL",      // 47
+    "JUMP_ON_NOT_NIL_POP",       // 48
+    "JUMP_ON_NIL_POP ",          // 49
+    "JUMP_ON_NOT_NIL_TOP_TOP",   // 50
+    "JUMP_ON_NIL_TOP_TOP",       // 51
+    "JUMP_IF_GREATER ",          // 52
+    "JUMP_BACKWARD   ",          // 53
+    "JUMP2           ",          // 54
+    "JUMP2_ON_FALSE_POP",        // 55
+    "JUMP2_ON_TRUE_POP",         // 56
+    "JUMP2_ON_FALSE_TOP_NIL",    // 57
+    "JUMP2_ON_TRUE_TOP_NIL",     // 58
+    "JUMP2_ON_NOT_NIL_POP",      // 59
+    "JUMP2_ON_NIL_POP ",         // 60
+    "JUMP2_ON_NOT_NIL_TOP_TOP",  // 61
+    "JUMP2_ON_NIL_TOP_TOP",      // 62
+    "JUMP2_IF_GREATER",          // 63
+    "JUMP2_BACKWARD  ",          // 64
 };
 
 uint8_t GetNumberOfWords(uint8_t bc) {
@@ -201,6 +203,7 @@ uint8_t IsPushConstBytecode(uint8_t bc) {
         case BC_PUSH_CONSTANT:
         case BC_PUSH_0:
         case BC_PUSH_1:
+        case BC_PUSH_SMALL_INT:
         case BC_PUSH_NIL:
             return bc;
 

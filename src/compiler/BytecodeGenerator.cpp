@@ -196,6 +196,11 @@ void EmitPUSHCONSTANT(MethodGenerationContext& mgenc, const Parser& /*parser*/,
             Emit1(mgenc, BC_PUSH_1, 1);
             return;
         }
+        som_int_t const value = SMALL_INT_VAL(cst);
+        if (value >= INT8_MIN && value <= INT8_MAX) {
+            Emit2(mgenc, BC_PUSH_SMALL_INT, (uint8_t)value, 1);
+            return;
+        }
     } else {
         assert(!IsVMInteger(cst));
     }
