@@ -76,7 +76,8 @@ constexpr size_t VMObject_clazz = 8;
 constexpr size_t VMObject_size = 10;
 
 constexpr size_t VMClass_name = 10;
-constexpr size_t VMClass_instanceFields = 12;
+/** The number of fields, tagged: the image has no field names. */
+constexpr size_t VMClass_numberOfInstanceFields = 12;
 constexpr size_t VMClass_instanceInvokables = 14;
 constexpr size_t VMClass_superClass = 16;
 constexpr size_t VMClass_size = 18;

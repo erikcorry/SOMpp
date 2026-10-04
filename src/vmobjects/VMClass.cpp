@@ -227,7 +227,11 @@ som_int_t VMClass::LookupFieldIndex(VMSymbol* name) const {
 // the instance fields include those of the superclasses, see
 // ClassGenerationContext::SetInstanceFieldsOfSuper()
 size_t VMClass::GetNumberOfInstanceFields() const {
+#ifdef FRUCTUS
+    return SMALL_INT_VAL(load_ptr(numberOfInstanceFields));
+#else
     return load_ptr(instanceFields)->GetNumberOfIndexableFields();
+#endif
 }
 
 #ifndef FRUCTUS
@@ -281,6 +285,7 @@ bool VMClass::HasSuperClass() const {
     return load_ptr(superClass) != load_ptr(nilObject);
 }
 
+#ifndef FRUCTUS
 VMArray* VMClass::GetInstanceFields() const {
     return load_ptr(instanceFields);
 }
@@ -288,6 +293,7 @@ VMArray* VMClass::GetInstanceFields() const {
 void VMClass::SetInstanceFields(VMArray* instFields) {
     store_ptr(instanceFields, instFields);
 }
+#endif
 
 VMArray* VMClass::GetInstanceInvokables() const {
     return load_ptr(instanceInvokables);

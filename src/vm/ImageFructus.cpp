@@ -150,7 +150,8 @@ void FructusImage::CheckLayout() {
     CHECK_SIZE(VMObject, L::VMObject_size);
 
     CHECK_FIELD(VMClass, name, VMClass_name);
-    CHECK_FIELD(VMClass, instanceFields, VMClass_instanceFields);
+    CHECK_FIELD(VMClass, numberOfInstanceFields,
+                VMClass_numberOfInstanceFields);
     CHECK_FIELD(VMClass, instanceInvokables, VMClass_instanceInvokables);
     CHECK_FIELD(VMClass, superClass, VMClass_superClass);
     CHECK_SIZE(VMClass, L::VMClass_size);

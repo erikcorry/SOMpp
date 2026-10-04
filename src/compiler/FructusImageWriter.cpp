@@ -279,6 +279,8 @@ public:
 
     /** The assembler expression for a reference to `obj`. */
     std::string Ref(vm_oop_t obj);
+    /** The assembler expression for a tagged integer. */
+    std::string IntRef(int64_t value);
 
     std::ostream& Out() { return out; }
 
@@ -353,7 +355,7 @@ public:
         return classLabels.find(obj) != classLabels.end();
     }
 
-    /** Whether `obj` is the instanceFields or instanceInvokables of a class. */
+    /** Whether `obj` is the instanceInvokables of a class. */
     [[nodiscard]] bool IsClassArray(AbstractVMObject* obj) const {
         return classArrays.find(obj) != classArrays.end();
     }
@@ -410,14 +412,17 @@ FructusImage::AsmFile::AsmFile(ImageWriter& image, const std::string& path,
         << "\t.data\n";
 }
 
+std::string FructusImage::AsmFile::IntRef(int64_t value) {
+    if (value < L::smallIntMin || value > L::smallIntMax) {
+        Fail("the integer " + std::to_string(value) +
+             " is too big for fructus");
+    }
+    return std::to_string(value * 2 + 1);
+}
+
 std::string FructusImage::AsmFile::Ref(vm_oop_t obj) {
     if (IS_TAGGED(obj)) {
-        auto const value = (int64_t)SMALL_INT_VAL(obj);
-        if (value < L::smallIntMin || value > L::smallIntMax) {
-            Fail("the integer " + std::to_string(value) +
-                 " is too big for fructus");
-        }
-        return std::to_string(value * 2 + 1);
+        return IntRef((int64_t)SMALL_INT_VAL(obj));
     }
 
     auto* o = AS_OBJ(obj);
@@ -608,6 +613,7 @@ void FructusImage::AsmFile::writeHeader(ObjectWriter& w, const std::string& vtab
 /** The fields of every class, see VMClass::VMClassNumberOfFields. */
 const char* const classFields[] = {"name", "instanceFields",
                                    "instanceInvokables", "superClass"};
+constexpr size_t instanceFieldsField = 1;
 constexpr size_t superClassField = 3;
 
 /** VMObject, VMClass, VMArray: a header, and fields that are all oops. */
@@ -644,15 +650,23 @@ void FructusImage::AsmFile::writeVMObject(VMObject* obj, const std::string& labe
     bool const isInternal = image.IsClassArray(obj);
     for (size_t i = 0; i < numberOfFields; i++) {
         bool const isClassField = isClass && i < 4;
-        vm_oop_t const field = obj->GetField(i);
+        vm_oop_t field = obj->GetField(i);
+        if (isClass && i == instanceFieldsField) {
+            // fructus has no field names, just how many, see VMClass.h
+            w.Word(L::VMClass_numberOfInstanceFields,
+                   IntRef((int64_t) static_cast<VMClass*>(obj)
+                              ->GetNumberOfInstanceFields()),
+                   "numberOfInstanceFields");
+            continue;
+        }
         if (!isClassField && !isInternal && IsDispatchOnly(field)) {
             Fail("the program could get at " + Describe(field) + " in " +
                  comment);
         }
         std::string const fieldComment =
             isClassField ? classFields[i] : "field " + std::to_string(i);
-        // the only symbols left are the name of a class and the names of its
-        // fields, which fructus doesn't have, see VMSymbol.h
+        // the only symbol left is the name of a class, which fructus doesn't
+        // have, see VMSymbol.h
         bool const isSymbol = !IS_TAGGED(field) &&
                               dynamic_cast<VMSymbol*>(AS_OBJ(field)) != nullptr;
         w.Word(L::VMObject_size + i * L::word,
@@ -1117,7 +1131,6 @@ void FructusImage::ImageWriter::checkClosedWorld() {
     for (VMClass* cls : classes) {
         installPrimitives(cls);
         for (VMClass* c : {cls, cls->GetClass()}) {
-            classArrays.insert(c->GetInstanceFields());
             classArrays.insert(c->GetInstanceInvokables());
             size_t const n = c->GetNumberOfInstanceInvokables();
             for (size_t i = 0; i < n; i++) {
