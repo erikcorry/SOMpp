@@ -156,6 +156,16 @@ public:
         return GetIndexableField(index);
     }
 
+    /** A constant that is a selector or the name of a global. */
+    [[nodiscard]] inline VMSymbol* GetSymbolWithIndex(uint8_t index) const {
+#ifdef FRUCTUS
+        // a symbol isn't an object on fructus, see VMSymbol.h
+        return reinterpret_cast<VMSymbol*>(GetConstantWithIndex(index));
+#else
+        return static_cast<VMSymbol*>(GetConstantWithIndex(index));
+#endif
+    }
+
     [[nodiscard]] inline uint8_t GetBytecode(size_t indx) const {
         return bytecodes[indx];
     }

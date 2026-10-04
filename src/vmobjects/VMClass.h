@@ -72,14 +72,19 @@ public:
     [[nodiscard]] VMInvokable* GetInstanceInvokable(size_t index) const;
     void SetInstanceInvokable(size_t index, VMInvokable* invokable);
     VMInvokable* LookupInvokable(VMSymbol* name);
+#ifndef FRUCTUS
+    // fructus has no reflection on field names
     som_int_t LookupFieldIndex(VMSymbol* name) const;
+#endif
 #ifndef FRUCTUS
     // fructus has its primitives in the image, see primitives/FructusPrimitives.h
     PrimInstallResult InstallPrimitive(VMInvokable* invokable,
                                        size_t bytecodeHash,
                                        bool reportHashMismatch);
 #endif
+#ifndef FRUCTUS
     [[nodiscard]] VMSymbol* GetInstanceFieldName(size_t index) const;
+#endif
     [[nodiscard]] size_t GetNumberOfInstanceFields() const;
 #ifndef FRUCTUS
     [[nodiscard]] bool HasPrimitives() const;

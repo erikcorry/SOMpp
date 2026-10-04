@@ -71,11 +71,14 @@ constexpr size_t VMString_length = 4;
 constexpr size_t VMString_chars = 6;
 constexpr size_t VMString_size = 8;
 
-constexpr size_t VMSymbol_numberOfArgumentsOfSignature = 8;
-constexpr size_t VMSymbol_cachedClass_invokable = 10;
-constexpr size_t VMSymbol_nextCachePos = 16;
-constexpr size_t VMSymbol_cachedInvokable = 18;
-constexpr size_t VMSymbol_size = 24;
+/** A symbol isn't an object: no vtable or GC field, see VMSymbol.h. */
+constexpr size_t VMSymbol_cachedClass_invokable = 0;
+constexpr size_t VMSymbol_nextCachePos = 6;
+constexpr size_t VMSymbol_cachedInvokable = 8;
+constexpr size_t VMSymbol_numberOfArgumentsOfSignature = 14;
+constexpr size_t VMSymbol_length = 15;
+constexpr size_t VMSymbol_size = 16;
+constexpr size_t VMSymbol_maxLength = 255;
 
 constexpr size_t VMInvokable_signature = 4;
 constexpr size_t VMInvokable_holder = 6;

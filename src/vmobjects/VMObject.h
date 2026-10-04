@@ -109,7 +109,9 @@ public:
     }
 
     void SetClass(VMClass* cl) override;
+#ifndef FRUCTUS
     [[nodiscard]] VMSymbol* GetFieldName(size_t index) const override;
+#endif
 
     [[nodiscard]] inline size_t GetNumberOfFields() const override {
         return numberOfFields;

@@ -148,6 +148,8 @@ PrimInstallResult VMClass::InstallPrimitive(VMInvokable* invokable,
 }
 #endif
 
+#ifndef FRUCTUS
+// fructus has no reflection on field names
 VMSymbol* VMClass::GetInstanceFieldName(size_t index) const {
     size_t const numSuperInstanceFields = numberOfSuperInstanceFields();
     if (index >= numSuperInstanceFields) {
@@ -158,6 +160,7 @@ VMSymbol* VMClass::GetInstanceFieldName(size_t index) const {
     assert(HasSuperClass());
     return ((VMClass*)load_ptr(superClass))->GetInstanceFieldName(index);
 }
+#endif
 
 void VMClass::SetInstanceInvokables(VMArray* invokables) {
     store_ptr(instanceInvokables, invokables);
@@ -219,6 +222,8 @@ VMInvokable* VMClass::LookupInvokable(VMSymbol* name) {
     return nullptr;
 }
 
+#ifndef FRUCTUS
+// fructus has no reflection on field names
 som_int_t VMClass::LookupFieldIndex(VMSymbol* name) const {
     size_t const numInstanceFields = GetNumberOfInstanceFields();
     for (size_t i = 0; i <= numInstanceFields; ++i) {
@@ -229,6 +234,7 @@ som_int_t VMClass::LookupFieldIndex(VMSymbol* name) const {
     }
     return -1;
 }
+#endif
 
 size_t VMClass::GetNumberOfInstanceFields() const {
     return load_ptr(instanceFields)->GetNumberOfIndexableFields() +

@@ -58,15 +58,20 @@ public:
         ErrorPrint("this object doesn't support SetClass\n");
     }
 
+#ifndef FRUCTUS
+    // fructus has no reflection on field names
     som_int_t GetFieldIndex(VMSymbol* fieldName) const;
+#endif
 
     virtual void WalkObjects(walk_heap_fn /*walk*/) {}
 
+#ifndef FRUCTUS
     [[nodiscard]] inline virtual VMSymbol* GetFieldName(
         size_t /*index*/) const {
         ErrorPrint("this object doesn't support GetFieldName\n");
         return nullptr;
     }
+#endif
 
     /**
      * usage: new( <heap> , <additionalBytes>) VMObject( <constructor params> )

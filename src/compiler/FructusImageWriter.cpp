@@ -395,10 +395,11 @@ void FructusImage::AsmFile::Finish() {
         write(obj, localLabels[obj]);
     }
 
-    // each symbol in a COMDAT group of its own, so the linker keeps one
+    // each symbol in a COMDAT group of its own, so the linker keeps one, and
+    // all in the som_symbols section, which is how the GC knows them
     for (auto& [label, sym] : symbols) {
-        out << "\n\t.section\t.data." << label << ",\"awG\",@progbits,"
-            << label << ",comdat\n"
+        out << "\n\t.section\tsom_symbols,\"awG\",@progbits," << label
+            << ",comdat\n"
             << "\t.globl\t" << label << "\n";
         writeSymbol(sym, label);
     }
@@ -501,20 +502,24 @@ void FructusImage::AsmFile::writeString(VMString* str, const std::string& label)
     w.End(L::VMString_size + L::PaddedSize(length));
 }
 
+/** A symbol isn't an object on fructus, see VMSymbol.h. */
 void FructusImage::AsmFile::writeSymbol(VMSymbol* sym, const std::string& label) {
-    out << "\t.balign\t2\n" << label << ":\n";
-    ObjectWriter w(out, label);
     size_t const length = sym->GetStringLength();
-    writeHeader(w, Vtable("8VMSymbol"), "Symbol #" + Printable(sym));
-    w.Word(L::VMString_length, (int64_t)length, "length");
-    w.Word(L::VMString_chars, w.Self(L::VMSymbol_size), "chars");
-    w.Byte(L::VMSymbol_numberOfArgumentsOfSignature,
-           sym->numberOfArgumentsOfSignature, "numberOfArgumentsOfSignature");
+    if (length > L::VMSymbol_maxLength) {
+        Fail("the symbol #" + Printable(sym) + " is longer than " +
+             std::to_string(L::VMSymbol_maxLength) + " characters");
+    }
+    out << "\t.balign\t2\n" << label << ":\t; Symbol #" << Printable(sym)
+        << "\n";
+    ObjectWriter w(out, label);
     w.Raw(L::VMSymbol_cachedClass_invokable, 3 * L::word,
           "\t.short\t0, 0, 0\t; cachedClass_invokable\n");
     w.Word(L::VMSymbol_nextCachePos, 0, "nextCachePos");
     w.Raw(L::VMSymbol_cachedInvokable, 3 * L::word,
           "\t.short\t0, 0, 0\t; cachedInvokable\n");
+    w.Byte(L::VMSymbol_numberOfArgumentsOfSignature,
+           sym->numberOfArgumentsOfSignature, "numberOfArgumentsOfSignature");
+    w.Byte(L::VMSymbol_length, (uint8_t)length, "length");
     w.Raw(L::VMSymbol_size, length,
           "\t.ascii\t" + Quote(sym->GetRawChars(), length) + "\n");
     w.End(L::VMSymbol_size + L::PaddedSize(length));

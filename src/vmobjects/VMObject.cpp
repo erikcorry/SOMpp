@@ -69,9 +69,12 @@ void VMObject::SetClass(VMClass* cl) {
     store_ptr(clazz, cl);
 }
 
+#ifndef FRUCTUS
+// fructus has no reflection on field names
 VMSymbol* VMObject::GetFieldName(size_t index) const {
     return load_ptr(clazz)->GetInstanceFieldName(index);
 }
+#endif
 
 void VMObject::Assert(bool value) const {
     Universe::Assert(value);

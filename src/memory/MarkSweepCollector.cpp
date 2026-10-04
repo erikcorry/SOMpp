@@ -11,6 +11,7 @@
 #include "../vmobjects/IntegerBox.h"
 #include "../vmobjects/ObjectFormats.h"
 #include "../vmobjects/VMFrame.h"
+#include "../vmobjects/VMSymbol.h"
 #include "MarkSweepHeap.h"
 
 static size_t markedBytes = 0;
@@ -20,6 +21,15 @@ static gc_oop_t mark_object(gc_oop_t oop) {
     if (IS_TAGGED(oop)) {
         return oop;
     }
+
+#ifdef FRUCTUS
+    // a symbol isn't an object: it has no vtable and isn't marked, see
+    // VMSymbol.h
+    if (VMSymbol::IsSymbol(oop)) {
+        reinterpret_cast<VMSymbol*>(oop)->WalkObjects(mark_object);
+        return oop;
+    }
+#endif
 
     AbstractVMObject* obj = AS_OBJ(oop);
     assert(IsValidObject(obj));

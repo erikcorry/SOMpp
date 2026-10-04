@@ -295,7 +295,7 @@ LABEL_BC_PUSH_GLOBAL:
         // sends #unknownGlobal:, which pushes a new frame
         SAVE_PC();
         SendUnknownGlobal(
-            static_cast<VMSymbol*>(method->GetConstantWithIndex(pc[-1])));
+            method->GetSymbolWithIndex(pc[-1]));
         RELOAD_PC();
     }
     DISPATCH_GC();
@@ -885,7 +885,7 @@ void Interpreter::doPushBlock(uint8_t constantIndex) {
 // #unknownGlobal:.
 bool Interpreter::doPushGlobal(uint8_t constantIndex) {
     auto* globalName =
-        static_cast<VMSymbol*>(method->GetConstantWithIndex(constantIndex));
+        method->GetSymbolWithIndex(constantIndex);
     vm_oop_t global = Universe::GetGlobal(globalName);
 
     if (global == nullptr) {
@@ -960,7 +960,7 @@ void Interpreter::doPopFieldWithIndex(uint8_t fieldIndex) {
 
 void Interpreter::doSend(uint8_t constantIndex) {
     auto* signature =
-        static_cast<VMSymbol*>(method->GetConstantWithIndex(constantIndex));
+        method->GetSymbolWithIndex(constantIndex);
 
     uint8_t const numOfArgs = Signature::GetNumberOfArguments(signature);
 
@@ -978,7 +978,7 @@ void Interpreter::doSend(uint8_t constantIndex) {
 
 void Interpreter::doUnarySend(uint8_t constantIndex) {
     auto* signature =
-        static_cast<VMSymbol*>(method->GetConstantWithIndex(constantIndex));
+        method->GetSymbolWithIndex(constantIndex);
 
     const int numOfArgs = 1;
 
@@ -1004,7 +1004,7 @@ void Interpreter::doUnarySend(uint8_t constantIndex) {
 
 void Interpreter::doSuperSend(uint8_t constantIndex) {
     auto* signature =
-        static_cast<VMSymbol*>(method->GetConstantWithIndex(constantIndex));
+        method->GetSymbolWithIndex(constantIndex);
 
     VMFrame const* const ctxt = GetFrame()->GetOuterContext();
     VMMethod const* const realMethod = ctxt->GetMethod();

@@ -167,6 +167,7 @@ void FructusImage::CheckLayout() {
                 VMSymbol_cachedClass_invokable);
     CHECK_FIELD(VMSymbol, nextCachePos, VMSymbol_nextCachePos);
     CHECK_FIELD(VMSymbol, cachedInvokable, VMSymbol_cachedInvokable);
+    CHECK_FIELD(VMSymbol, length, VMSymbol_length);
     CHECK_SIZE(VMSymbol, L::VMSymbol_size);
 
     CHECK_FIELD(VMInvokable, gcField, gcField);

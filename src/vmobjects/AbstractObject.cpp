@@ -31,6 +31,9 @@ void AbstractVMObject::Send(VMSymbol* selector, vm_oop_t* arguments,
     invokable->Invoke(frame);
 }
 
+#ifndef FRUCTUS
+// fructus has no reflection on field names
 som_int_t AbstractVMObject::GetFieldIndex(VMSymbol* fieldName) const {
     return GetClass()->LookupFieldIndex(fieldName);
 }
+#endif
