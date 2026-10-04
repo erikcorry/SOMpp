@@ -94,6 +94,10 @@ if(FRUCTUS)
   add_compile_options(-fno-exceptions -fno-rtti -ffunction-sections
                       -fdata-sections)
   add_link_options(-Wl,--gc-sections -Wl,-Map=SOM++.map)
+  # At -Os gcc gives all the bytecodes one shared indirect jump, so every
+  # dispatch takes several extra jumps to get to it
+  set_source_files_properties(${INTERPRETER_DIR}/Interpreter.cpp PROPERTIES
+    COMPILE_OPTIONS -O2)
 
   # The class library: compiled by the host SOM++ (see src/vm/FructusImage.h)
   # and linked in as som-image.o
