@@ -26,13 +26,18 @@
 
 #include "Block.h"
 
+#include "FructusPrimitives.h"
+
 #include "../vmobjects/VMFrame.h"
 
-static void bRestart(VMFrame* frame) {
+void bRestart(VMFrame* frame) {
     frame->ResetBytecodeIndex();
     frame->ResetStackPointer();
 }
 
+// fructus has its primitives in the image, see FructusPrimitives.h
+#ifndef FRUCTUS
 _Block::_Block() {
     Add("restart", &bRestart, false);
 }
+#endif

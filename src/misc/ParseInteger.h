@@ -8,3 +8,9 @@
 /** Parse an optionally signed decimal integer, as strtoll would. */
 vm_oop_t ParseInteger(const char* str, size_t length, bool negateValue);
 vm_oop_t ParseInteger(const char* str, bool negateValue);
+
+#ifndef FRUCTUS
+inline vm_oop_t ParseInteger(const std::string& str, bool negateValue) {
+    return ParseInteger(str.data(), str.length(), negateValue);
+}
+#endif

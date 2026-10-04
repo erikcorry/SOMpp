@@ -29,6 +29,19 @@
 #include <cstdint>
 #include <stdio.h>
 
+#ifndef FRUCTUS
+  // the host build, which has the compiler, uses the standard library
+  #include <fstream>
+  #include <iomanip>
+  #include <iostream>
+  #include <map>
+  #include <set>
+  #include <sstream>
+  #include <string>
+  #include <utility>
+  #include <vector>
+#endif
+
 // Macro Debugging
 #define VALUE_TO_STRING(x) #x
 #define VALUE(x) VALUE_TO_STRING(x)

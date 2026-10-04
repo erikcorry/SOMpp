@@ -4,6 +4,14 @@
 
 VMSymbol* SymbolFor(const char* str, size_t length);
 VMSymbol* SymbolFor(const char* str);
+#ifndef FRUCTUS
+inline VMSymbol* SymbolFor(const std::string& str) {
+    return SymbolFor(str.data(), str.length());
+}
+#endif
+
+/** Add symbols that are not on the heap, e.g. those of the fructus image. */
+void AddSymbols(GCSymbol* const* begin, GCSymbol* const* end);
 
 void InitializeSymbols();
 

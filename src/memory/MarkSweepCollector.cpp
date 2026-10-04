@@ -24,12 +24,16 @@ static gc_oop_t mark_object(gc_oop_t oop) {
     AbstractVMObject* obj = AS_OBJ(oop);
     assert(IsValidObject(obj));
 
-    if (obj->GetGCField() == MarkSweepHeap::GC_MARKED) {
+    MarkSweepHeap const* heap = GetHeap<MarkSweepHeap>();
+    if (obj->GetGCField() == heap->GetMark()) {
         return oop;
     }
 
-    obj->SetGCField(MarkSweepHeap::GC_MARKED);
-    markedBytes += MarkSweepCollector::GetAllocationSize(obj->GetObjectSize());
+    obj->SetGCField(heap->GetMark());
+    if (heap->Contains(obj)) {
+        markedBytes +=
+            MarkSweepCollector::GetAllocationSize(obj->GetObjectSize());
+    }
     markStack.push_back(obj);
     return oop;
 }

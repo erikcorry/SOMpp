@@ -9,6 +9,8 @@
 #include <assert.h>
 
 class VMObjectBase : public VMOop {
+    friend class FructusImage;
+
 protected:
     size_t gcField{0};
 

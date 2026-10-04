@@ -26,6 +26,8 @@
 
 #include "String.h"
 
+#include "FructusPrimitives.h"
+
 #include <ctype.h>
 #include <cstdint>
 #include <stdio.h>
@@ -43,7 +45,7 @@
 #include "../vmobjects/VMString.h"
 #include "../vmobjects/VMSymbol.h"  // NOLINT(misc-include-cleaner) it's required to make the types complete
 
-static vm_oop_t strConcatenate_(vm_oop_t leftObj, vm_oop_t rightObj) {
+vm_oop_t strConcatenate_(vm_oop_t leftObj, vm_oop_t rightObj) {
     auto* arg = static_cast<VMString*>(rightObj);
     auto* self = static_cast<VMString*>(leftObj);
     size_t const selfLength = self->GetStringLength();
@@ -60,24 +62,24 @@ static vm_oop_t strConcatenate_(vm_oop_t leftObj, vm_oop_t rightObj) {
     return result;
 }
 
-static vm_oop_t strAsSymbol(vm_oop_t rcvr) {
+vm_oop_t strAsSymbol(vm_oop_t rcvr) {
     auto* self = static_cast<VMString*>(rcvr);
     return SymbolFor(self->GetRawChars(), self->GetStringLength());
 }
 
-static vm_oop_t strHashcode(vm_oop_t rcvr) {
+vm_oop_t strHashcode(vm_oop_t rcvr) {
     auto* self = static_cast<VMString*>(rcvr);
     return NEW_INT(self->GetHash());
 }
 
-static vm_oop_t strLength(vm_oop_t rcvr) {
+vm_oop_t strLength(vm_oop_t rcvr) {
     auto* self = static_cast<VMString*>(rcvr);
 
     size_t const len = self->GetStringLength();
     return NEW_INT((som_int_t)len);
 }
 
-static vm_oop_t strEqual(vm_oop_t leftObj, vm_oop_t op1) {
+vm_oop_t strEqual(vm_oop_t leftObj, vm_oop_t op1) {
     auto* left = static_cast<VMString*>(leftObj);
 
     if (IS_TAGGED(op1)) {
@@ -105,7 +107,7 @@ static vm_oop_t strEqual(vm_oop_t leftObj, vm_oop_t op1) {
     return load_ptr(falseObject);
 }
 
-static vm_oop_t strPrimSubstringFromTo(vm_oop_t rcvr,
+vm_oop_t strPrimSubstringFromTo(vm_oop_t rcvr,
                                        vm_oop_t start,
                                        vm_oop_t end) {
     auto* self = static_cast<VMString*>(rcvr);
@@ -119,7 +121,7 @@ static vm_oop_t strPrimSubstringFromTo(vm_oop_t rcvr,
     return Universe::NewString(e - s + 1, self->GetRawChars() + s);
 }
 
-static vm_oop_t strCharAt(vm_oop_t rcvr, vm_oop_t indexPtr) {
+vm_oop_t strCharAt(vm_oop_t rcvr, vm_oop_t indexPtr) {
     auto* self = static_cast<VMString*>(rcvr);
     som_int_t const index = SMALL_INT_VAL(indexPtr) - 1;
 
@@ -130,7 +132,7 @@ static vm_oop_t strCharAt(vm_oop_t rcvr, vm_oop_t indexPtr) {
     return Universe::NewString(1, &self->GetRawChars()[index]);
 }
 
-static vm_oop_t strIsWhiteSpace(vm_oop_t rcvr) {
+vm_oop_t strIsWhiteSpace(vm_oop_t rcvr) {
     auto* self = static_cast<VMString*>(rcvr);
 
     size_t const len = self->GetStringLength();
@@ -149,7 +151,7 @@ static vm_oop_t strIsWhiteSpace(vm_oop_t rcvr) {
     return load_ptr(falseObject);
 }
 
-static vm_oop_t strIsLetters(vm_oop_t rcvr) {
+vm_oop_t strIsLetters(vm_oop_t rcvr) {
     auto* self = static_cast<VMString*>(rcvr);
 
     size_t const len = self->GetStringLength();
@@ -168,7 +170,7 @@ static vm_oop_t strIsLetters(vm_oop_t rcvr) {
     return load_ptr(falseObject);
 }
 
-static vm_oop_t strIsDigits(vm_oop_t rcvr) {
+vm_oop_t strIsDigits(vm_oop_t rcvr) {
     auto* self = static_cast<VMString*>(rcvr);
 
     size_t const len = self->GetStringLength();
@@ -187,6 +189,8 @@ static vm_oop_t strIsDigits(vm_oop_t rcvr) {
     return load_ptr(falseObject);
 }
 
+// fructus has its primitives in the image, see FructusPrimitives.h
+#ifndef FRUCTUS
 _String::_String() {
     Add("concatenate:", &strConcatenate_, false);
     Add("asSymbol", &strAsSymbol, false);
@@ -200,3 +204,4 @@ _String::_String() {
 
     Add("charAt:", &strCharAt, false);
 }
+#endif

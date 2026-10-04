@@ -26,37 +26,41 @@
 
 #include "Class.h"
 
+#include "FructusPrimitives.h"
+
 #include "../vm/Universe.h"
 #include "../vmobjects/ObjectFormats.h"
 #include "../vmobjects/VMClass.h"
 #include "../vmobjects/VMFrame.h"
 #include "../vmobjects/VMSymbol.h"  // NOLINT(misc-include-cleaner) it's required to make the types complete
 
-static vm_oop_t clsNew(vm_oop_t rcvr) {
+vm_oop_t clsNew(vm_oop_t rcvr) {
     auto* self = static_cast<VMClass*>(rcvr);
     return Universe::NewInstance(self);
 }
 
-static vm_oop_t clsName(vm_oop_t rcvr) {
+vm_oop_t clsName(vm_oop_t rcvr) {
     auto* self = static_cast<VMClass*>(rcvr);
     return self->GetName();
 }
 
-static vm_oop_t clsSuperclass(vm_oop_t rcvr) {
+vm_oop_t clsSuperclass(vm_oop_t rcvr) {
     auto* self = static_cast<VMClass*>(rcvr);
     return self->GetSuperClass();
 }
 
-static vm_oop_t clsMethods(vm_oop_t rcvr) {
+vm_oop_t clsMethods(vm_oop_t rcvr) {
     auto* self = static_cast<VMClass*>(rcvr);
     return self->GetInstanceInvokables();
 }
 
-static vm_oop_t clsFields(vm_oop_t rcvr) {
+vm_oop_t clsFields(vm_oop_t rcvr) {
     auto* self = static_cast<VMClass*>(rcvr);
     return self->GetInstanceFields();
 }
 
+// fructus has its primitives in the image, see FructusPrimitives.h
+#ifndef FRUCTUS
 _Class::_Class() {
     Add("new", &clsNew, false);
     Add("name", &clsName, false);
@@ -64,3 +68,4 @@ _Class::_Class() {
     Add("fields", &clsFields, false);
     Add("methods", &clsMethods, false);
 }
+#endif

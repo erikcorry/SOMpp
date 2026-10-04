@@ -26,6 +26,8 @@
 
 #include "Object.h"
 
+#include "FructusPrimitives.h"
+
 #include <cstddef>
 #include <cstdint>
 
@@ -41,31 +43,33 @@
 #include "../vmobjects/VMInvokable.h"
 #include "../vmobjects/VMObject.h"
 
-static vm_oop_t objEqualequal(vm_oop_t op2, vm_oop_t op1) {
+vm_oop_t objEqualequal(vm_oop_t op2, vm_oop_t op1) {
     return load_ptr(op1 == op2 ? trueObject : falseObject);
 }
 
-static vm_oop_t objObjectSize(vm_oop_t self) {
+vm_oop_t objObjectSize(vm_oop_t self) {
     return NEW_INT((som_int_t)AS_OBJ(self)->GetObjectSize());
 }
 
-static vm_oop_t objHashcode(vm_oop_t self) {
+vm_oop_t objHashcode(vm_oop_t self) {
     if (IS_TAGGED(self)) {
         return self;
     }
     return NEW_INT(AS_OBJ(self)->GetHash());
 }
 
-static vm_oop_t objInspect(vm_oop_t /*unused*/) {
+vm_oop_t objInspect(vm_oop_t /*unused*/) {
     // not implemeted
     return load_ptr(falseObject);
 }
 
-static vm_oop_t objHalt(vm_oop_t /*unused*/) {
+vm_oop_t objHalt(vm_oop_t /*unused*/) {
     // not implemeted
     return load_ptr(falseObject);
 }
 
+#ifndef FRUCTUS
+// fructus is a closed world, without perform
 static void objPerform(VMFrame* frame) {
     auto* selector = (VMSymbol*)frame->Pop();
     vm_oop_t self = frame->GetStackElement(0);
@@ -117,28 +121,31 @@ static void objPerformWithArgumentsInSuperclass(VMFrame* frame) {
 
     invokable->Invoke(frame);
 }
+#endif
 
-static vm_oop_t objInstVarAt(vm_oop_t self, vm_oop_t idx) {
+vm_oop_t objInstVarAt(vm_oop_t self, vm_oop_t idx) {
     som_int_t const field_idx = SMALL_INT_VAL(idx) - 1;
     return static_cast<VMObject*>(self)->GetField(field_idx);
 }
 
-static vm_oop_t objInstVarAtPut(vm_oop_t self, vm_oop_t idx, vm_oop_t value) {
+vm_oop_t objInstVarAtPut(vm_oop_t self, vm_oop_t idx, vm_oop_t value) {
     size_t const field_idx = SMALL_INT_VAL(idx) - 1;
     static_cast<VMObject*>(self)->SetField(field_idx, value);
     return self;
 }
 
-static vm_oop_t objInstVarNamed(vm_oop_t self, vm_oop_t nameObj) {
+vm_oop_t objInstVarNamed(vm_oop_t self, vm_oop_t nameObj) {
     auto* name = (VMSymbol*)nameObj;
     som_int_t const fieldIdx = AS_OBJ(self)->GetFieldIndex(name);
     return static_cast<VMObject*>(self)->GetField(fieldIdx);
 }
 
-static vm_oop_t objClass(vm_oop_t self) {
+vm_oop_t objClass(vm_oop_t self) {
     return CLASS_OF(self);
 }
 
+// fructus has its primitives in the image, see FructusPrimitives.h
+#ifndef FRUCTUS
 _Object::_Object() {
     Add("==", &objEqualequal, false);
     Add("objectSize", &objObjectSize, false);
@@ -158,3 +165,4 @@ _Object::_Object() {
 
     Add("class", &objClass, false);
 }
+#endif

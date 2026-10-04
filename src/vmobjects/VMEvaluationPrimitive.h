@@ -29,6 +29,8 @@
 #include "VMPrimitive.h"
 
 class VMEvaluationPrimitive : public VMInvokable {
+    friend class FructusImage;
+
 public:
     typedef GCEvaluationPrimitive Stored;
 

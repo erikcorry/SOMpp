@@ -71,4 +71,5 @@ private:
 
     friend class Signature;
     friend class VMClass;
+    friend class FructusImage;
 };

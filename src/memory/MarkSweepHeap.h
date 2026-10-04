@@ -34,11 +34,25 @@ public:
     static void findFittingEntry(VMFreeListEntry*& cur, VMFreeListEntry*& prev,
                                  size_t allocSize);
 
-    static constexpr int GC_MARKED = 1;
-    static constexpr int GC_UNMARKED = 0;
+    /**
+     * The mark of the objects that the current collection reached. It
+     * alternates between two values, so that the previous collection's
+     * marks count as unmarked, and marks don't need to be cleared. Objects
+     * outside the heap, like those of the fructus image, are never swept.
+     */
+    [[nodiscard]] size_t GetMark() const { return mark; }
+
+    [[nodiscard]] bool Contains(const void* obj) const {
+        return obj >= (const void*)heap && obj < (const void*)heapEnd;
+    }
+
+    /** New objects and free list entries; never a mark. */
+    static constexpr size_t GC_UNMARKED = 0;
 
 private:
     void sweep();
+
+    size_t mark{1};
 
     AbstractVMObject* heap;
     AbstractVMObject* heapEnd;

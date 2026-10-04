@@ -97,6 +97,7 @@ bool operator<(const BackJumpPatch& a, const BackJumpPatch& b);
 class VMMethod : public VMInvokable {
     friend class Interpreter;
     friend class Disassembler;
+    friend class FructusImage;
 
 public:
     typedef GCMethod Stored;

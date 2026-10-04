@@ -26,6 +26,8 @@
 
 #include "Array.h"
 
+#include "FructusPrimitives.h"
+
 #include <cstdint>
 
 #include "../vm/Universe.h"
@@ -36,33 +38,35 @@
 #endif
 #include "../vmobjects/VMFrame.h"
 
-static vm_oop_t arrAt(vm_oop_t leftObj, vm_oop_t idx) {
+vm_oop_t arrAt(vm_oop_t leftObj, vm_oop_t idx) {
     auto* self = static_cast<VMArray*>(leftObj);
     return self->GetIndexableField(SMALL_INT_VAL(idx) - 1);
 }
 
-static vm_oop_t arrAtPut(vm_oop_t rcvr, vm_oop_t index, vm_oop_t value) {
+vm_oop_t arrAtPut(vm_oop_t rcvr, vm_oop_t index, vm_oop_t value) {
     auto* self = static_cast<VMArray*>(rcvr);
     som_int_t const i = SMALL_INT_VAL(index);
     self->SetIndexableField(i - 1, value);
     return rcvr;
 }
 
-static vm_oop_t arrLength(vm_oop_t leftObj) {
+vm_oop_t arrLength(vm_oop_t leftObj) {
     auto* self = static_cast<VMArray*>(leftObj);
     return NEW_INT((som_int_t)self->GetNumberOfIndexableFields());
 }
 
-static vm_oop_t arrNew(vm_oop_t /*unused*/, vm_oop_t arg) {
+vm_oop_t arrNew(vm_oop_t /*unused*/, vm_oop_t arg) {
     som_int_t const size = SMALL_INT_VAL(arg);
     return Universe::NewArray(size);
 }
 
-static vm_oop_t arrCopy(vm_oop_t rcvr) {
+vm_oop_t arrCopy(vm_oop_t rcvr) {
     auto* self = static_cast<VMArray*>(rcvr);
     return self->Copy();
 }
 
+// fructus has its primitives in the image, see FructusPrimitives.h
+#ifndef FRUCTUS
 _Array::_Array() {
     Add("new:", &arrNew, true);
     Add("at:", &arrAt, false);
@@ -70,3 +74,4 @@ _Array::_Array() {
     Add("length", &arrLength, false);
     Add("copy", &arrCopy, false);
 }
+#endif

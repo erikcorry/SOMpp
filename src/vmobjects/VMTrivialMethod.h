@@ -78,6 +78,8 @@ VMTrivialMethod* MakeSetter(VMSymbol* sig, vector<Variable>& arguments,
 #endif
 
 class VMLiteralReturn : public VMTrivialMethod {
+    friend class FructusImage;
+
 public:
     typedef GCLiteralReturn Stored;
 
@@ -122,6 +124,8 @@ private:
 };
 
 class VMGlobalReturn : public VMTrivialMethod {
+    friend class FructusImage;
+
 public:
     typedef GCGlobalReturn Stored;
 
@@ -166,6 +170,8 @@ private:
 };
 
 class VMGetter : public VMTrivialMethod {
+    friend class FructusImage;
+
 public:
     typedef GCGetter Stored;
 
@@ -205,6 +211,8 @@ private:
 };
 
 class VMSetter : public VMTrivialMethod {
+    friend class FructusImage;
+
 public:
     typedef GCSetter Stored;
 

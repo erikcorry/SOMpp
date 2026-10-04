@@ -26,6 +26,8 @@
 
 #include "System.h"
 
+#include "FructusPrimitives.h"
+
 #include <stdint.h>
 
 #include "../memory/Heap.h"
@@ -46,20 +48,20 @@
   #include <sys/time.h>
 #endif
 
-static vm_oop_t sysGlobal_(vm_oop_t /*unused*/, vm_oop_t rightObj) {
+vm_oop_t sysGlobal_(vm_oop_t /*unused*/, vm_oop_t rightObj) {
     auto* arg = static_cast<VMSymbol*>(rightObj);
     vm_oop_t result = Universe::GetGlobal(arg);
 
     return (result != nullptr) ? result : load_ptr(nilObject);
 }
 
-static vm_oop_t sysGlobalPut(vm_oop_t sys, vm_oop_t sym, vm_oop_t val) {
+vm_oop_t sysGlobalPut(vm_oop_t sys, vm_oop_t sym, vm_oop_t val) {
     auto* arg = static_cast<VMSymbol*>(sym);
     Universe::SetGlobal(arg, val);
     return sys;
 }
 
-static vm_oop_t sysHasGlobal_(vm_oop_t /*unused*/, vm_oop_t rightObj) {
+vm_oop_t sysHasGlobal_(vm_oop_t /*unused*/, vm_oop_t rightObj) {
     auto* arg = static_cast<VMSymbol*>(rightObj);
 
     if (Universe::HasGlobal(arg)) {
@@ -68,7 +70,7 @@ static vm_oop_t sysHasGlobal_(vm_oop_t /*unused*/, vm_oop_t rightObj) {
     return load_ptr(falseObject);
 }
 
-static vm_oop_t sysLoad_(vm_oop_t /*unused*/, vm_oop_t rightObj) {
+vm_oop_t sysLoad_(vm_oop_t /*unused*/, vm_oop_t rightObj) {
     auto* arg = static_cast<VMSymbol*>(rightObj);
     VMClass* result = Universe::LoadClass(arg);
     if (result != nullptr) {
@@ -77,29 +79,29 @@ static vm_oop_t sysLoad_(vm_oop_t /*unused*/, vm_oop_t rightObj) {
     return load_ptr(nilObject);
 }
 
-static vm_oop_t sysExit_(vm_oop_t /*unused*/, vm_oop_t err) {
+vm_oop_t sysExit_(vm_oop_t /*unused*/, vm_oop_t err) {
     som_int_t const err_no = SMALL_INT_VAL(err);
     Quit((int32_t)err_no);
 }
 
-static vm_oop_t sysPrintString_(vm_oop_t leftObj, vm_oop_t rightObj) {
+vm_oop_t sysPrintString_(vm_oop_t leftObj, vm_oop_t rightObj) {
     auto* arg = static_cast<VMString*>(rightObj);
     PrintChars(arg->GetRawChars(), arg->GetStringLength());
     return leftObj;
 }
 
-static vm_oop_t sysPrintNewline(vm_oop_t leftObj) {
+vm_oop_t sysPrintNewline(vm_oop_t leftObj) {
     Print("\n");
     return leftObj;
 }
 
-static vm_oop_t sysErrorPrint_(vm_oop_t leftObj, vm_oop_t rightObj) {
+vm_oop_t sysErrorPrint_(vm_oop_t leftObj, vm_oop_t rightObj) {
     auto* arg = static_cast<VMString*>(rightObj);
     ErrorPrintf("%.*s", STR_ARGS(arg));
     return leftObj;
 }
 
-static vm_oop_t sysErrorPrintNewline_(vm_oop_t leftObj, vm_oop_t rightObj) {
+vm_oop_t sysErrorPrintNewline_(vm_oop_t leftObj, vm_oop_t rightObj) {
     auto* arg = static_cast<VMString*>(rightObj);
     ErrorPrintf("%.*s\n", STR_ARGS(arg));
     return leftObj;
@@ -107,17 +109,17 @@ static vm_oop_t sysErrorPrintNewline_(vm_oop_t leftObj, vm_oop_t rightObj) {
 
 #ifdef FRUCTUS
 // there is no clock yet
-static vm_oop_t sysTime(vm_oop_t /*unused*/) {
+vm_oop_t sysTime(vm_oop_t /*unused*/) {
     return NEW_INT(0);
 }
 
-static vm_oop_t sysTicks(vm_oop_t /*unused*/) {
+vm_oop_t sysTicks(vm_oop_t /*unused*/) {
     return NEW_INT(0);
 }
 #else
 static struct timeval start_time;
 
-static vm_oop_t sysTime(vm_oop_t /*unused*/) {
+vm_oop_t sysTime(vm_oop_t /*unused*/) {
     struct timeval now{};
 
     gettimeofday(&now, nullptr);
@@ -129,7 +131,7 @@ static vm_oop_t sysTime(vm_oop_t /*unused*/) {
     return NEW_INT(diff);
 }
 
-static vm_oop_t sysTicks(vm_oop_t /*unused*/) {
+vm_oop_t sysTicks(vm_oop_t /*unused*/) {
     struct timeval now{};
 
     gettimeofday(&now, nullptr);
@@ -142,7 +144,7 @@ static vm_oop_t sysTicks(vm_oop_t /*unused*/) {
 }
 #endif
 
-static vm_oop_t sysFullGC(vm_oop_t /*unused*/) {
+vm_oop_t sysFullGC(vm_oop_t /*unused*/) {
     // not safe to do it immediatly, will be done when it is ok, i.e., in the
     // interpreter loop
     GetHeap<HEAP_CLS>()->requestGC();
@@ -165,10 +167,12 @@ static vm_oop_t sysLoadFile_(vm_oop_t /*unused*/, vm_oop_t rightObj) {
 }
 #endif
 
-static void printStackTrace(VMFrame* frame) {
+void sysPrintStackTrace(VMFrame* frame) {
     frame->PrintStackTrace();
 }
 
+// fructus has its primitives in the image, see FructusPrimitives.h
+#ifndef FRUCTUS
 _System::_System() {
 #ifndef FRUCTUS
     gettimeofday(&start_time, nullptr);
@@ -190,7 +194,8 @@ _System::_System() {
 #ifndef FRUCTUS
     Add("loadFile:", &sysLoadFile_, false);
 #endif
-    Add("printStackTrace", &printStackTrace, false);
+    Add("printStackTrace", &sysPrintStackTrace, false);
 }
 
 _System::~_System() = default;
+#endif

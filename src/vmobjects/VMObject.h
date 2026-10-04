@@ -56,6 +56,8 @@
 #define FIELDS (((gc_oop_t*)&clazz) + 1)
 
 class VMObject : public AbstractVMObject {
+    friend class FructusImage;
+
 public:
     typedef GCObject Stored;
 

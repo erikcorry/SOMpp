@@ -7,6 +7,13 @@ using UnaryPrimitiveRoutine = vm_oop_t(vm_oop_t);
 using BinaryPrimitiveRoutine = vm_oop_t(vm_oop_t, vm_oop_t);
 using TernaryPrimitiveRoutine = vm_oop_t(vm_oop_t, vm_oop_t, vm_oop_t);
 
+#ifdef FRUCTUS
+/** Fructus installs nothing at run time, so a primitive is its routine. */
+class Prim {
+public:
+    explicit Prim(bool /*classSide*/, size_t /*bytecodeHash*/) {}
+};
+#else
 class Prim {
 public:
     explicit Prim(bool classSide, size_t bytecodeHash)
@@ -15,6 +22,7 @@ public:
     bool isClassSide;
     size_t bytecodeHash;
 };
+#endif
 
 class FramePrim : public Prim {
 public:

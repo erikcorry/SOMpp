@@ -99,7 +99,7 @@ void MarkSweepHeap::sweep() {
     while (cur < heapEnd) {
         size_t const allocSize =
             MarkSweepCollector::GetAllocationSize(cur->GetObjectSize());
-        if (cur->GetGCField() == GC_UNMARKED) {
+        if (cur->GetGCField() != mark) {
             // an unreachable object, add it to `freeList`
             if (freeList == nullptr) {
                 // the freeList is empty
@@ -113,9 +113,9 @@ void MarkSweepHeap::sweep() {
                 freeList = newEntry;
             }
         } else {
-            // a reachable object, reset its mark for the next collection
+            // a reachable object, its mark counts as unmarked in the next
+            // collection
             assert(IsValidObject(cur));
-            cur->SetGCField(GC_UNMARKED);
         }
 
         // go to next object in the heap
@@ -123,4 +123,6 @@ void MarkSweepHeap::sweep() {
         cur = reinterpret_cast<AbstractVMObject*>(reinterpret_cast<char*>(cur) +
                                                   allocSize);
     }
+
+    mark = mark == 1 ? 2 : 1;
 }

@@ -49,18 +49,19 @@ VMPrimitive* VMPrimitive::CloneForMovingGC() const {
     return prim;
 }
 
-static void emptyRoutine(VMFrame* frame) {
+// not static: the fructus image refers to it by name, see vm/FructusImage.h
+extern "C" void som_empty_primitive(VMFrame* frame) {
     ErrorPrint("undefined primitive called\n");
     frame->PrintStackTrace();
     ErrorExit("undefined primitive called");
 }
 
 VMInvokable* VMPrimitive::GetEmptyPrimitive(VMSymbol* sig, bool classSide) {
-    return GetFramePrim(sig, FramePrim(&emptyRoutine, classSide, 0));
+    return GetFramePrim(sig, FramePrim(&som_empty_primitive, classSide, 0));
 }
 
 bool VMPrimitive::IsEmpty() const {
-    return prim.pointer == &emptyRoutine;
+    return prim.pointer == &som_empty_primitive;
 }
 
 #ifndef FRUCTUS

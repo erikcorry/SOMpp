@@ -33,6 +33,8 @@
 #include "VMObject.h"
 
 class VMPrimitive : public VMInvokable {
+    friend class FructusImage;
+
 public:
     typedef GCPrimitive Stored;
 

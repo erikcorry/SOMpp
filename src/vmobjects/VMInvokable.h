@@ -36,6 +36,8 @@ class VMFrame;
 class Parser;
 
 class VMInvokable : public AbstractVMObject {
+    friend class FructusImage;
+
 public:
     typedef GCInvokable Stored;
 

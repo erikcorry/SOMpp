@@ -66,6 +66,7 @@
 #include "../vmobjects/VMObjectBase.h"
 #include "../vmobjects/VMString.h"
 #include "../vmobjects/VMVector.h"
+#include "FructusImage.h"
 #include "Globals.h"
 #include "IsValidObject.h"
 #include "Print.h"
@@ -88,25 +89,16 @@ bool abortOnCoreLibHashMismatch = false;
 #ifdef FRUCTUS
 SimpleVector<Universe::Global> Universe::globals;
 GCClass* Universe::blockClassesByNoOfArgs[MAX_BLOCK_ARGS + 1];
-
-/*
- * The class library, prepared on the host, because there is no compiler on
- * fructus. This is still to be designed: for now it only installs the
- * primitives, as a loaded image will need that, too.
- */
-static void LoadImage() {
-    GCClass* const classes[] = {objectClass, classClass,  metaClassClass,
-                                nilClass,    arrayClass,  vectorClass,
-                                methodClass, symbolClass, integerClass,
-                                primitiveClass, stringClass};
-    for (GCClass* cls : classes) {
-        load_ptr(cls)->LoadPrimitives(false);
-    }
-}
 #else
 map<GCSymbol*, gc_oop_t> Universe::globals;
 map<uint8_t, GCClass*> Universe::blockClassesByNoOfArgs;
 vector<std::string> Universe::classPath;
+
+/**
+ * Where -asm writes the image for fructus, see FructusImage.h. The classes
+ * are written without their primitives, which are bound on fructus.
+ */
+static const char* fructusImageDir = nullptr;
 #endif
 size_t Universe::heapSize;
 
@@ -187,6 +179,11 @@ vector<std::string> Universe::handleArguments(int32_t argc, char** argv) {
             setupClassPath(std::string(argv[++i]));
         } else if (!sawOtherArgs && strncmp(argv[i], "-d", 2) == 0) {
             ++dumpBytecodes;
+        } else if (!sawOtherArgs && strcmp(argv[i], "-asm") == 0) {
+            if (argc == i + 1) {
+                printUsageAndExit(argv[0]);
+            }
+            fructusImageDir = argv[++i];
         } else if (!sawOtherArgs && strncmp(argv[i], "-cfg", 4) == 0) {
             printVmConfig();
         } else if (!sawOtherArgs && strncmp(argv[i], "-gc-stress", 10) == 0) {
@@ -288,6 +285,9 @@ void Universe::printUsageAndExit(char* executable) {
     cout << "         set search path for application classes\n";
     cout << "    -d   enable disassembling\n";
     cout << "    -cfg print VM configuration\n";
+    cout << "    -asm <directory>\n";
+    cout << "         write the classes the program needs as assembler for\n"
+            "         fructus, and exit\n";
     cout << "    -prim-hash-check check that method replacements have expected "
             "hash.\n";
     cout
@@ -381,8 +381,8 @@ void Universe::initialize(int32_t /*argc*/, char** /*argv*/) {
     VMInvokable* initialize =
         load_ptr(systemClass)->LookupInvokable(SymbolFor("initialize:"));
 
-    // there are no command line arguments
-    interpretMethod(systemObject, initialize, NewArray(0));
+    // there is no command line, the arguments come with the image
+    interpretMethod(systemObject, initialize, FructusImage::Arguments());
 }
 #else
 void Universe::initialize(int32_t _argc, char** _argv) {
@@ -408,6 +408,11 @@ void Universe::initialize(int32_t _argc, char** _argv) {
 #endif
 
     VMObject* systemObject = InitializeGlobals();
+
+    if (fructusImageDir != nullptr) {
+        FructusImage::Write(fructusImageDir, argv);
+        return;
+    }
 
     if (argv.empty()) {
         VMMethod* bootstrapMethod =
@@ -445,6 +450,10 @@ Universe::~Universe() {
 VMObject* Universe::InitializeGlobals() {
     set_vt_to_null();
 
+#ifdef FRUCTUS
+    // the objects and the system classes come with the image
+    FructusImage::Load();
+#else
     //
     // allocate nil object
     //
@@ -493,6 +502,7 @@ VMObject* Universe::InitializeGlobals() {
 
     // Fix up objectClass
     load_ptr(objectClass)->SetSuperClass(nil);
+#endif
 
     if (USE_TAGGING) {
         GlobalBox::updateIntegerBox(NewInteger(1));
@@ -500,9 +510,7 @@ VMObject* Universe::InitializeGlobals() {
     InitializeSymbols();
     obtain_vtables_of_known_classes(load_ptr(symbolSelf));
 
-#ifdef FRUCTUS
-    LoadImage();
-#else
+#ifndef FRUCTUS
     LoadSystemClass(load_ptr(objectClass));
     LoadSystemClass(load_ptr(classClass));
     LoadSystemClass(load_ptr(metaClassClass));
@@ -566,10 +574,7 @@ VMClass* Universe::GetBlockClassWithArgs(uint8_t numberOfArguments) {
         ErrorExit("Block class not found");
     }
 
-    result->InstallPrimitive(new (GetHeap<HEAP_CLS>(), 0)
-                                 VMEvaluationPrimitive(numberOfArguments),
-                             0, false);
-
+    // its #value primitive is in the image
     blockClassesByNoOfArgs[numberOfArguments] = store_root(result);
     return result;
 }
@@ -676,7 +681,8 @@ VMClass* Universe::LoadClass(VMSymbol* name) {
         return (VMClass*)nilObject;
     }
 
-    if (result->HasPrimitives() || result->GetClass()->HasPrimitives()) {
+    if (fructusImageDir == nullptr &&
+        (result->HasPrimitives() || result->GetClass()->HasPrimitives())) {
         result->LoadPrimitives(true);
     }
 
@@ -720,6 +726,10 @@ void Universe::LoadSystemClass(VMClass* systemClass) {
     if (result == nullptr) {
         ErrorPrint("Can't load system class: " + s + "\n");
         Quit(ERR_FAIL);
+    }
+
+    if (fructusImageDir != nullptr) {
+        return;
     }
 
     // Vector has primitive methods and should be loaded (This is temporary)
@@ -987,7 +997,10 @@ void Universe::WalkGlobals(walk_heap_fn walk) {
     stringClass = static_cast<GCClass*>(walk(stringClass));
     systemClass = static_cast<GCClass*>(walk(systemClass));
     blockClass = static_cast<GCClass*>(walk(blockClass));
+#ifndef FRUCTUS
+    // fructus has no doubles, and no Double class
     doubleClass = static_cast<GCClass*>(walk(doubleClass));
+#endif
 
     trueClass = static_cast<GCClass*>(walk(trueClass));
     falseClass = static_cast<GCClass*>(walk(falseClass));

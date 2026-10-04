@@ -51,8 +51,7 @@ static size_t findSlot(GCSymbol** table, size_t size, const char* str,
     return i;
 }
 
-static void growSymbolTable() {
-    size_t const newSize = symbolTableSize == 0 ? 256 : symbolTableSize * 2;
+static void resizeSymbolTable(size_t newSize) {
     auto** newTable = (GCSymbol**)calloc(newSize, sizeof(GCSymbol*));
     if (newTable == nullptr) {
         ErrorExit("out of memory for the symbol table");
@@ -69,15 +68,28 @@ static void growSymbolTable() {
     symbolTableSize = newSize;
 }
 
-VMSymbol* NewSymbol(const size_t length, const char* str) {
-    if ((symbolCount + 1) * 4 > symbolTableSize * 3) {
-        growSymbolTable();
+/** Make room for `count` more symbols, keeping the table at most 3/4 full. */
+static void reserveSymbols(size_t count) {
+    size_t newSize = symbolTableSize == 0 ? 256 : symbolTableSize;
+    while ((symbolCount + count) * 4 > newSize * 3) {
+        newSize *= 2;
     }
+    if (newSize != symbolTableSize) {
+        resizeSymbolTable(newSize);
+    }
+}
+
+static void addSymbol(VMSymbol* sym) {
+    symbolTable[findSlot(symbolTable, symbolTableSize, sym->GetRawChars(),
+                         sym->GetStringLength())] = store_root(sym);
+    symbolCount++;
+}
+
+VMSymbol* NewSymbol(const size_t length, const char* str) {
+    reserveSymbols(1);
     auto* result =
         new (GetHeap<HEAP_CLS>(), PADDED_SIZE(length)) VMSymbol(length, str);
-    symbolTable[findSlot(symbolTable, symbolTableSize, str, length)] =
-        store_root(result);
-    symbolCount++;
+    addSymbol(result);
 
     recordStat(Allocation, "VMSymbol", result->GetObjectSize());
     return result;
@@ -96,6 +108,13 @@ VMSymbol* SymbolFor(const char* str, size_t length) {
 
 VMSymbol* SymbolFor(const char* str) {
     return SymbolFor(str, strlen(str));
+}
+
+void AddSymbols(GCSymbol* const* begin, GCSymbol* const* end) {
+    reserveSymbols(end - begin);
+    for (GCSymbol* const* sym = begin; sym < end; sym++) {
+        addSymbol(load_ptr(*sym));
+    }
 }
 
 void InitializeSymbols() {

@@ -73,6 +73,8 @@ if(FRUCTUS)
   set(COMPILER_SRC "")
   list(FILTER MEMORY_SRC INCLUDE REGEX "/(Heap|MarkSweepHeap|MarkSweepCollector)\\.cpp$")
   list(FILTER PRIMITIVES_SRC EXCLUDE REGEX "/(Double|Integer|Vector)\\.cpp$")
+  # the primitives are in the image, see src/primitives/FructusPrimitives.h
+  set(PRIMITIVESCORE_SRC "")
   list(FILTER VMOBJECTS_SRC EXCLUDE REGEX "/(VMDouble|VMBigInteger)\\.cpp$")
   list(FILTER VM_SRC EXCLUDE REGEX "/(Statistics|Shell)\\.cpp$")
   list(FILTER MISC_SRC EXCLUDE REGEX "/(Timer|Murmur3Hash)\\.cpp$")
@@ -88,6 +90,38 @@ if(FRUCTUS)
   add_compile_options(-fno-exceptions -fno-rtti -ffunction-sections
                       -fdata-sections)
   add_link_options(-Wl,--gc-sections -Wl,-Map=SOM++.map)
+
+  # The class library: compiled by the host SOM++ (see src/vm/FructusImage.h)
+  # and linked in as som-image.o
+  set(FRUCTUS_HOST_SOM "${ROOT_DIR}/build-release/SOM++" CACHE FILEPATH
+    "The host SOM++, which compiles the classes for fructus")
+  set(FRUCTUS_CLASSPATH "${ROOT_DIR}/Smalltalk" CACHE STRING
+    "The class path to compile the classes for fructus from")
+  set(FRUCTUS_PROGRAM "${ROOT_DIR}/Examples/Hello.som" CACHE STRING
+    "The main class file and the arguments of the fructus program")
+  separate_arguments(FRUCTUS_PROGRAM_ARGS UNIX_COMMAND "${FRUCTUS_PROGRAM}")
+  list(GET FRUCTUS_PROGRAM_ARGS 0 FRUCTUS_MAIN_FILE)
+  get_filename_component(FRUCTUS_MAIN_DIR "${FRUCTUS_MAIN_FILE}" DIRECTORY)
+  string(REPLACE ":" ";" FRUCTUS_CLASS_DIRS "${FRUCTUS_CLASSPATH}")
+  set(FRUCTUS_CLASS_FILES "")
+  foreach(CLASS_DIR ${FRUCTUS_CLASS_DIRS} ${FRUCTUS_MAIN_DIR})
+    file(GLOB CLASS_FILES ${CLASS_DIR}/*.som)
+    list(APPEND FRUCTUS_CLASS_FILES ${CLASS_FILES})
+  endforeach()
+
+  set(FRUCTUS_IMAGE "${CMAKE_BINARY_DIR}/som-image.o")
+  add_custom_command(
+    OUTPUT ${FRUCTUS_IMAGE}
+    COMMAND ${ROOT_DIR}/cmake/fructus-image.sh ${FRUCTUS_HOST_SOM}
+            ${FRUCTUS_AS} ${FRUCTUS_LD} ${FRUCTUS_IMAGE} ${FRUCTUS_CLASSPATH}
+            ${FRUCTUS_PROGRAM_ARGS}
+    DEPENDS ${ROOT_DIR}/cmake/fructus-image.sh ${FRUCTUS_HOST_SOM}
+            ${FRUCTUS_CLASS_FILES}
+    COMMENT "Compiling the SOM classes for fructus"
+    VERBATIM)
+  set_source_files_properties(${FRUCTUS_IMAGE} PROPERTIES
+    EXTERNAL_OBJECT TRUE GENERATED TRUE)
+  set(MAIN_SRC ${MAIN_SRC} ${FRUCTUS_IMAGE})
 else()
   # fructus-specific replacements of other files
   foreach(SRC_LIST PRIMITIVES_SRC VMOBJECTS_SRC VM_SRC MISC_SRC MEMORY_SRC

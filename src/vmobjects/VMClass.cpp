@@ -32,7 +32,9 @@
 
 #include "../memory/Heap.h"
 #include "../misc/defs.h"
-#include "../primitivesCore/PrimitiveLoader.h"
+#ifndef FRUCTUS
+  #include "../primitivesCore/PrimitiveLoader.h"
+#endif
 #include "../vm/Globals.h"
 #include "../vm/IsValidObject.h"
 #include "../vm/Print.h"
@@ -63,6 +65,7 @@ VMClass::VMClass(size_t numberOfFields, size_t additionalBytes)
     : VMObject(numberOfFields + VMClassNumberOfFields,
                additionalBytes + sizeof(VMClass)) {}
 
+#ifndef FRUCTUS
 PrimInstallResult VMClass::InstallPrimitive(VMInvokable* invokable,
                                             size_t bytecodeHash,
                                             bool reportHashMismatch) {
@@ -89,14 +92,6 @@ PrimInstallResult VMClass::InstallPrimitive(VMInvokable* invokable,
         }
 
         if (invokable->GetSignature() == inv->GetSignature()) {
-#ifdef FRUCTUS
-            // only the Vector primitives replace Smalltalk methods, checked
-            // by bytecode hash, and fructus doesn't use them
-            (void)bytecodeHash;
-            (void)reportHashMismatch;
-            SetInstanceInvokable(i, invokable);
-            return PrimInstallResult::INSTALLED_REPLACED;
-#else
             PrimInstallResult result = PrimInstallResult::NULL_ARG;
             bool hashMismatch = false;
             size_t seenHash = 0;
@@ -138,7 +133,6 @@ PrimInstallResult VMClass::InstallPrimitive(VMInvokable* invokable,
                     seenHash);
             }
             return result;
-#endif
         }
     }
     // it's a new invokable so we need to expand the invokables array.
@@ -152,6 +146,7 @@ PrimInstallResult VMClass::InstallPrimitive(VMInvokable* invokable,
     }
     return PrimInstallResult::INSTALLED_ADDED;
 }
+#endif
 
 VMSymbol* VMClass::GetInstanceFieldName(size_t index) const {
     size_t const numSuperInstanceFields = numberOfSuperInstanceFields();
@@ -240,6 +235,7 @@ size_t VMClass::GetNumberOfInstanceFields() const {
            numberOfSuperInstanceFields();
 }
 
+#ifndef FRUCTUS
 bool VMClass::HasPrimitives() const {
     size_t const numInvokables = GetNumberOfInstanceInvokables();
     for (size_t i = 0; i < numInvokables; ++i) {
@@ -261,6 +257,7 @@ void VMClass::LoadPrimitives(bool showWarning) {
     PrimitiveLoader::InstallPrimitives(chars, length, GetClass(), true,
                                        showWarning);
 }
+#endif
 
 size_t VMClass::numberOfSuperInstanceFields() const {
     if (HasSuperClass()) {

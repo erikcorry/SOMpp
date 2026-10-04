@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../primitivesCore/PrimitiveContainer.h"
+#include "../primitivesCore/Primitives.h"
 #include "Signature.h"
 #include "VMInvokable.h"
 
@@ -37,6 +37,8 @@ public:
 };
 
 class VMSafeUnaryPrimitive : public VMSafePrimitive {
+    friend class FructusImage;
+
 public:
     typedef GCSafeUnaryPrimitive Stored;
 
@@ -66,6 +68,8 @@ private:
 };
 
 class VMSafeBinaryPrimitive : public VMSafePrimitive {
+    friend class FructusImage;
+
 public:
     typedef GCSafeBinaryPrimitive Stored;
 
@@ -95,6 +99,8 @@ private:
 };
 
 class VMSafeTernaryPrimitive : public VMSafePrimitive {
+    friend class FructusImage;
+
 public:
     typedef GCSafeTernaryPrimitive Stored;
 

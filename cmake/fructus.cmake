@@ -14,6 +14,9 @@ set(CMAKE_AR "${FRUCTUS_ROOT}/build/cross-bin/fructus-elf-ar")
 set(CMAKE_RANLIB "${FRUCTUS_ROOT}/build/cross-bin/fructus-elf-ranlib")
 set(CMAKE_OBJDUMP "${FRUCTUS_ROOT}/build/cross-bin/fructus-elf-objdump")
 set(CMAKE_NM "${FRUCTUS_ROOT}/build/cross-bin/fructus-elf-nm")
+# for the class library, which is assembler, see src/vm/FructusImage.h
+set(FRUCTUS_AS "$ENV{HOME}/fructus-tools/bin/fructus-elf-as")
+set(FRUCTUS_LD "$ENV{HOME}/fructus-tools/bin/fructus-elf-ld")
 
 # the compiler can't link a test program without our sources
 set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
