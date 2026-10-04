@@ -88,7 +88,7 @@ public:
     [[nodiscard]] inline VMFrame* GetContext() const;
     inline void SetContext(VMFrame* /*frm*/);
     [[nodiscard]] inline bool HasContext() const;
-    VMFrame* GetContextLevel(uint8_t lvl);
+    [[nodiscard]] inline VMFrame* GetContextLevel(size_t lvl);
     VMFrame* GetOuterContext();
     [[nodiscard]] inline VMMethod* GetMethod() const;
 
@@ -250,6 +250,15 @@ bool VMFrame::IsBootstrapFrame() const {
 
 VMFrame* VMFrame::GetContext() const {
     return load_ptr(context);
+}
+
+VMFrame* VMFrame::GetContextLevel(size_t lvl) {
+    VMFrame* current = this;
+    while (lvl > 0) {
+        current = current->GetContext();
+        --lvl;
+    }
+    return current;
 }
 
 void VMFrame::SetContext(VMFrame* frm) {

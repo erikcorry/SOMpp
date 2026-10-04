@@ -123,15 +123,6 @@ VMFrame* VMFrame::CloneForMovingGC() const {
 
 const size_t VMFrame::VMFrameNumberOfFields = 0;
 
-VMFrame* VMFrame::GetContextLevel(uint8_t lvl) {
-    VMFrame* current = this;
-    while (lvl > 0) {
-        current = current->GetContext();
-        --lvl;
-    }
-    return current;
-}
-
 VMFrame* VMFrame::GetOuterContext() {
     VMFrame* current = this;
     while (current->HasContext()) {
