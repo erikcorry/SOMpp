@@ -17,7 +17,10 @@
  *  - There are no symbols. A selector, or the name of a global, is a
  *    number, the absolute ELF symbol som_sym_<mangled name>, which
  *    _selectors.s gives each, see vmobjects/VMSymbol.h. Classes have no
- *    names: the name of a class and of its fields are nil.
+ *    names, nor a field for one, and no names of fields, just how many.
+ *    Since the class side is compiled on the host, where a class's first
+ *    field is its name, the image writer shifts the class side's field
+ *    indices down by one.
  *  - Each class adds a global to the som_globals section.
  *  - A method of a class is the global symbol <class label>.<mangled
  *    selector>, for the super sends in other files. A method has no
@@ -77,12 +80,12 @@ constexpr size_t VMObject_numberOfFields = 6;
 constexpr size_t VMObject_clazz = 8;
 constexpr size_t VMObject_size = 10;
 
-constexpr size_t VMClass_name = 10;
+// no name: classes have none
 /** The number of fields, tagged: the image has no field names. */
-constexpr size_t VMClass_numberOfInstanceFields = 12;
-constexpr size_t VMClass_instanceInvokables = 14;
-constexpr size_t VMClass_superClass = 16;
-constexpr size_t VMClass_size = 18;
+constexpr size_t VMClass_numberOfInstanceFields = 10;
+constexpr size_t VMClass_instanceInvokables = 12;
+constexpr size_t VMClass_superClass = 14;
+constexpr size_t VMClass_size = 16;
 
 constexpr size_t VMArray_size = 10;
 

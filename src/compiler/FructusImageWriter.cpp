@@ -610,16 +610,68 @@ void FructusImage::AsmFile::writeHeader(ObjectWriter& w, const std::string& vtab
     w.Word(L::gcField, 0, "gcField");
 }
 
-/** The fields of every class, see VMClass::VMClassNumberOfFields. */
+/** The fields of every class on the host, see VMClass::VMClassNumberOfFields. */
 const char* const classFields[] = {"name", "instanceFields",
                                    "instanceInvokables", "superClass"};
+constexpr size_t nameField = 0;
 constexpr size_t instanceFieldsField = 1;
 constexpr size_t superClassField = 3;
+static_assert(L::VMClass_numberOfInstanceFields ==
+                  L::VMObject_size + (instanceFieldsField - 1) * L::word,
+              "fructus classes have no name");
+static_assert(L::VMClass_superClass ==
+                  L::VMObject_size + (superClassField - 1) * L::word,
+              "fructus classes have no name");
+
+/**
+ * Whether the receivers of `holder`'s methods are classes: Class, and its
+ * subclasses, which the metaclasses are.
+ */
+static bool IsClassSide(VMClass* holder) {
+    for (VMObject* c = holder; c != load_ptr(nilObject);
+         c = static_cast<VMClass*>(c)->GetSuperClass()) {
+        if (c == load_ptr(classClass)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/** Whether `bc` has the index of a field after it. */
+static bool HasFieldOperand(uint8_t bc) {
+    return bc == BC_PUSH_FIELD || bc == BC_POP_FIELD || bc == BC_INC_FIELD ||
+           bc == BC_INC_FIELD_PUSH;
+}
+
+/** Whether `bc` is for one of the first fields, which it has no index of. */
+static bool IsFixedFieldBytecode(uint8_t bc) {
+    return bc == BC_PUSH_FIELD_0 || bc == BC_PUSH_FIELD_1 ||
+           bc == BC_POP_FIELD_0 || bc == BC_POP_FIELD_1 ||
+           bc == BC_RETURN_FIELD_0 || bc == BC_RETURN_FIELD_1 ||
+           bc == BC_RETURN_FIELD_2;
+}
+
+/**
+ * The index on fructus of field `index` of an instance of `holder`. A class
+ * has no name there, its first field on the host, so the other fields are
+ * one lower. The class side can't have the name, see checkClassFields().
+ */
+static size_t FructusFieldIndex(VMClass* holder, size_t index) {
+    if (holder == nullptr || !IsClassSide(holder)) {
+        return index;
+    }
+    if (index == nameField) {
+        Fail("the name of a class isn't a field on fructus");
+    }
+    return index - 1;
+}
 
 /** VMObject, VMClass, VMArray: a header, and fields that are all oops. */
 void FructusImage::AsmFile::writeVMObject(VMObject* obj, const std::string& label) {
     ObjectWriter w(out, label);
-    size_t const numberOfFields = obj->GetNumberOfFields();
+    bool const isClass = dynamic_cast<VMClass*>(obj) != nullptr;
+    // a class has no name on fructus, see VMClass.h
+    size_t const numberOfFields = obj->GetNumberOfFields() - (isClass ? 1 : 0);
     size_t const size = L::VMObject_size + numberOfFields * L::word;
 
     std::string vtable;
@@ -644,16 +696,18 @@ void FructusImage::AsmFile::writeVMObject(VMObject* obj, const std::string& labe
            "numberOfFields");
     w.Word(L::VMObject_clazz, Ref(obj->GetClass()), "class");
 
-    bool const isClass = dynamic_cast<VMClass*>(obj) != nullptr;
     // the program can get at the other objects, and at the class-side
     // fields of classes
     bool const isInternal = image.IsClassArray(obj);
-    for (size_t i = 0; i < numberOfFields; i++) {
+    for (size_t i = isClass ? nameField + 1 : 0; i < obj->GetNumberOfFields();
+         i++) {
         bool const isClassField = isClass && i < 4;
+        size_t const offset =
+            L::VMObject_size + (isClass ? i - 1 : i) * L::word;
         vm_oop_t field = obj->GetField(i);
         if (isClass && i == instanceFieldsField) {
             // fructus has no field names, just how many, see VMClass.h
-            w.Word(L::VMClass_numberOfInstanceFields,
+            w.Word(offset,
                    IntRef((int64_t) static_cast<VMClass*>(obj)
                               ->GetNumberOfInstanceFields()),
                    "numberOfInstanceFields");
@@ -663,15 +717,8 @@ void FructusImage::AsmFile::writeVMObject(VMObject* obj, const std::string& labe
             Fail("the program could get at " + Describe(field) + " in " +
                  comment);
         }
-        std::string const fieldComment =
-            isClassField ? classFields[i] : "field " + std::to_string(i);
-        // the only symbol left is the name of a class, which fructus doesn't
-        // have, see VMSymbol.h
-        bool const isSymbol = !IS_TAGGED(field) &&
-                              dynamic_cast<VMSymbol*>(AS_OBJ(field)) != nullptr;
-        w.Word(L::VMObject_size + i * L::word,
-               Ref(isSymbol ? load_ptr(nilObject) : field),
-               isSymbol ? fieldComment + ", nil" : fieldComment);
+        w.Word(offset, Ref(field),
+               isClassField ? classFields[i] : "field " + std::to_string(i));
     }
     w.End(size);
 }
@@ -773,6 +820,13 @@ FructusImage::AsmFile::Lines FructusImage::AsmFile::writeBytecodes(
             Fail("bad bytecode " + std::to_string(bc) + " in " +
                  describe(method));
         }
+        if (IsFixedFieldBytecode(bc) && method->GetHolder() != nullptr &&
+            IsClassSide(method->GetHolder())) {
+            // the first fields of a class are the VM's, see
+            // checkClassFields()
+            Fail(describe(method) + " uses a field of the class that only "
+                 "the VM can");
+        }
         if (IsSendBytecode(bc)) {
             writeSendSite(w, offset + n, method, i);
             i += length;
@@ -787,7 +841,11 @@ FructusImage::AsmFile::Lines FructusImage::AsmFile::writeBytecodes(
         std::ostringstream line;
         line << "\t.byte\t";
         for (size_t j = 0; j < numBytes; j++) {
-            line << (j == 0 ? "" : ", ") << (unsigned)fructusBytecodes[n + j];
+            unsigned byte = fructusBytecodes[n + j];
+            if (j == 1 && HasFieldOperand(bc)) {
+                byte = FructusFieldIndex(method->GetHolder(), byte);
+            }
+            line << (j == 0 ? "" : ", ") << byte;
         }
         std::string name = Bytecode::GetBytecodeName(fructusBytecodes[n]);
         name.erase(name.find_last_not_of(' ') + 1);
@@ -922,7 +980,9 @@ void FructusImage::AsmFile::writeGlobalReturn(VMGlobalReturn* inv,
 void FructusImage::AsmFile::writeGetter(VMGetter* inv, const std::string& label) {
     ObjectWriter w(out, label);
     writeInvokableHeader(w, inv, Vtable("8VMGetter"), "Getter");
-    w.Word(L::VMGetter_fieldIndex, (int64_t)inv->fieldIndex, "fieldIndex");
+    w.Word(L::VMGetter_fieldIndex,
+           (int64_t)FructusFieldIndex(inv->GetHolder(), inv->fieldIndex),
+           "fieldIndex");
     w.Byte(L::VMGetter_numberOfArguments, inv->numberOfArguments,
            "numberOfArguments");
     w.End(L::VMGetter_size);
@@ -931,7 +991,9 @@ void FructusImage::AsmFile::writeGetter(VMGetter* inv, const std::string& label)
 void FructusImage::AsmFile::writeSetter(VMSetter* inv, const std::string& label) {
     ObjectWriter w(out, label);
     writeInvokableHeader(w, inv, Vtable("8VMSetter"), "Setter");
-    w.Word(L::VMSetter_fieldIndex, (int64_t)inv->fieldIndex, "fieldIndex");
+    w.Word(L::VMSetter_fieldIndex,
+           (int64_t)FructusFieldIndex(inv->GetHolder(), inv->fieldIndex),
+           "fieldIndex");
     w.Word(L::VMSetter_argIndex, (int64_t)inv->argIndex, "argIndex");
     w.Byte(L::VMSetter_numberOfArguments, inv->numberOfArguments,
            "numberOfArguments");

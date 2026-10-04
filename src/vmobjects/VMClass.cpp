@@ -45,7 +45,11 @@
 #include "VMObject.h"
 #include "VMSymbol.h"
 
+#ifdef FRUCTUS
+const size_t VMClass::VMClassNumberOfFields = 3;
+#else
 const size_t VMClass::VMClassNumberOfFields = 4;
+#endif
 
 // NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init, hicpp-member-init)
 VMClass::VMClass() : VMObject(VMClassNumberOfFields, sizeof(VMClass)) {}
@@ -277,6 +281,7 @@ void VMClass::SetSuperClass(VMObject* sup) {
     store_ptr(superClass, sup);
 }
 
+#ifndef FRUCTUS
 VMSymbol* VMClass::GetName() const {
     return load_ptr(name);
 }
@@ -284,6 +289,7 @@ VMSymbol* VMClass::GetName() const {
 void VMClass::SetName(VMSymbol* nam) {
     store_ptr(name, nam);
 }
+#endif
 
 bool VMClass::HasSuperClass() const {
     assert(IsValidObject(load_ptr(superClass)));

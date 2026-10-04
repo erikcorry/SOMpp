@@ -62,8 +62,11 @@ public:
     [[nodiscard]] VMObject* GetSuperClass() const;
     void SetSuperClass(VMObject* sup);
     [[nodiscard]] bool HasSuperClass() const;
+#ifndef FRUCTUS
+    // fructus classes have no names, see vm/FructusImage.h
     [[nodiscard]] VMSymbol* GetName() const;
     void SetName(VMSymbol* name);
+#endif
 #ifndef FRUCTUS
     // fructus has only the number of fields, see numberOfInstanceFields
     [[nodiscard]] VMArray* GetInstanceFields() const;
@@ -101,7 +104,10 @@ public:
 
     DECLARE_AS_DEBUG_STRING(override)
 
-    /** The fields of every class: name, instanceFields and so on. */
+    /**
+     * The fields of every class: name (not on fructus), instanceFields and
+     * so on.
+     */
     static const size_t VMClassNumberOfFields;
 
 private:
@@ -109,7 +115,9 @@ private:
 
     // Remember to update Parser::superclass when the fields are changed
     // Theses are treated like VMObject fields and initialized that way
+#ifndef FRUCTUS
     GCSymbol* name;
+#endif
 #ifdef FRUCTUS
     // the image has no field names, so this is how many fields there are,
     // tagged, where the host has the array of their names
