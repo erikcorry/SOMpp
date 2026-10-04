@@ -124,9 +124,21 @@ public:
         return load_ptr(methodClass);
     }
 
+#ifdef FRUCTUS
+    /**
+     * The bytecodes come right after numberOfArguments, an odd offset, since
+     * the bytecodes don't need aligning. ImageFructus.cpp checks it.
+     */
+    static constexpr size_t headerSize = 13;
+
+    [[nodiscard]] inline size_t GetObjectSize() const override {
+        return PADDED_SIZE(headerSize + bcLength);
+    }
+#else
     [[nodiscard]] inline size_t GetObjectSize() const override {
         return sizeof(VMMethod) + PADDED_SIZE(bcLength);
     }
+#endif
 
     [[nodiscard]] size_t GetMaximumNumberOfStackElements() const {
         return maximumNumberOfStackElements;
@@ -211,7 +223,11 @@ public:
 
     /** The bytecodes come right after the method. */
     [[nodiscard]] inline uint8_t* GetBytecodes() const {
+#ifdef FRUCTUS
+        return (uint8_t*)this + headerSize;
+#else
         return (uint8_t*)(this + 1);
+#endif
     }
 
 private:
@@ -231,10 +247,18 @@ private:
 
     make_testable(public);
 
+#ifdef FRUCTUS
+    // bytes, and the bytecodes follow at headerSize, with no padding
+    const size_t bcLength;
+    const uint8_t numberOfLocals;
+    const uint8_t maximumNumberOfStackElements;
+    const uint8_t numberOfArguments;
+#else
     const size_t numberOfLocals;
     const size_t maximumNumberOfStackElements;
     const size_t bcLength;
     const uint8_t numberOfArguments;
+#endif
 
     make_testable(private);
 #ifndef FRUCTUS

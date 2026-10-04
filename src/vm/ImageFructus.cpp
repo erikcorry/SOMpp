@@ -176,12 +176,15 @@ void FructusImage::CheckLayout() {
     CHECK_FIELD(VMInvokable, signature, VMInvokable_signature);
     CHECK_FIELD(VMInvokable, holder, VMInvokable_holder);
 
+    CHECK_FIELD(VMMethod, bcLength, VMMethod_bcLength);
     CHECK_FIELD(VMMethod, numberOfLocals, VMMethod_numberOfLocals);
     CHECK_FIELD(VMMethod, maximumNumberOfStackElements,
                 VMMethod_maximumNumberOfStackElements);
-    CHECK_FIELD(VMMethod, bcLength, VMMethod_bcLength);
     CHECK_FIELD(VMMethod, numberOfArguments, VMMethod_numberOfArguments);
-    CHECK_SIZE(VMMethod, L::VMMethod_size);
+    // the bytecodes start right after numberOfArguments, in the padding
+    static_assert(VMMethod::headerSize == L::VMMethod_size);
+    static_assert(L::VMMethod_numberOfArguments + 1 == L::VMMethod_size);
+    static_assert(sizeof(VMMethod) == L::PaddedSize(L::VMMethod_size));
 
     CHECK_FIELD(VMLiteralReturn, literal, VMLiteralReturn_literal);
     CHECK_FIELD(VMLiteralReturn, numberOfArguments,

@@ -577,17 +577,22 @@ void FructusImage::AsmFile::writeMethod(VMMethod* method, const std::string& lab
         method->ResizeWords(L::word, [](void* /*word*/, uint8_t* /*out*/) {});
     size_t const bcLength = fructusBytecodes.size();
 
+    if (method->numberOfLocals > UINT8_MAX ||
+        method->maximumNumberOfStackElements > UINT8_MAX) {
+        Fail(describe(method) + " has too many locals or too deep a stack");
+    }
+
     writeInvokableHeader(w, method, Vtable("8VMMethod"), "Method");
-    w.Word(L::VMMethod_numberOfLocals, (int64_t)method->numberOfLocals,
-           "numberOfLocals");
-    w.Word(L::VMMethod_maximumNumberOfStackElements,
-           (int64_t)method->maximumNumberOfStackElements,
-           "maximumNumberOfStackElements");
     w.Word(L::VMMethod_bcLength, (int64_t)bcLength, "bcLength");
+    w.Byte(L::VMMethod_numberOfLocals, (uint8_t)method->numberOfLocals,
+           "numberOfLocals");
+    w.Byte(L::VMMethod_maximumNumberOfStackElements,
+           (uint8_t)method->maximumNumberOfStackElements,
+           "maximumNumberOfStackElements");
     w.Byte(L::VMMethod_numberOfArguments, method->numberOfArguments,
            "numberOfArguments");
     writeBytecodes(w, L::VMMethod_size, method, fructusBytecodes);
-    w.End(L::VMMethod_size + L::PaddedSize(bcLength));
+    w.End(L::PaddedSize(L::VMMethod_size + bcLength));
 }
 
 /**

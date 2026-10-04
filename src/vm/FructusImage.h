@@ -86,12 +86,12 @@ constexpr size_t VMSymbol_maxLength = 255;
 constexpr size_t VMInvokable_signature = 4;
 constexpr size_t VMInvokable_holder = 6;
 
-constexpr size_t VMMethod_numberOfLocals = 8;
-constexpr size_t VMMethod_maximumNumberOfStackElements = 10;
-constexpr size_t VMMethod_bcLength = 12;
-constexpr size_t VMMethod_numberOfArguments = 14;
-/** The bytecodes come right after the method. */
-constexpr size_t VMMethod_size = 16;
+constexpr size_t VMMethod_bcLength = 8;
+constexpr size_t VMMethod_numberOfLocals = 10;
+constexpr size_t VMMethod_maximumNumberOfStackElements = 11;
+constexpr size_t VMMethod_numberOfArguments = 12;
+/** The bytecodes come right after the header, unaligned. */
+constexpr size_t VMMethod_size = 13;
 
 constexpr size_t VMLiteralReturn_literal = 8;
 constexpr size_t VMLiteralReturn_numberOfArguments = 10;

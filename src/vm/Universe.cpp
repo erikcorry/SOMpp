@@ -1024,8 +1024,10 @@ void Universe::WalkGlobals(walk_heap_fn walk) {
 #ifdef FRUCTUS
 VMMethod* Universe::NewMethod(VMSymbol* signature, size_t numberOfBytecodes,
                               size_t numLocals, size_t maxStackDepth) {
-    // method needs space for the bytecodes
-    size_t const additionalBytes = PADDED_SIZE(numberOfBytecodes);
+    // method needs space for the bytecodes, which start inside it
+    size_t const additionalBytes =
+        PADDED_SIZE(VMMethod::headerSize + numberOfBytecodes) -
+        sizeof(VMMethod);
     return new (GetHeap<HEAP_CLS>(), additionalBytes)
         VMMethod(signature, numberOfBytecodes, numLocals, maxStackDepth);
 }
