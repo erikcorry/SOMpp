@@ -93,6 +93,11 @@ if(FRUCTUS)
                   -DFRUCTUS_HEAP_SIZE=${FRUCTUS_HEAP_SIZE})
   add_compile_options(-fno-exceptions -fno-rtti -ffunction-sections
                       -fdata-sections)
+  # A three-byte instruction at an odd address costs a cycle more, so a
+  # function at an odd address can be slower, and every function after one
+  # that changes size by an odd number of bytes changes speed. Unlike
+  # -falign-functions, this applies at -Os too.
+  add_compile_options(-fmin-function-alignment=2)
   add_link_options(-Wl,--gc-sections -Wl,-Map=SOM++.map)
   # At -Os gcc gives all the bytecodes one shared indirect jump, so every
   # dispatch takes several extra jumps to get to it
