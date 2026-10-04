@@ -48,20 +48,22 @@
   #include <sys/time.h>
 #endif
 
-vm_oop_t sysGlobal_(vm_oop_t /*unused*/, vm_oop_t rightObj) {
+#ifndef FRUCTUS
+// fructus has no symbols at run time, and all its globals are in the image
+static vm_oop_t sysGlobal_(vm_oop_t /*unused*/, vm_oop_t rightObj) {
     auto* arg = static_cast<VMSymbol*>(rightObj);
     vm_oop_t result = Universe::GetGlobal(arg);
 
     return (result != nullptr) ? result : load_ptr(nilObject);
 }
 
-vm_oop_t sysGlobalPut(vm_oop_t sys, vm_oop_t sym, vm_oop_t val) {
+static vm_oop_t sysGlobalPut(vm_oop_t sys, vm_oop_t sym, vm_oop_t val) {
     auto* arg = static_cast<VMSymbol*>(sym);
     Universe::SetGlobal(arg, val);
     return sys;
 }
 
-vm_oop_t sysHasGlobal_(vm_oop_t /*unused*/, vm_oop_t rightObj) {
+static vm_oop_t sysHasGlobal_(vm_oop_t /*unused*/, vm_oop_t rightObj) {
     auto* arg = static_cast<VMSymbol*>(rightObj);
 
     if (Universe::HasGlobal(arg)) {
@@ -70,7 +72,7 @@ vm_oop_t sysHasGlobal_(vm_oop_t /*unused*/, vm_oop_t rightObj) {
     return load_ptr(falseObject);
 }
 
-vm_oop_t sysLoad_(vm_oop_t /*unused*/, vm_oop_t rightObj) {
+static vm_oop_t sysLoad_(vm_oop_t /*unused*/, vm_oop_t rightObj) {
     auto* arg = static_cast<VMSymbol*>(rightObj);
     VMClass* result = Universe::LoadClass(arg);
     if (result != nullptr) {
@@ -78,6 +80,7 @@ vm_oop_t sysLoad_(vm_oop_t /*unused*/, vm_oop_t rightObj) {
     }
     return load_ptr(nilObject);
 }
+#endif
 
 vm_oop_t sysExit_(vm_oop_t /*unused*/, vm_oop_t err) {
     som_int_t const err_no = SMALL_INT_VAL(err);
@@ -97,13 +100,14 @@ vm_oop_t sysPrintNewline(vm_oop_t leftObj) {
 
 vm_oop_t sysErrorPrint_(vm_oop_t leftObj, vm_oop_t rightObj) {
     auto* arg = static_cast<VMString*>(rightObj);
-    ErrorPrintf("%.*s", STR_ARGS(arg));
+    ErrorPrintChars(arg->GetRawChars(), arg->GetStringLength());
     return leftObj;
 }
 
 vm_oop_t sysErrorPrintNewline_(vm_oop_t leftObj, vm_oop_t rightObj) {
     auto* arg = static_cast<VMString*>(rightObj);
-    ErrorPrintf("%.*s\n", STR_ARGS(arg));
+    ErrorPrintChars(arg->GetRawChars(), arg->GetStringLength());
+    ErrorPrint("\n");
     return leftObj;
 }
 

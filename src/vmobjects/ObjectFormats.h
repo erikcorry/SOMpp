@@ -39,6 +39,21 @@
 typedef intptr_t som_int_t;
 typedef uintptr_t som_uint_t;
 
+#ifdef FRUCTUS
+/** A hash as a small integer: its low 15 bits, sign extended. */
+inline som_int_t SmallIntHash(som_uint_t bits) {
+    return (som_int_t)(bits << 1U) >> 1U;
+}
+
+/**
+ * The hash of an object, which is its address: fructus' GC doesn't move
+ * objects. Addresses are even, so the low bit is dropped.
+ */
+inline som_int_t AddressHash(const void* obj) {
+    return SmallIntHash((som_uint_t)obj >> 1U);
+}
+#endif
+
 constexpr int SOM_INT_BITS = sizeof(som_int_t) * 8;
 
 // some MACROS for integer tagging

@@ -37,6 +37,11 @@
 #include "../vm/IsValidObject.h"
 #include "../vm/Print.h"
 #include "../vm/Statistics.h"
+#ifdef FRUCTUS
+  #include "../vm/FructusImage.h"
+#else
+  #include "../vm/Symbols.h"
+#endif
 #include "../vm/Universe.h"
 #include "../vmobjects/IntegerBox.h"
 #include "../vmobjects/ObjectFormats.h"
@@ -752,6 +757,21 @@ void Interpreter::send(VMSymbol* signature, VMClass* receiverClass) {
     }
 }
 
+#ifdef FRUCTUS
+// a closed world: the program can't have the selector, so it's an error
+void Interpreter::triggerDoesNotUnderstand(VMSymbol* signature) {
+    uint8_t const numberOfArgs = Signature::GetNumberOfArguments(signature);
+    vm_oop_t receiver = GetFrame()->GetStackElement(numberOfArgs - 1);
+    VMSymbol const* className = CLASS_OF(receiver)->GetName();
+    ErrorPrint("ERROR: Method ");
+    ErrorPrintChars(signature->GetRawChars(), signature->GetStringLength());
+    ErrorPrint(" not found in class ");
+    ErrorPrintChars(className->GetRawChars(), className->GetStringLength());
+    ErrorPrint("\n");
+    GetFrame()->PrintStackTrace();
+    Quit(ERR_FAIL);
+}
+#else
 void Interpreter::triggerDoesNotUnderstand(VMSymbol* signature) {
     uint8_t const numberOfArgs = Signature::GetNumberOfArguments(signature);
 
@@ -780,8 +800,9 @@ void Interpreter::triggerDoesNotUnderstand(VMSymbol* signature) {
         SetFrame(VMFrame::EmergencyFrameFrom(GetFrame(), additionalStackSlots));
     }
 
-    AS_OBJ(receiver)->Send(doesNotUnderstand, arguments, 2);
+    AS_OBJ(receiver)->Send(SymbolFor(doesNotUnderstand), arguments, 2);
 }
+#endif
 
 void Interpreter::doDup() {
     vm_oop_t elem = GetFrame()->GetStackElement(0);
@@ -874,6 +895,16 @@ bool Interpreter::doPushGlobal(uint8_t constantIndex) {
     return true;
 }
 
+#ifdef FRUCTUS
+// all globals are in the image, so this is an error
+void Interpreter::SendUnknownGlobal(VMSymbol* globalName) {
+    ErrorPrint("ERROR: Unknown global ");
+    ErrorPrintChars(globalName->GetRawChars(), globalName->GetStringLength());
+    ErrorPrint("\n");
+    GetFrame()->PrintStackTrace();
+    Quit(ERR_FAIL);
+}
+#else
 void Interpreter::SendUnknownGlobal(VMSymbol* globalName) {
     vm_oop_t arguments[] = {globalName};
     vm_oop_t self = GetSelf();
@@ -888,8 +919,9 @@ void Interpreter::SendUnknownGlobal(VMSymbol* globalName) {
         SetFrame(VMFrame::EmergencyFrameFrom(GetFrame(), additionalStackSlots));
     }
 
-    AS_OBJ(self)->Send(unknownGlobal, arguments, 1);
+    AS_OBJ(self)->Send(SymbolFor(unknownGlobal), arguments, 1);
 }
+#endif
 
 void Interpreter::doPop() {
     GetFrame()->Pop();
@@ -984,6 +1016,9 @@ void Interpreter::doSuperSend(uint8_t constantIndex) {
     if (invokable != nullptr) {
         invokable->Invoke(GetFrame());
     } else {
+#ifdef FRUCTUS
+        triggerDoesNotUnderstand(signature);
+#else
         uint8_t const numOfArgs = Signature::GetNumberOfArguments(signature);
         vm_oop_t receiver = GetFrame()->GetStackElement(numOfArgs - 1);
         VMArray* argumentsArray = Universe::NewArray(numOfArgs);
@@ -994,7 +1029,8 @@ void Interpreter::doSuperSend(uint8_t constantIndex) {
         }
         vm_oop_t arguments[] = {signature, argumentsArray};
 
-        AS_OBJ(receiver)->Send(doesNotUnderstand, arguments, 2);
+        AS_OBJ(receiver)->Send(SymbolFor(doesNotUnderstand), arguments, 2);
+#endif
     }
 }
 
@@ -1035,7 +1071,11 @@ void Interpreter::doReturnNonLocal() {
                 VMFrame::EmergencyFrameFrom(GetFrame(), additionalStackSlots));
         }
 
-        AS_OBJ(sender)->Send(escapedBlock, arguments, 1);
+#ifdef FRUCTUS
+        AS_OBJ(sender)->Send(&som_sym_escapedBlock_3a, arguments, 1);
+#else
+        AS_OBJ(sender)->Send(SymbolFor(escapedBlock), arguments, 1);
+#endif
         return;
     }
 

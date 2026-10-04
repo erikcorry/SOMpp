@@ -41,7 +41,13 @@ vm_oop_t clsNew(vm_oop_t rcvr) {
 
 vm_oop_t clsName(vm_oop_t rcvr) {
     auto* self = static_cast<VMClass*>(rcvr);
+#ifdef FRUCTUS
+    // the program can't have symbols
+    VMSymbol const* name = self->GetName();
+    return Universe::NewString(name->GetStringLength(), name->GetRawChars());
+#else
     return self->GetName();
+#endif
 }
 
 vm_oop_t clsSuperclass(vm_oop_t rcvr) {
@@ -49,15 +55,18 @@ vm_oop_t clsSuperclass(vm_oop_t rcvr) {
     return self->GetSuperClass();
 }
 
-vm_oop_t clsMethods(vm_oop_t rcvr) {
+#ifndef FRUCTUS
+// the program can't have symbols or methods on fructus
+static vm_oop_t clsMethods(vm_oop_t rcvr) {
     auto* self = static_cast<VMClass*>(rcvr);
     return self->GetInstanceInvokables();
 }
 
-vm_oop_t clsFields(vm_oop_t rcvr) {
+static vm_oop_t clsFields(vm_oop_t rcvr) {
     auto* self = static_cast<VMClass*>(rcvr);
     return self->GetInstanceFields();
 }
+#endif
 
 // fructus has its primitives in the image, see FructusPrimitives.h
 #ifndef FRUCTUS

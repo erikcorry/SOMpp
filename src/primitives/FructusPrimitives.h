@@ -9,6 +9,9 @@
  * what the method it replaces does, and an unused routine is dropped by
  * --gc-sections.
  *
+ * The program can't make or get symbols or methods, so there are no
+ * primitives that take or answer them, and Class>>name answers a String.
+ *
  * P(class, classSide, selector, kind, routine), where kind is the routine's
  * type: Frame, Unary, Binary, or Ternary.
  */
@@ -28,8 +31,6 @@
     P(Class, false, "new", Unary, clsNew)                              \
     P(Class, false, "name", Unary, clsName)                            \
     P(Class, false, "superclass", Unary, clsSuperclass)                \
-    P(Class, false, "fields", Unary, clsFields)                        \
-    P(Class, false, "methods", Unary, clsMethods)                      \
                                                                        \
     P(Integer, false, "+", Binary, intPlus)                            \
     P(Integer, false, "-", Binary, intMinus)                           \
@@ -57,26 +58,14 @@
     P(Integer, false, "max:", Binary, intMax)                          \
     P(Integer, false, "to:", Binary, intRange)                         \
                                                                        \
-    P(Method, false, "signature", Unary, mSignature)                   \
-    P(Method, false, "holder", Unary, mHolder)                         \
-    P(Method, false, "invokeOn:with:", Frame, mInvokeOnWith)           \
-                                                                       \
     P(Object, false, "==", Binary, objEqualequal)                      \
     P(Object, false, "objectSize", Unary, objObjectSize)               \
     P(Object, false, "hashcode", Unary, objHashcode)                   \
     P(Object, false, "inspect", Unary, objInspect)                     \
     P(Object, false, "halt", Unary, objHalt)                           \
-    P(Object, false, "instVarAt:", Binary, objInstVarAt)               \
-    P(Object, false, "instVarAt:put:", Ternary, objInstVarAtPut)       \
-    P(Object, false, "instVarNamed:", Binary, objInstVarNamed)         \
     P(Object, false, "class", Unary, objClass)                         \
                                                                        \
-    P(Primitive, false, "signature", Unary, pSignature)                \
-    P(Primitive, false, "holder", Unary, pHolder)                      \
-    P(Primitive, false, "invokeOn:with:", Frame, pInvokeOnWith)        \
-                                                                       \
     P(String, false, "concatenate:", Binary, strConcatenate_)          \
-    P(String, false, "asSymbol", Unary, strAsSymbol)                   \
     P(String, false, "hashcode", Unary, strHashcode)                   \
     P(String, false, "length", Unary, strLength)                       \
     P(String, false, "=", Binary, strEqual)                            \
@@ -87,12 +76,6 @@
     P(String, false, "isDigits", Unary, strIsDigits)                   \
     P(String, false, "charAt:", Binary, strCharAt)                     \
                                                                        \
-    P(Symbol, false, "asString", Unary, symAsString)                   \
-                                                                       \
-    P(System, false, "global:", Binary, sysGlobal_)                    \
-    P(System, false, "global:put:", Ternary, sysGlobalPut)             \
-    P(System, false, "hasGlobal:", Binary, sysHasGlobal_)              \
-    P(System, false, "load:", Binary, sysLoad_)                        \
     P(System, false, "exit:", Binary, sysExit_)                        \
     P(System, false, "printString:", Binary, sysPrintString_)          \
     P(System, false, "printNewline", Unary, sysPrintNewline)           \

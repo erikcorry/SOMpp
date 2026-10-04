@@ -52,7 +52,11 @@ public:
             hash = ((hash << 5U) + hash) + chars[i];
         }
 
+#ifdef FRUCTUS
+        return SmallIntHash(hash);
+#else
         return (som_int_t)hash;
+#endif
     }
 
     /**

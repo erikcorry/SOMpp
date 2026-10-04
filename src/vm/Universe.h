@@ -120,19 +120,19 @@ public:
     static VMString* NewString(const char* str);
     static VMClass* NewSystemClass();
 
-    static void InitializeSystemClass(VMClass* /*systemClass*/,
-                                      VMClass* /*superClass*/,
-                                      const char* /*name*/);
-
     static vm_oop_t GetGlobal(VMSymbol* /*name*/);
-    static void SetGlobal(VMSymbol* name, vm_oop_t val);
-    static bool HasGlobal(VMSymbol* /*name*/);
     static VMObject* InitializeGlobals();
     static VMClass* GetBlockClass();
     static VMClass* GetBlockClassWithArgs(uint8_t numberOfArguments);
 
-    static VMClass* LoadClass(VMSymbol* /*name*/);
 #ifndef FRUCTUS
+    // fructus' globals and classes are all in the image
+    static void InitializeSystemClass(VMClass* /*systemClass*/,
+                                      VMClass* /*superClass*/,
+                                      const char* /*name*/);
+    static void SetGlobal(VMSymbol* name, vm_oop_t val);
+    static bool HasGlobal(VMSymbol* /*name*/);
+    static VMClass* LoadClass(VMSymbol* /*name*/);
     static void LoadSystemClass(VMClass* /*systemClass*/);
     static VMClass* LoadClassBasic(VMSymbol* /*name*/,
                                    VMClass* /*systemClass*/);
@@ -165,17 +165,7 @@ private:
     static void initialize(int32_t _argc, char** _argv);
 
     static size_t heapSize;
-#ifdef FRUCTUS
-    struct Global {
-        GCSymbol* name;
-        gc_oop_t value;
-    };
-    static Global* findGlobal(VMSymbol* name);
-
-    static SimpleVector<Global> globals;
-    static constexpr uint8_t MAX_BLOCK_ARGS = 4;
-    static GCClass* blockClassesByNoOfArgs[MAX_BLOCK_ARGS + 1];
-#else
+#ifndef FRUCTUS
     static map<GCSymbol*, gc_oop_t> globals;
     static map<uint8_t, GCClass*> blockClassesByNoOfArgs;
     static vector<std::string> classPath;

@@ -1,7 +1,5 @@
 #include "Primitive.h"
 
-#include "FructusPrimitives.h"
-
 #include <assert.h>
 #include <cstddef>
 
@@ -10,19 +8,19 @@
 #include "../vmobjects/VMFrame.h"
 #include "../vmobjects/VMSymbol.h"  // NOLINT(misc-include-cleaner) it's required to make the types complete
 
-vm_oop_t pHolder(vm_oop_t rcvr) {
+static vm_oop_t pHolder(vm_oop_t rcvr) {
     auto* self = static_cast<VMInvokable*>(rcvr);
     vm_oop_t holder = self->GetHolder();
     assert(holder != nullptr);
     return holder;
 }
 
-vm_oop_t pSignature(vm_oop_t rcvr) {
+static vm_oop_t pSignature(vm_oop_t rcvr) {
     auto* self = static_cast<VMInvokable*>(rcvr);
     return self->GetSignature();
 }
 
-void pInvokeOnWith(VMFrame* frame) {
+static void pInvokeOnWith(VMFrame* frame) {
     // REM: this is a clone with _Method mInvokeOnWith
     auto* args = static_cast<VMArray*>(frame->Pop());
     auto* rcvr = frame->Pop();
@@ -38,11 +36,8 @@ void pInvokeOnWith(VMFrame* frame) {
     mthd->Invoke(frame);
 }
 
-// fructus has its primitives in the image, see FructusPrimitives.h
-#ifndef FRUCTUS
 _Primitive::_Primitive() {
     Add("signature", &pSignature, false);
     Add("holder", &pHolder, false);
     Add("invokeOn:with:", &pInvokeOnWith, false);
 }
-#endif

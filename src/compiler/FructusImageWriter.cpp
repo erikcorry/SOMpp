@@ -44,17 +44,6 @@ const char* const unsupportedClasses[] = {"Double"};
 const char* const vmClasses[] = {"Block",  "Block1", "Block2", "Block3",
                                  "Block4", "True",   "False",  "System"};
 
-/**
- * Fructus is a closed world: every send's selector is in the program, which
- * perform would break.
- */
-const char* const dynamicSendSelectors[] = {
-    "perform:", "perform:withArguments:", "perform:inSuperclass:",
-    "perform:withArguments:inSuperclass:"};
-
-/** The highest number of arguments, with the receiver, of a block class. */
-constexpr int maxBlockClassArguments = 4;
-
 /** An entry of FRUCTUS_PRIMITIVES. */
 struct PrimitiveSpec {
     const char* className;
@@ -153,6 +142,24 @@ std::string Printable(const VMString* str) {
 std::string Vtable(const char* mangledClassName) {
     return std::string("_ZTV") + mangledClassName + "+" +
            std::to_string(L::vtableOffset);
+}
+
+/** Symbols and methods are only for dispatch, the program can't have them. */
+bool IsDispatchOnly(vm_oop_t obj) {
+    if (IS_TAGGED(obj)) {
+        return false;
+    }
+    auto* o = AS_OBJ(obj);
+    return dynamic_cast<VMSymbol*>(o) != nullptr ||
+           dynamic_cast<VMInvokable*>(o) != nullptr;
+}
+
+std::string Describe(vm_oop_t obj) {
+    auto* o = AS_OBJ(obj);
+    if (auto* sym = dynamic_cast<VMSymbol*>(o)) {
+        return "the symbol #" + Printable(sym);
+    }
+    return "a " + Printable(o->GetClass()->GetName());
 }
 
 [[noreturn]] void Fail(const std::string& message) {
@@ -295,6 +302,11 @@ public:
         return classLabels.find(obj) != classLabels.end();
     }
 
+    /** Whether `obj` is the instanceFields or instanceInvokables of a class. */
+    [[nodiscard]] bool IsClassArray(AbstractVMObject* obj) const {
+        return classArrays.find(obj) != classArrays.end();
+    }
+
     /** The fructus primitive `prim` stands for, or nullptr if there's none. */
     const PrimitiveSpec* PrimitiveFor(VMPrimitive* prim) const {
         auto const it = primitives.find(prim);
@@ -304,9 +316,8 @@ public:
 private:
     void collectClasses(const std::vector<std::string>& arguments);
     void checkClosedWorld();
-    void checkSends(VMClass* cls, VMMethod* method);
+    void checkPushes(VMClass* cls, VMMethod* method);
     void installPrimitives(VMClass* cls);
-    void removeDynamicSends(VMClass* cls);
     void addClass(const char* name, bool required);
     void addGlobalsOf(VMClass* cls);
     void addGlobalsOf(VMInvokable* inv);
@@ -318,6 +329,7 @@ private:
     std::deque<VMClass*> toScan;
     std::map<AbstractVMObject*, std::string> classLabels;
     std::map<VMPrimitive*, const PrimitiveSpec*> primitives;
+    std::set<AbstractVMObject*> classArrays;
 };
 
 FructusImage::AsmFile::AsmFile(ImageWriter& image, const std::string& path,
@@ -383,17 +395,12 @@ void FructusImage::AsmFile::Finish() {
         write(obj, localLabels[obj]);
     }
 
-    // each symbol in a COMDAT group of its own, with its entry in the table
-    // of all symbols
+    // each symbol in a COMDAT group of its own, so the linker keeps one
     for (auto& [label, sym] : symbols) {
         out << "\n\t.section\t.data." << label << ",\"awG\",@progbits,"
             << label << ",comdat\n"
             << "\t.globl\t" << label << "\n";
         writeSymbol(sym, label);
-        out << "\t.section\tsom_symbols,\"aG\",@progbits," << label
-            << ",comdat\n"
-            << "\t.balign\t2\n"
-            << "\t.short\t" << label << "\n";
     }
 }
 
@@ -457,7 +464,6 @@ void FructusImage::AsmFile::writeVMObject(VMObject* obj, const std::string& labe
     }
 
     writeHeader(w, vtable, comment);
-    w.Word(L::VMObject_hash, w.Self(), "hash");
     w.Word(L::VMObject_totalObjectSize, (int64_t)size, "totalObjectSize");
     w.Word(L::VMObject_numberOfFields, (int64_t)numberOfFields,
            "numberOfFields");
@@ -467,11 +473,19 @@ void FructusImage::AsmFile::writeVMObject(VMObject* obj, const std::string& labe
                                               "instanceInvokables",
                                               "superClass"};
     bool const isClass = dynamic_cast<VMClass*>(obj) != nullptr;
+    // the program can get at the other objects, and at the class-side
+    // fields of classes
+    bool const isInternal = image.IsClassArray(obj);
     for (size_t i = 0; i < numberOfFields; i++) {
+        bool const isClassField = isClass && i < 4;
+        vm_oop_t const field = obj->GetField(i);
+        if (!isClassField && !isInternal && IsDispatchOnly(field)) {
+            Fail("the program could get at " + Describe(field) + " in " +
+                 comment);
+        }
         std::string const fieldComment =
-            isClass && i < 4 ? classFields[i] : "field " + std::to_string(i);
-        w.Word(L::VMObject_size + i * L::word, Ref(obj->GetField(i)),
-               fieldComment);
+            isClassField ? classFields[i] : "field " + std::to_string(i);
+        w.Word(L::VMObject_size + i * L::word, Ref(field), fieldComment);
     }
     w.End(size);
 }
@@ -517,7 +531,6 @@ void FructusImage::AsmFile::writeInvokableHeader(ObjectWriter& w, VMInvokable* i
                                    const std::string& vtable,
                                    const std::string& comment) {
     writeHeader(w, vtable, comment + " " + describe(inv));
-    w.Word(L::VMInvokable_hash, w.Self(), "hash");
     w.Word(L::VMInvokable_signature, Ref(inv->GetSignature()), "signature");
     w.Word(L::VMInvokable_holder, Ref(inv->GetHolder()), "holder");
 }
@@ -610,6 +623,10 @@ void FructusImage::AsmFile::writeEvaluationPrimitive(
 void FructusImage::AsmFile::writeLiteralReturn(VMLiteralReturn* inv,
                                  const std::string& label) {
     ObjectWriter w(out, label);
+    if (IsDispatchOnly(load_ptr(inv->literal))) {
+        Fail(describe(inv) + " answers " + Describe(load_ptr(inv->literal)) +
+             ", but the program can't have it");
+    }
     writeInvokableHeader(w, inv, Vtable("15VMLiteralReturn"),
                          "LiteralReturn");
     w.Word(L::VMLiteralReturn_literal, Ref(load_ptr(inv->literal)),
@@ -740,32 +757,6 @@ void FructusImage::ImageWriter::collectClasses(const std::vector<std::string>& a
     }
 }
 
-/** Leave out the methods that send a selector the program doesn't have. */
-void FructusImage::ImageWriter::removeDynamicSends(VMClass* cls) {
-    VMArray* invokables = cls->GetInstanceInvokables();
-    size_t const n = invokables->GetNumberOfIndexableFields();
-    std::vector<vm_oop_t> kept;
-    for (size_t i = 0; i < n; i++) {
-        auto* inv = static_cast<VMInvokable*>(invokables->GetIndexableField(i));
-        std::string const selector = inv->GetSignature()->GetStdString();
-        bool dynamic = false;
-        for (const char* d : dynamicSendSelectors) {
-            dynamic = dynamic || selector == d;
-        }
-        if (!dynamic) {
-            kept.push_back(inv);
-        }
-    }
-    if (kept.size() == n) {
-        return;
-    }
-    VMArray* result = Universe::NewArray(kept.size());
-    for (size_t i = 0; i < kept.size(); i++) {
-        result->SetIndexableField(i, kept[i]);
-    }
-    cls->SetInstanceInvokables(result);
-}
-
 /**
  * Put the fructus primitives of `cls` in place, as placeholders that are
  * written as the primitives. They replace the methods with the same
@@ -785,7 +776,7 @@ void FructusImage::ImageWriter::installPrimitives(VMClass* cls) {
     }
 
     // Block1 is the class of blocks with only the receiver as argument, and
-    // so on
+    // so on, see FructusImage::BlockClass()
     for (int n = 1; n <= maxBlockClassArguments; n++) {
         if (name == "Block" + std::to_string(n)) {
             cls->InstallPrimitive(new (GetHeap<HEAP_CLS>(), 0)
@@ -795,48 +786,59 @@ void FructusImage::ImageWriter::installPrimitives(VMClass* cls) {
     }
 }
 
-void FructusImage::ImageWriter::checkSends(VMClass* cls, VMMethod* method) {
+/** No bytecode pushes a symbol or a method. */
+void FructusImage::ImageWriter::checkPushes(VMClass* cls, VMMethod* method) {
     for (size_t i = 0; i < method->bcLength;
          i += Bytecode::GetBytecodeLength(method->bytecodes[i])) {
         uint8_t const bc = method->bytecodes[i];
-        if (bc != BC_SEND && bc != BC_SEND_1 && bc != BC_SUPER_SEND) {
-            continue;
+        size_t index = 0;
+        switch (bc) {
+            case BC_PUSH_CONSTANT:
+                index = method->bytecodes[i + 1];
+                break;
+            case BC_PUSH_CONSTANT_0:
+            case BC_PUSH_CONSTANT_1:
+            case BC_PUSH_CONSTANT_2:
+                index = bc - BC_PUSH_CONSTANT_0;
+                break;
+            default:
+                continue;
         }
-        std::string const selector =
-            static_cast<VMSymbol*>(
-                method->GetConstantWithIndex(method->bytecodes[i + 1]))
-                ->GetStdString();
-        for (const char* d : dynamicSendSelectors) {
-            if (selector == d) {
-                Fail(Printable(cls->GetName()) + " sends #" + selector +
-                     ", but fructus is a closed world");
-            }
+        vm_oop_t constant = method->GetConstantWithIndex(index);
+        if (IsDispatchOnly(constant)) {
+            Fail(Printable(cls->GetName()) + ">>#" +
+                 Printable(method->GetSignature()) + " pushes " +
+                 Describe(constant) + ", but the program can't have it");
         }
     }
     for (size_t i = 0; i < method->numberOfConstants; i++) {
         vm_oop_t constant = load_ptr(method->indexableFields[i]);
         if (!IS_TAGGED(constant)) {
             if (auto* block = dynamic_cast<VMMethod*>(AS_OBJ(constant))) {
-                checkSends(cls, block);
+                checkPushes(cls, block);
             }
         }
     }
 }
 
-/** Fructus has no perform, and its primitives are known when it's linked. */
+/**
+ * The program can't have symbols or methods, and its primitives are known
+ * when it's linked.
+ */
 void FructusImage::ImageWriter::checkClosedWorld() {
     for (VMClass* cls : classes) {
+        installPrimitives(cls);
         for (VMClass* c : {cls, cls->GetClass()}) {
-            removeDynamicSends(c);
+            classArrays.insert(c->GetInstanceFields());
+            classArrays.insert(c->GetInstanceInvokables());
             size_t const n = c->GetNumberOfInstanceInvokables();
             for (size_t i = 0; i < n; i++) {
                 if (auto* method =
                         dynamic_cast<VMMethod*>(c->GetInstanceInvokable(i))) {
-                    checkSends(cls, method);
+                    checkPushes(cls, method);
                 }
             }
         }
-        installPrimitives(cls);
     }
 }
 
@@ -857,14 +859,60 @@ void FructusImage::ImageWriter::writeClass(VMClass* cls) {
     file.Finish();
 }
 
-void FructusImage::ImageWriter::writeUniverse(const std::vector<std::string>& arguments) {
-    AsmFile file(*this, dir + "/_universe.s",
-                 "nil, true, false, and the program's arguments");
+void FructusImage::ImageWriter::writeUniverse(
+    const std::vector<std::string>& arguments) {
+    AsmFile file(*this, dir + "/_universe.s", "The universe of the program");
+    auto* system = static_cast<VMObject*>(
+        AS_OBJ(Universe::GetGlobal(SymbolFor("system"))));
     file.WriteGlobal(load_ptr(nilObject), "som_nil");
     file.WriteGlobal(load_ptr(trueObject), "som_true");
     file.WriteGlobal(load_ptr(falseObject), "som_false");
+    file.WriteGlobal(system, "som_system");
     file.WriteGlobal(Universe::NewArrayFromStrings(arguments),
                      "som_arguments");
+
+    // System>>initialize: on the host, but known now
+    VMClass* mainClass = Universe::LoadClass(SymbolFor(arguments[0]));
+    bool const hasRunWithArguments =
+        mainClass->LookupInvokable(SymbolFor("run:")) != nullptr;
+    std::ostream& out = file.Out();
+    out << "\n\t.globl\tsom_main_class\n"
+        << "\t.balign\t2\n"
+        << "som_main_class:\n"
+        << "\t.short\t" << ClassLabel(mainClass) << "\n"
+        << "\n\t.globl\tsom_main_selector\n"
+        << "som_main_selector:\n"
+        << "\t.short\t"
+        << file.Ref(SymbolFor(hasRunWithArguments ? "run:" : "run")) << "\n";
+
+    // indexed by the number of arguments, with the receiver
+    out << "\n\t.globl\tsom_block_classes\n"
+        << "som_block_classes:\n"
+        << "\t.short\t0\t; no arguments, not even the receiver\n";
+    for (int n = 1; n <= maxBlockClassArguments; n++) {
+        VMSymbol* name = SymbolFor("Block" + std::to_string(n));
+        vm_oop_t cls = Universe::GetGlobal(name);
+        bool const inImage = cls != nullptr && IsClass(AS_OBJ(cls));
+        out << "\t.short\t"
+            << (inImage ? ClassLabel(static_cast<VMClass*>(AS_OBJ(cls)))
+                        : std::string("0"))
+            << "\n";
+    }
+
+    // the globals that aren't classes
+    out << "\n\t.section\tsom_globals,\"a\",@progbits\n"
+        << "\t.balign\t2\n";
+    for (const char* name : {"nil", "true", "false", "system"}) {
+        out << "\t.short\t" << file.Ref(SymbolFor(name)) << ", som_" << name
+            << "\n";
+    }
+    out << "\t.data\n";
+
+    // the symbols the VM uses
+#define FRUCTUS_REF_SYMBOL(mangled, selector) file.Ref(SymbolFor(selector));
+    FRUCTUS_VM_SYMBOLS(FRUCTUS_REF_SYMBOL)
+#undef FRUCTUS_REF_SYMBOL
+
     file.Finish();
 }
 

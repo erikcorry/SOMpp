@@ -69,6 +69,12 @@ public:
     VMFrame* PushNewFrame(VMMethod* method);
     void SetFrame(VMFrame* frm);
 
+    /** Drop the frames, after Start() returned from the last one. */
+    void ClearFrames() {
+        frame = nullptr;
+        method = nullptr;
+    }
+
     inline VMFrame* GetFrame() { return frame; }
 
     VMMethod* GetMethod();

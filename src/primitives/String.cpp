@@ -35,7 +35,9 @@
 
 #include "../misc/defs.h"
 #include "../vm/Globals.h"
-#include "../vm/Symbols.h"
+#ifndef FRUCTUS
+  #include "../vm/Symbols.h"
+#endif
 #include "../vm/Universe.h"
 #include "../vmobjects/ObjectFormats.h"
 #ifndef FRUCTUS
@@ -62,10 +64,13 @@ vm_oop_t strConcatenate_(vm_oop_t leftObj, vm_oop_t rightObj) {
     return result;
 }
 
-vm_oop_t strAsSymbol(vm_oop_t rcvr) {
+#ifndef FRUCTUS
+// fructus makes no symbols at run time
+static vm_oop_t strAsSymbol(vm_oop_t rcvr) {
     auto* self = static_cast<VMString*>(rcvr);
     return SymbolFor(self->GetRawChars(), self->GetStringLength());
 }
+#endif
 
 vm_oop_t strHashcode(vm_oop_t rcvr) {
     auto* self = static_cast<VMString*>(rcvr);
@@ -91,10 +96,18 @@ vm_oop_t strEqual(vm_oop_t leftObj, vm_oop_t op1) {
     }
 
     VMClass const* const otherClass = CLASS_OF(op1);
+#ifdef FRUCTUS
+    // a symbol is only ever equal to itself, never to a string
+    if (otherClass != load_ptr(stringClass) ||
+        left->GetClass() != load_ptr(stringClass)) {
+        return load_ptr(falseObject);
+    }
+#else
     if (otherClass != load_ptr(stringClass) &&
         otherClass != load_ptr(symbolClass)) {
         return load_ptr(falseObject);
     }
+#endif
 
     auto* right = static_cast<VMString*>(op1);
     if (left->length != right->length) {

@@ -199,6 +199,7 @@ bool IsSafeUnaryPrim(vm_oop_t obj) {
     return get_vtable(AS_OBJ(obj)) == vt_safe_un_primitive;
 }
 
+#ifndef FRUCTUS
 void obtain_vtables_of_known_classes(VMSymbol* someValidSymbol) {
     // These objects are allocated on the heap. So, they will get GC'ed soon
     // enough.
@@ -284,3 +285,4 @@ void obtain_vtables_of_known_classes(VMSymbol* someValidSymbol) {
     vt_string = get_vtable(str);
     vt_symbol = get_vtable(someValidSymbol);
 }
+#endif

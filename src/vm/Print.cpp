@@ -20,6 +20,10 @@ void ErrorPrint(const char* str) {
     fputs(str, stderr);
 }
 
+void ErrorPrintChars(const char* str, size_t length) {
+    fwrite(str, 1, length, stderr);
+}
+
 void ErrorPrintf(const char* format, ...) {
     va_list args;
     va_start(args, format);

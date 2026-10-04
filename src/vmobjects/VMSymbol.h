@@ -42,6 +42,13 @@ public:
     [[nodiscard]] VMSymbol* CloneForMovingGC() const override;
     [[nodiscard]] VMClass* GetClass() const override;
 
+#ifdef FRUCTUS
+    /** Symbols are unique, see vm/FructusImage.h. */
+    [[nodiscard]] som_int_t GetHash() const override {
+        return AddressHash(this);
+    }
+#endif
+
     DECLARE_AS_DEBUG_STRING(override)
 
     void WalkObjects(walk_heap_fn /*unused*/) override;

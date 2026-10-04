@@ -45,8 +45,10 @@ public:
 
     DECLARE_AS_DEBUG_STRING(override)
 
+#ifndef FRUCTUS
     static VMEvaluationPrimitive* GetEvaluationPrimitive(
         int /*numberOfArguments*/);
+#endif
 
 private:
     make_testable(public);

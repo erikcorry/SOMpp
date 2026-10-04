@@ -16,17 +16,21 @@
  *    so a missing class is a link error.
  *  - A symbol is som_sym_<mangled name>, defined in a COMDAT group of the
  *    same name by every file that uses it, so the linker keeps one copy and
- *    symbols stay unique. The group also holds the symbol's entry in the
- *    som_symbols section, a table of all symbols.
- *  - Each class adds a Universe::Global to the som_globals section.
+ *    symbols stay unique. There is no symbol table, and no symbols are made
+ *    at run time.
+ *  - Each class adds a global to the som_globals section.
  *  - A primitive is an object in the image like a method, which refers to
  *    its routine by name, see primitives/FructusPrimitives.h. Nothing is
  *    installed at run time.
- *  - _universe.s holds nil, true, false, and som_arguments, the arguments
- *    the program was written with.
+ *  - _universe.s holds nil, true, false, the system object and their
+ *    globals, the program's main class, its arguments, the block classes,
+ *    and the symbols the VM uses.
  *
- * FructusImage::Load() (in ImageFructus.cpp) registers the tables the linker
- * gathered, between __start_<section> and __stop_<section>.
+ * The world is closed: the program's symbols and methods are only for
+ * dispatch and field names. No bytecode pushes them, and no object the
+ * program can get at has them in a field, see Smalltalk-fructus. So there is
+ * no perform, a message that isn't understood or an unknown global is an
+ * error of the VM, and since nothing moves, objects hash by their address.
  */
 
 #include <cstddef>
@@ -49,19 +53,19 @@ constexpr size_t vtableOffset = 2 * word;
 
 constexpr size_t gcField = 2;
 
-constexpr size_t VMObject_hash = 4;
-constexpr size_t VMObject_totalObjectSize = 6;
-constexpr size_t VMObject_numberOfFields = 8;
-constexpr size_t VMObject_clazz = 10;
-constexpr size_t VMObject_size = 12;
+// objects hash by their address, so there is no hash field
+constexpr size_t VMObject_totalObjectSize = 4;
+constexpr size_t VMObject_numberOfFields = 6;
+constexpr size_t VMObject_clazz = 8;
+constexpr size_t VMObject_size = 10;
 
-constexpr size_t VMClass_name = 12;
-constexpr size_t VMClass_instanceFields = 14;
-constexpr size_t VMClass_instanceInvokables = 16;
-constexpr size_t VMClass_superClass = 18;
-constexpr size_t VMClass_size = 20;
+constexpr size_t VMClass_name = 10;
+constexpr size_t VMClass_instanceFields = 12;
+constexpr size_t VMClass_instanceInvokables = 14;
+constexpr size_t VMClass_superClass = 16;
+constexpr size_t VMClass_size = 18;
 
-constexpr size_t VMArray_size = 12;
+constexpr size_t VMArray_size = 10;
 
 constexpr size_t VMString_length = 4;
 constexpr size_t VMString_chars = 6;
@@ -73,42 +77,41 @@ constexpr size_t VMSymbol_nextCachePos = 16;
 constexpr size_t VMSymbol_cachedInvokable = 18;
 constexpr size_t VMSymbol_size = 24;
 
-constexpr size_t VMInvokable_hash = 4;
-constexpr size_t VMInvokable_signature = 6;
-constexpr size_t VMInvokable_holder = 8;
+constexpr size_t VMInvokable_signature = 4;
+constexpr size_t VMInvokable_holder = 6;
 
-constexpr size_t VMMethod_numberOfLocals = 10;
-constexpr size_t VMMethod_maximumNumberOfStackElements = 12;
-constexpr size_t VMMethod_bcLength = 14;
-constexpr size_t VMMethod_numberOfArguments = 16;
-constexpr size_t VMMethod_numberOfConstants = 18;
-constexpr size_t VMMethod_indexableFields = 20;
-constexpr size_t VMMethod_bytecodes = 22;
-constexpr size_t VMMethod_size = 24;
+constexpr size_t VMMethod_numberOfLocals = 8;
+constexpr size_t VMMethod_maximumNumberOfStackElements = 10;
+constexpr size_t VMMethod_bcLength = 12;
+constexpr size_t VMMethod_numberOfArguments = 14;
+constexpr size_t VMMethod_numberOfConstants = 16;
+constexpr size_t VMMethod_indexableFields = 18;
+constexpr size_t VMMethod_bytecodes = 20;
+constexpr size_t VMMethod_size = 22;
 
-constexpr size_t VMLiteralReturn_literal = 10;
-constexpr size_t VMLiteralReturn_numberOfArguments = 12;
-constexpr size_t VMLiteralReturn_size = 14;
+constexpr size_t VMLiteralReturn_literal = 8;
+constexpr size_t VMLiteralReturn_numberOfArguments = 10;
+constexpr size_t VMLiteralReturn_size = 12;
 
-constexpr size_t VMGlobalReturn_globalName = 10;
-constexpr size_t VMGlobalReturn_numberOfArguments = 12;
-constexpr size_t VMGlobalReturn_size = 14;
+constexpr size_t VMGlobalReturn_globalName = 8;
+constexpr size_t VMGlobalReturn_numberOfArguments = 10;
+constexpr size_t VMGlobalReturn_size = 12;
 
-constexpr size_t VMGetter_fieldIndex = 10;
-constexpr size_t VMGetter_numberOfArguments = 12;
-constexpr size_t VMGetter_size = 14;
+constexpr size_t VMGetter_fieldIndex = 8;
+constexpr size_t VMGetter_numberOfArguments = 10;
+constexpr size_t VMGetter_size = 12;
 
-constexpr size_t VMSetter_fieldIndex = 10;
-constexpr size_t VMSetter_argIndex = 12;
-constexpr size_t VMSetter_numberOfArguments = 14;
-constexpr size_t VMSetter_size = 16;
+constexpr size_t VMSetter_fieldIndex = 8;
+constexpr size_t VMSetter_argIndex = 10;
+constexpr size_t VMSetter_numberOfArguments = 12;
+constexpr size_t VMSetter_size = 14;
 
 /** VMPrimitive and VMSafe*Primitive: a Prim, which is just a routine. */
-constexpr size_t VMPrimitive_prim = 10;
-constexpr size_t VMPrimitive_size = 12;
+constexpr size_t VMPrimitive_prim = 8;
+constexpr size_t VMPrimitive_size = 10;
 
-constexpr size_t VMEvaluationPrimitive_numberOfArguments = 10;
-constexpr size_t VMEvaluationPrimitive_size = 12;
+constexpr size_t VMEvaluationPrimitive_numberOfArguments = 8;
+constexpr size_t VMEvaluationPrimitive_size = 10;
 
 /** Small integers are tagged, so they have 15 bits. */
 constexpr long smallIntMin = -(1L << 14);
@@ -119,21 +122,59 @@ constexpr size_t PaddedSize(size_t n) {
 }
 }  // namespace FructusLayout
 
+#ifdef FRUCTUS
+  #include "../vmobjects/ObjectFormats.h"
+#endif
+
 class VMArray;
+class VMClass;
+class VMObject;
+class VMSymbol;
+
+/** The block classes are Block1 to Block<maxBlockClassArguments>. */
+constexpr int maxBlockClassArguments = 4;
+
+/**
+ * The symbols the VM uses, which the image always has, as
+ * P(mangled, selector).
+ */
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
+#define FRUCTUS_VM_SYMBOLS(P)            \
+    P(new, "new")                         \
+    P(run, "run")                         \
+    P(run_3a, "run:")                     \
+    P(escapedBlock_3a, "escapedBlock:") \
+    P(bootstrap, "bootstrap")
+
+#ifdef FRUCTUS
+  #define FRUCTUS_DECLARE_SYMBOL(mangled, selector) \
+      extern "C" VMSymbol som_sym_##mangled;
+FRUCTUS_VM_SYMBOLS(FRUCTUS_DECLARE_SYMBOL)
+  #undef FRUCTUS_DECLARE_SYMBOL
+#endif
 
 /** Friend of the VM object classes, to read and check their fields. */
 class FructusImage {
 public:
 #ifdef FRUCTUS
-    /**
-     * Set the well-known objects and classes, and register the image's
-     * symbols and globals. Before anything looks up a symbol, so that the
-     * image's symbols are the ones that are found.
-     */
+    /** Set the well-known objects and classes. */
     static void Load();
 
-    /** The arguments of the program, from the host. */
+    static VMObject* SystemObject();
+
+    /** The class the program was written with, and its arguments. */
+    static VMClass* MainClass();
     static VMArray* Arguments();
+
+    /** #run: if the main class has it, otherwise #run. */
+    static VMSymbol* MainSelector();
+
+    /** The class of blocks with `numberOfArguments`, or nullptr. */
+    static VMClass* BlockClass(uint8_t numberOfArguments);
+
+    /** The value of a global, or nullptr. */
+    static vm_oop_t GetGlobal(VMSymbol* name);
+    static void WalkGlobals(walk_heap_fn walk);
 
     static void CheckLayout();
 #else

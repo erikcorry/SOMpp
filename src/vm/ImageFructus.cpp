@@ -19,14 +19,12 @@
 #include "../vmobjects/VMTrivialMethod.h"
 #include "FructusImage.h"
 #include "Globals.h"
-#include "Symbols.h"
-#include "Universe.h"
 
 namespace {
 /** An entry of the som_globals section. */
 struct ImageGlobal {
     GCSymbol* name;
-    GCClass* value;
+    gc_oop_t value;
 };
 }  // namespace
 
@@ -35,7 +33,11 @@ extern "C" {
 extern VMObject som_nil;
 extern VMObject som_true;
 extern VMObject som_false;
+extern VMObject som_system;
 extern VMArray som_arguments;
+extern GCClass* const som_main_class;
+extern GCSymbol* const som_main_selector;
+extern GCClass* const som_block_classes[maxBlockClassArguments + 1];
 
 extern VMClass som_class_Object;
 extern VMClass som_class_Class;
@@ -48,12 +50,14 @@ extern VMClass som_class_Symbol;
 extern VMClass som_class_Integer;
 extern VMClass som_class_Primitive;
 extern VMClass som_class_String;
+extern VMClass som_class_Block;
+extern VMClass som_class_True;
+extern VMClass som_class_False;
+extern VMClass som_class_System;
 
-// the tables the linker gathers from all classes
-extern GCSymbol* const __start_som_symbols[];
-extern GCSymbol* const __stop_som_symbols[];
-extern const ImageGlobal __start_som_globals[];
-extern const ImageGlobal __stop_som_globals[];
+// the globals of all classes, which the linker gathers
+extern ImageGlobal __start_som_globals[];
+extern ImageGlobal __stop_som_globals[];
 }
 
 void FructusImage::Load() {
@@ -72,17 +76,52 @@ void FructusImage::Load() {
     integerClass = store_root(&som_class_Integer);
     primitiveClass = store_root(&som_class_Primitive);
     stringClass = store_root(&som_class_String);
+    blockClass = store_root(&som_class_Block);
+    trueClass = store_root(&som_class_True);
+    falseClass = store_root(&som_class_False);
+    systemClass = store_root(&som_class_System);
+}
 
-    AddSymbols(__start_som_symbols, __stop_som_symbols);
+VMObject* FructusImage::SystemObject() {
+    return &som_system;
+}
 
-    for (const ImageGlobal* g = __start_som_globals; g < __stop_som_globals;
-         g++) {
-        Universe::SetGlobal(load_ptr(g->name), load_ptr(g->value));
-    }
+VMClass* FructusImage::MainClass() {
+    return load_ptr(som_main_class);
 }
 
 VMArray* FructusImage::Arguments() {
     return &som_arguments;
+}
+
+VMSymbol* FructusImage::MainSelector() {
+    return load_ptr(som_main_selector);
+}
+
+VMClass* FructusImage::BlockClass(uint8_t numberOfArguments) {
+    if (numberOfArguments > maxBlockClassArguments) {
+        return nullptr;
+    }
+    GCClass* cls = som_block_classes[numberOfArguments];
+    return cls == nullptr ? nullptr : load_ptr(cls);
+}
+
+vm_oop_t FructusImage::GetGlobal(VMSymbol* name) {
+    for (const ImageGlobal* g = __start_som_globals; g < __stop_som_globals;
+         g++) {
+        if (load_ptr(g->name) == name) {
+            return load_ptr(g->value);
+        }
+    }
+    return nullptr;
+}
+
+void FructusImage::WalkGlobals(walk_heap_fn walk) {
+    // the GC doesn't move objects, so the globals stay as they are
+    for (const ImageGlobal* g = __start_som_globals; g < __stop_som_globals;
+         g++) {
+        walk(g->value);
+    }
 }
 
 #pragma GCC diagnostic push
@@ -104,7 +143,6 @@ void FructusImage::CheckLayout() {
     static_assert(VMTAGGEDINTEGER_MAX == L::smallIntMax, "small integers");
 
     CHECK_FIELD(VMObject, gcField, gcField);
-    CHECK_FIELD(VMObject, hash, VMObject_hash);
     CHECK_FIELD(VMObject, totalObjectSize, VMObject_totalObjectSize);
     CHECK_FIELD(VMObject, numberOfFields, VMObject_numberOfFields);
     CHECK_FIELD(VMObject, clazz, VMObject_clazz);
@@ -132,7 +170,6 @@ void FructusImage::CheckLayout() {
     CHECK_SIZE(VMSymbol, L::VMSymbol_size);
 
     CHECK_FIELD(VMInvokable, gcField, gcField);
-    CHECK_FIELD(VMInvokable, hash, VMInvokable_hash);
     CHECK_FIELD(VMInvokable, signature, VMInvokable_signature);
     CHECK_FIELD(VMInvokable, holder, VMInvokable_holder);
 

@@ -34,8 +34,7 @@ public:
     [[nodiscard]] virtual som_int_t GetHash() const = 0;
     [[nodiscard]] virtual VMClass* GetClass() const = 0;
     [[nodiscard]] virtual AbstractVMObject* CloneForMovingGC() const = 0;
-    void Send(const char* selectorString, vm_oop_t* arguments,
-              size_t argc);
+    void Send(VMSymbol* selector, vm_oop_t* arguments, size_t argc);
 
     /** Size in bytes of the object. */
     [[nodiscard]] virtual size_t GetObjectSize() const = 0;

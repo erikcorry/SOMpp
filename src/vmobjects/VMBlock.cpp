@@ -53,10 +53,12 @@ VMInvokable* VMBlock::GetMethod() const {
     return load_ptr(blockMethod);
 }
 
+#ifndef FRUCTUS
 VMEvaluationPrimitive* VMBlock::GetEvaluationPrimitive(int numberOfArguments) {
     return new (GetHeap<HEAP_CLS>(), 0)
         VMEvaluationPrimitive(numberOfArguments);
 }
+#endif
 
 #if DEBUG
 std::string VMBlock::AsDebugString() const {

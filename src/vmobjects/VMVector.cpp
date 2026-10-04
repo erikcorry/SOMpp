@@ -8,6 +8,9 @@
 #include "../interpreter/Interpreter.h"
 #include "../misc/defs.h"
 #include "../vm/Globals.h"
+#ifndef FRUCTUS
+  #include "../vm/Symbols.h"
+#endif
 #include "../vm/Universe.h"
 #include "../vmobjects/ObjectFormats.h"
 
@@ -22,6 +25,8 @@ VMVector::VMVector(vm_oop_t first, vm_oop_t last, VMArray* storage)
     write_barrier(this, storage);
 }
 
+#ifndef FRUCTUS
+// for the Vector primitives, which fructus doesn't have
 vm_oop_t VMVector::AWFYGetStorage(som_int_t index) {
     // This is a method that is used by the AWFY tests, it does not handle
     // 1-0 indexing conversion
@@ -120,7 +125,7 @@ vm_oop_t VMVector::RemoveLast() {
         vm_oop_t errorMsg =
             Universe::NewString("Vector: error when removing Last item.");
         vm_oop_t args[1] = {errorMsg};
-        this->Send("error:", args, 1);
+        this->Send(SymbolFor("error:"), args, 1);
         return frame->Pop();
     }
 
@@ -138,7 +143,7 @@ vm_oop_t VMVector::RemoveFirst() {
         vm_oop_t errorMsg =
             Universe::NewString("Vector: error when removing First item.");
         vm_oop_t args[1] = {errorMsg};
-        this->Send("error:", args, 1);
+        this->Send(SymbolFor("error:"), args, 1);
         return frame->Pop();
     }
 
@@ -217,12 +222,13 @@ vm_oop_t VMVector::IndexOutOfBounds(size_t maxSize, size_t indexAccessed) {
              indexAccessed);
     vm_oop_t errorMsg = Universe::NewString(message);
     vm_oop_t args[1] = {errorMsg};
-    this->Send("error:", args, 1);
+    this->Send(SymbolFor("error:"), args, 1);
     return frame->Pop();
 }
 
 vm_oop_t VMVector::IndexOutOfBoundsAWFY() {
     VMFrame* frame = GetInterpreter()->GetFrame();
-    this->Send("println", nullptr, 1);
+    this->Send(SymbolFor("println"), nullptr, 1);
     return frame->Pop();
 }
+#endif

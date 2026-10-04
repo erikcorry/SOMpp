@@ -22,4 +22,8 @@ bool IsSafeUnaryPrim(vm_oop_t obj);
 
 void set_vt_to_null();
 
+#ifndef FRUCTUS
+// fructus' objects are in the image, and IsValidObject() accepts all objects
+// before this was called
 void obtain_vtables_of_known_classes(VMSymbol* someValidSymbol);
+#endif

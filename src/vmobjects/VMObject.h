@@ -41,7 +41,7 @@
  *| vtable*          |   0x00 - 0x07                           |*
  *|__________________|_________________________________________|*
  *| gcField          |   0x08 - 0x0f                           |*
- *| hash             |   0x10 - 0x17                           |*
+ *| hash             |   0x10 - 0x17 (not on fructus)          |*
  *| totalObjectSize  |   0x18 - 0x1f                           |*
  *| numberOfFields   |   0x20 - 0x27 (because of alignment)    |*
  *| clazz            |   0x28 - 0x2f [0 indexed instance field]|*
@@ -70,9 +70,9 @@ public:
         assert(IS_PADDED_SIZE(totalObjectSize));
         assert(totalObjectSize >= sizeof(VMObject));
 
-        // this line would be needed if the VMObject** is used instead of the
-        // macro: FIELDS = (VMObject**)&clazz;
+#ifndef FRUCTUS
         hash = (intptr_t)this;
+#endif
 
         nilInitializeFields();
     }
@@ -86,16 +86,22 @@ public:
         assert(IS_PADDED_SIZE(totalObjectSize));
         assert(totalObjectSize >= sizeof(VMObject));
 
-        // this line would be needed if the VMObject** is used instead of the
-        // macro: FIELDS = (VMObject**)&clazz;
+#ifndef FRUCTUS
         hash = (intptr_t)this;
+#endif
 
         nilInitializeFieldsFrom(nillableFrom);
     }
 
     ~VMObject() override = default;
 
+#ifdef FRUCTUS
+    [[nodiscard]] som_int_t GetHash() const override {
+        return AddressHash(this);
+    }
+#else
     [[nodiscard]] som_int_t GetHash() const override { return hash; }
+#endif
 
     [[nodiscard]] inline VMClass* GetClass() const override {
         assert(IsValidObject((VMObject*)load_ptr(clazz)));
@@ -144,13 +150,19 @@ public:
             "vtable ptr should push gcField to offset 1 word. If "
             "this fails, please update the offsets in the VMObject structure "
             "at the top of this file accordingly.");
+#ifdef FRUCTUS
+        // there is no hash field, see FructusLayout
+        constexpr size_t fieldsFrom = 2 * word;
+#else
         static_assert(offsetof(VMObject, hash) == 2 * word,
                       "hash should be at offset 2 words");
-        static_assert(offsetof(VMObject, totalObjectSize) == 3 * word,
+        constexpr size_t fieldsFrom = 3 * word;
+#endif
+        static_assert(offsetof(VMObject, totalObjectSize) == fieldsFrom,
                       "totalObjectSize should be at offset 3 words");
-        static_assert(offsetof(VMObject, numberOfFields) == 4 * word,
+        static_assert(offsetof(VMObject, numberOfFields) == fieldsFrom + word,
                       "numberOfFields should be at offset 4 words");
-        static_assert(offsetof(VMObject, clazz) == 5 * word,
+        static_assert(offsetof(VMObject, clazz) == fieldsFrom + 2 * word,
                       "clazz should be at offset 5 words");
 #pragma GCC diagnostic pop
     }
@@ -160,7 +172,9 @@ protected:
     void nilInitializeFieldsFrom(size_t nillableFrom);
 
     // VMObject essentials
+#ifndef FRUCTUS
     som_int_t hash;
+#endif
 
     make_testable(public);
 

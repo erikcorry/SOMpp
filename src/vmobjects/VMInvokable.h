@@ -41,10 +41,19 @@ class VMInvokable : public AbstractVMObject {
 public:
     typedef GCInvokable Stored;
 
+#ifdef FRUCTUS
+    explicit VMInvokable(VMSymbol* sig)
+        : signature(store_with_separate_barrier(sig)) {}
+
+    [[nodiscard]] som_int_t GetHash() const override {
+        return AddressHash(this);
+    }
+#else
     explicit VMInvokable(VMSymbol* sig)
         : hash((intptr_t)this), signature(store_with_separate_barrier(sig)) {}
 
     [[nodiscard]] som_int_t GetHash() const override { return hash; }
+#endif
 
     virtual VMFrame* Invoke(VMFrame*) = 0;
     virtual VMFrame* Invoke1(VMFrame*) = 0;
@@ -90,7 +99,9 @@ public:
 protected:
     make_testable(public);
 
+#ifndef FRUCTUS
     som_int_t hash;
+#endif
 
     GCSymbol* signature;
     GCClass* holder{nullptr};

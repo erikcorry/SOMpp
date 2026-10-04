@@ -26,23 +26,18 @@
 
 #include "Symbol.h"
 
-#include "FructusPrimitives.h"
-
 
 #include "../vm/Universe.h"
 #include "../vmobjects/ObjectFormats.h"
 #include "../vmobjects/VMFrame.h"
 #include "../vmobjects/VMSymbol.h"
 
-vm_oop_t symAsString(vm_oop_t rcvr) {
+static vm_oop_t symAsString(vm_oop_t rcvr) {
     auto* sym = static_cast<VMSymbol*>(rcvr);
 
     return Universe::NewString(sym->GetStringLength(), sym->GetRawChars());
 }
 
-// fructus has its primitives in the image, see FructusPrimitives.h
-#ifndef FRUCTUS
 _Symbol::_Symbol() {
     Add("asString", &symAsString, false);
 }
-#endif

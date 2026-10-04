@@ -69,7 +69,7 @@ vm_oop_t objHalt(vm_oop_t /*unused*/) {
 }
 
 #ifndef FRUCTUS
-// fructus is a closed world, without perform
+// fructus is a closed world, without perform or reflection
 static void objPerform(VMFrame* frame) {
     auto* selector = (VMSymbol*)frame->Pop();
     vm_oop_t self = frame->GetStackElement(0);
@@ -121,24 +121,24 @@ static void objPerformWithArgumentsInSuperclass(VMFrame* frame) {
 
     invokable->Invoke(frame);
 }
-#endif
 
-vm_oop_t objInstVarAt(vm_oop_t self, vm_oop_t idx) {
+static vm_oop_t objInstVarAt(vm_oop_t self, vm_oop_t idx) {
     som_int_t const field_idx = SMALL_INT_VAL(idx) - 1;
     return static_cast<VMObject*>(self)->GetField(field_idx);
 }
 
-vm_oop_t objInstVarAtPut(vm_oop_t self, vm_oop_t idx, vm_oop_t value) {
+static vm_oop_t objInstVarAtPut(vm_oop_t self, vm_oop_t idx, vm_oop_t value) {
     size_t const field_idx = SMALL_INT_VAL(idx) - 1;
     static_cast<VMObject*>(self)->SetField(field_idx, value);
     return self;
 }
 
-vm_oop_t objInstVarNamed(vm_oop_t self, vm_oop_t nameObj) {
+static vm_oop_t objInstVarNamed(vm_oop_t self, vm_oop_t nameObj) {
     auto* name = (VMSymbol*)nameObj;
     som_int_t const fieldIdx = AS_OBJ(self)->GetFieldIndex(name);
     return static_cast<VMObject*>(self)->GetField(fieldIdx);
 }
+#endif
 
 vm_oop_t objClass(vm_oop_t self) {
     return CLASS_OF(self);

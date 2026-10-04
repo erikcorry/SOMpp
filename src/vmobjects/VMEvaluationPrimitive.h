@@ -34,7 +34,10 @@ class VMEvaluationPrimitive : public VMInvokable {
 public:
     typedef GCEvaluationPrimitive Stored;
 
+#ifndef FRUCTUS
+    // fructus has them in the image, see FructusImage.h
     explicit VMEvaluationPrimitive(uint8_t argc);
+#endif
     void WalkObjects(walk_heap_fn /*unused*/) override;
     [[nodiscard]] VMEvaluationPrimitive* CloneForMovingGC() const override;
 
@@ -67,7 +70,9 @@ public:
 #endif
 
 private:
+#ifndef FRUCTUS
     static VMSymbol* computeSignatureString(size_t argc);
+#endif
     void evaluationRoutine(VMFrame*);
 
     make_testable(public);

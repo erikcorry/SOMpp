@@ -11,17 +11,15 @@
 #include <cstdint>
 
 #include "../interpreter/Interpreter.h"
-#include "../vm/Symbols.h"
 #include "../vmobjects/ObjectFormats.h"
 #include "VMClass.h"
 #include "VMFrame.h"
 #include "VMInvokable.h"
 #include "VMSymbol.h"
 
-void AbstractVMObject::Send(const char* selectorString,
-                            vm_oop_t* arguments, size_t argc) {
+void AbstractVMObject::Send(VMSymbol* selector, vm_oop_t* arguments,
+                            size_t argc) {
     VMFrame* frame = GetInterpreter()->GetFrame();
-    VMSymbol* selector = SymbolFor(selectorString);
     frame->Push(this);
 
     for (size_t i = 0; i < argc; ++i) {

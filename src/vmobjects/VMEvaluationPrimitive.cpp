@@ -34,7 +34,9 @@
 #include "../misc/debug.h"
 #include "../misc/defs.h"
 #include "../vm/Print.h"
-#include "../vm/Symbols.h"
+#ifndef FRUCTUS
+  #include "../vm/Symbols.h"
+#endif
 #include "../vm/Universe.h"  // NOLINT(misc-include-cleaner) it's required to make the types complete
 #include "ObjectFormats.h"
 #include "VMBlock.h"
@@ -42,10 +44,12 @@
 #include "VMMethod.h"
 #include "VMSymbol.h"
 
+#ifndef FRUCTUS
 VMEvaluationPrimitive::VMEvaluationPrimitive(uint8_t argc)
     : VMInvokable(computeSignatureString(argc)), numberOfArguments(argc) {
     write_barrier(this, load_ptr(signature));
 }
+#endif
 
 VMEvaluationPrimitive* VMEvaluationPrimitive::CloneForMovingGC() const {
     auto* evPrim =
@@ -57,6 +61,7 @@ void VMEvaluationPrimitive::WalkObjects(walk_heap_fn walk) {
     VMInvokable::WalkObjects(walk);
 }
 
+#ifndef FRUCTUS
 VMSymbol* VMEvaluationPrimitive::computeSignatureString(size_t argc) {
 #define VALUE_S "value"
 #define VALUE_LEN 5
@@ -80,6 +85,7 @@ VMSymbol* VMEvaluationPrimitive::computeSignatureString(size_t argc) {
     // Return the signature string
     return SymbolFor(signatureString);
 }
+#endif
 
 VMFrame* VMEvaluationPrimitive::Invoke(VMFrame* frm) {
     // Get the block (the receiver) from the stack

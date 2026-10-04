@@ -74,7 +74,9 @@
 #include "Shell.h"
 #endif
 #include "Statistics.h"
-#include "Symbols.h"
+#ifndef FRUCTUS
+  #include "Symbols.h"
+#endif
 
 #if CACHE_INTEGER
 static gc_oop_t prebuildInts[INT_CACHE_MAX_VALUE - INT_CACHE_MIN_VALUE + 1];
@@ -86,10 +88,7 @@ uint8_t dumpBytecodes;
 uint8_t gcVerbosity;
 bool abortOnCoreLibHashMismatch = false;
 
-#ifdef FRUCTUS
-SimpleVector<Universe::Global> Universe::globals;
-GCClass* Universe::blockClassesByNoOfArgs[MAX_BLOCK_ARGS + 1];
-#else
+#ifndef FRUCTUS
 map<GCSymbol*, gc_oop_t> Universe::globals;
 map<uint8_t, GCClass*> Universe::blockClassesByNoOfArgs;
 vector<std::string> Universe::classPath;
@@ -312,7 +311,7 @@ VMMethod* Universe::createBootstrapMethod(VMClass* holder,
                                           uint8_t numArgsOfMsgSend) {
 #ifdef FRUCTUS
     VMMethod* bootstrapMethod =
-        NewMethod(SymbolFor("bootstrap"), 1, 0, 0, numArgsOfMsgSend);
+        NewMethod(&som_sym_bootstrap, 1, 0, 0, numArgsOfMsgSend);
 #else
     vector<BackJump> inlinedLoops;
     auto* bootStrapScope = new LexicalScope(nullptr, {}, {});
@@ -376,13 +375,19 @@ void Universe::initialize(int32_t /*argc*/, char** /*argv*/) {
     heapSize = FRUCTUS_HEAP_SIZE;
     Heap<HEAP_CLS>::InitializeHeap(heapSize);
 
-    VMObject* systemObject = InitializeGlobals();
+    InitializeGlobals();
 
-    VMInvokable* initialize =
-        load_ptr(systemClass)->LookupInvokable(SymbolFor("initialize:"));
-
-    // there is no command line, the arguments come with the image
-    interpretMethod(systemObject, initialize, FructusImage::Arguments());
+    // What System>>initialize: does elsewhere, but with the main class and
+    // whether it has #run: known when the image was written. There is no
+    // command line, the arguments come with the image.
+    VMClass* mainClass = FructusImage::MainClass();
+    auto* application = static_cast<VMObject*>(interpretMethod(
+        mainClass, mainClass->GetClass()->LookupInvokable(&som_sym_new),
+        nullptr));
+    GetInterpreter()->ClearFrames();
+    VMSymbol* run = FructusImage::MainSelector();
+    interpretMethod(application, CLASS_OF(application)->LookupInvokable(run),
+                    run == &som_sym_run ? nullptr : FructusImage::Arguments());
 }
 #else
 void Universe::initialize(int32_t _argc, char** _argv) {
@@ -507,10 +512,13 @@ VMObject* Universe::InitializeGlobals() {
     if (USE_TAGGING) {
         GlobalBox::updateIntegerBox(NewInteger(1));
     }
+#ifdef FRUCTUS
+    return FructusImage::SystemObject();
+}
+#else
     InitializeSymbols();
     obtain_vtables_of_known_classes(load_ptr(symbolSelf));
 
-#ifndef FRUCTUS
     LoadSystemClass(load_ptr(objectClass));
     LoadSystemClass(load_ptr(classClass));
     LoadSystemClass(load_ptr(metaClassClass));
@@ -523,7 +531,6 @@ VMObject* Universe::InitializeGlobals() {
     LoadSystemClass(load_ptr(primitiveClass));
     LoadSystemClass(load_ptr(stringClass));
     LoadSystemClass(load_ptr(doubleClass));
-#endif
 
     blockClass = store_root(LoadClass(SymbolFor("Block")));
 
@@ -548,6 +555,7 @@ VMObject* Universe::InitializeGlobals() {
 
     return systemObject;
 }
+#endif
 
 void Universe::Assert(bool value) {
     if (!value) {
@@ -561,40 +569,15 @@ VMClass* Universe::GetBlockClass() {
 
 #ifdef FRUCTUS
 VMClass* Universe::GetBlockClassWithArgs(uint8_t numberOfArguments) {
-    Assert(numberOfArguments <= MAX_BLOCK_ARGS);
-    GCClass* const cached = blockClassesByNoOfArgs[numberOfArguments];
-    if (cached != nullptr) {
-        return load_ptr(cached);
-    }
-
-    char name[8];
-    snprintf(name, sizeof(name), "Block%d", (int)numberOfArguments);
-    auto* result = static_cast<VMClass*>(GetGlobal(SymbolFor(name)));
+    VMClass* result = FructusImage::BlockClass(numberOfArguments);
     if (result == nullptr) {
         ErrorExit("Block class not found");
     }
-
-    // its #value primitive is in the image
-    blockClassesByNoOfArgs[numberOfArguments] = store_root(result);
     return result;
 }
 
-Universe::Global* Universe::findGlobal(VMSymbol* name) {
-    for (auto& g : globals) {
-        if (load_ptr(g.name) == name) {
-            return &g;
-        }
-    }
-    return nullptr;
-}
-
 vm_oop_t Universe::GetGlobal(VMSymbol* name) {
-    Global const* g = findGlobal(name);
-    return g == nullptr ? nullptr : load_ptr(g->value);
-}
-
-bool Universe::HasGlobal(VMSymbol* name) {
-    return findGlobal(name) != nullptr;
+    return FructusImage::GetGlobal(name);
 }
 #else
 VMClass* Universe::GetBlockClassWithArgs(uint8_t numberOfArguments) {
@@ -635,6 +618,7 @@ bool Universe::HasGlobal(VMSymbol* name) {
 
 #endif
 
+#ifndef FRUCTUS
 void Universe::InitializeSystemClass(VMClass* systemClass, VMClass* superClass,
                                      const char* name) {
     if (superClass != nullptr) {
@@ -670,10 +654,6 @@ VMClass* Universe::LoadClass(VMSymbol* name) {
         return result;
     }
 
-#ifdef FRUCTUS
-    // all classes come with the image
-    return (VMClass*)load_ptr(nilObject);
-#else
     result = LoadClassBasic(name, nullptr);
 
     if (result == nullptr) {
@@ -689,10 +669,8 @@ VMClass* Universe::LoadClass(VMSymbol* name) {
     SetGlobal(name, result);
 
     return result;
-#endif
 }
 
-#ifndef FRUCTUS
 VMClass* Universe::LoadClassBasic(VMSymbol* name, VMClass* systemClass) {
     std::string const sName = name->GetStdString();
     VMClass* result = nullptr;
@@ -1012,18 +990,7 @@ void Universe::WalkGlobals(walk_heap_fn walk) {
 #endif
 
 #ifdef FRUCTUS
-    for (auto& g : globals) {
-        g.name = static_cast<GCSymbol*>(walk(g.name));
-        g.value = walk(g.value);
-    }
-
-    WalkSymbols(walk);
-
-    for (auto& bc : blockClassesByNoOfArgs) {
-        if (bc != nullptr) {
-            bc = static_cast<GCClass*>(walk(bc));
-        }
-    }
+    FructusImage::WalkGlobals(walk);
 #else
     // walk all entries in globals map
     map<GCSymbol*, gc_oop_t> globs = globals;
@@ -1124,15 +1091,8 @@ VMClass* Universe::NewSystemClass() {
     return systemClass;
 }
 
+#ifndef FRUCTUS
 void Universe::SetGlobal(VMSymbol* name, vm_oop_t val) {
-#ifdef FRUCTUS
-    Global* g = findGlobal(name);
-    if (g != nullptr) {
-        g->value = store_root(val);
-    } else {
-        globals.push_back({store_root(name), store_root(val)});
-    }
-#else
     globals[store_root(name)] = store_root(val);
-#endif
 }
+#endif

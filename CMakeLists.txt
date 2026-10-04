@@ -72,11 +72,15 @@ if(FRUCTUS)
   # on the host), no floats, no big integers, only the mark-sweep GC.
   set(COMPILER_SRC "")
   list(FILTER MEMORY_SRC INCLUDE REGEX "/(Heap|MarkSweepHeap|MarkSweepCollector)\\.cpp$")
-  list(FILTER PRIMITIVES_SRC EXCLUDE REGEX "/(Double|Integer|Vector)\\.cpp$")
+  # Method, Primitive and Symbol have no primitives: the program can't have
+  # methods or symbols, see Smalltalk-fructus
+  list(FILTER PRIMITIVES_SRC EXCLUDE REGEX
+       "/(Double|Integer|Vector|Method|Primitive|Symbol)\\.cpp$")
   # the primitives are in the image, see src/primitives/FructusPrimitives.h
   set(PRIMITIVESCORE_SRC "")
   list(FILTER VMOBJECTS_SRC EXCLUDE REGEX "/(VMDouble|VMBigInteger)\\.cpp$")
-  list(FILTER VM_SRC EXCLUDE REGEX "/(Statistics|Shell)\\.cpp$")
+  # the symbols are all in the image, and none are made at run time
+  list(FILTER VM_SRC EXCLUDE REGEX "/(Statistics|Shell|Symbols)\\.cpp$")
   list(FILTER MISC_SRC EXCLUDE REGEX "/(Timer|Murmur3Hash)\\.cpp$")
 
   set(GC_TYPE "MARK_SWEEP" CACHE STRING "" FORCE)
@@ -95,8 +99,9 @@ if(FRUCTUS)
   # and linked in as som-image.o
   set(FRUCTUS_HOST_SOM "${ROOT_DIR}/build-release/SOM++" CACHE FILEPATH
     "The host SOM++, which compiles the classes for fructus")
-  set(FRUCTUS_CLASSPATH "${ROOT_DIR}/Smalltalk" CACHE STRING
-    "The class path to compile the classes for fructus from")
+  # Smalltalk-fructus has the closed-world versions of some classes
+  set(FRUCTUS_CLASSPATH "${ROOT_DIR}/Smalltalk-fructus:${ROOT_DIR}/Smalltalk"
+    CACHE STRING "The class path to compile the classes for fructus from")
   set(FRUCTUS_PROGRAM "${ROOT_DIR}/Examples/Hello.som" CACHE STRING
     "The main class file and the arguments of the fructus program")
   separate_arguments(FRUCTUS_PROGRAM_ARGS UNIX_COMMAND "${FRUCTUS_PROGRAM}")
