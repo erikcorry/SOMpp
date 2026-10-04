@@ -306,8 +306,9 @@ private:
     Lines writeBytecodes(ObjectWriter& w, size_t offset, VMMethod* method,
                          const std::vector<uint8_t>& fructusBytecodes);
     void writeDebugInfo();
-    void writeSendSite(ObjectWriter& w, size_t offset, VMMethod* method,
-                       size_t index);
+    /** Write the send at `index`, and return how long it is on fructus. */
+    size_t writeSendSite(ObjectWriter& w, size_t offset, VMMethod* method,
+                         size_t index);
     std::string describe(VMInvokable* inv);
 
     ImageWriter& image;
@@ -828,9 +829,8 @@ FructusImage::AsmFile::Lines FructusImage::AsmFile::writeBytecodes(
                  "the VM can");
         }
         if (IsSendBytecode(bc)) {
-            writeSendSite(w, offset + n, method, i);
+            n += writeSendSite(w, offset + n, method, i);
             i += length;
-            n += L::SendSite_length;
             continue;
         }
         // the bytes, and the word of a PUSH_CONSTANT, PUSH_BLOCK or
@@ -877,11 +877,9 @@ FructusImage::AsmFile::Lines FructusImage::AsmFile::writeBytecodes(
  * A send, unlinked, see SendSite.h. A super send is linked here, since the
  * world is closed and it doesn't depend on the receiver.
  */
-void FructusImage::AsmFile::writeSendSite(ObjectWriter& w, size_t offset,
-                                          VMMethod* method, size_t index) {
+size_t FructusImage::AsmFile::writeSendSite(ObjectWriter& w, size_t offset,
+                                            VMMethod* method, size_t index) {
     uint8_t const bc = method->GetBytecode(index);
-    uint8_t const numArgs =
-        method->GetBytecode(index + SendSite::numberOfArguments);
     VMSymbol* selector = method->GetSendSelector(index);
     std::string name = Bytecode::GetBytecodeName(bc);
     name.erase(name.find_last_not_of(' ') + 1);
@@ -905,11 +903,20 @@ void FructusImage::AsmFile::writeSendSite(ObjectWriter& w, size_t offset,
         comment += " in " + Printable(super->GetName());
     }
 
+    // a unary send has no number of arguments
     std::ostringstream line;
-    line << "\t.byte\t" << (unsigned)bc << ", " << (unsigned)numArgs << "\t; "
-         << comment << "\n"
+    line << "\t.byte\t" << (unsigned)bc;
+    if (bc != BC_SEND_1) {
+        line << ", "
+             << (unsigned)method->GetBytecode(index +
+                                              SendSite::numberOfArguments);
+    }
+    line << "\t; " << comment << "\n"
          << "\t.short\t" << target << ", " << receiverClass << "\n";
-    w.Raw(offset, L::SendSite_length, line.str());
+    size_t const length =
+        bc == BC_SEND_1 ? L::SendSite_unaryLength : L::SendSite_length;
+    w.Raw(offset, length, line.str());
+    return length;
 }
 
 void FructusImage::AsmFile::writePrimitive(VMPrimitive* prim,

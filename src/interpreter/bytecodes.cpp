@@ -62,9 +62,9 @@ const uint8_t Bytecode::bytecodeLengths[] = {
     2,  // BC_POP_FIELD
     1,  // BC_POP_FIELD_0
     1,  // BC_POP_FIELD_1
-    SendSite::length,  // BC_SEND
-    SendSite::length,  // BC_SEND_1
-    SendSite::length,  // BC_SUPER_SEND
+    SendSite::Length(BC_SEND),        // BC_SEND
+    SendSite::Length(BC_SEND_1),      // BC_SEND_1
+    SendSite::Length(BC_SUPER_SEND),  // BC_SUPER_SEND
     1,  // BC_RETURN_LOCAL
     1,  // BC_RETURN_NON_LOCAL
     1,  // BC_RETURN_SELF

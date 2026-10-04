@@ -330,21 +330,21 @@ LABEL_BC_POP_FIELD_1:
 
 LABEL_BC_SEND:
     PROLOGUE();
-    SAVE_NEXT_PC(SendSite::length);
+    SAVE_NEXT_PC(SendSite::Length(BC_SEND));
     doSend(pc);
     RELOAD_PC();
     DISPATCH_GC();
 
 LABEL_BC_SEND_1:
     PROLOGUE();
-    SAVE_NEXT_PC(SendSite::length);
+    SAVE_NEXT_PC(SendSite::Length(BC_SEND_1));
     doUnarySend(pc);
     RELOAD_PC();
     DISPATCH_GC();
 
 LABEL_BC_SUPER_SEND:
     PROLOGUE();
-    SAVE_NEXT_PC(SendSite::length);
+    SAVE_NEXT_PC(SendSite::Length(BC_SUPER_SEND));
     doSuperSend(pc);
     RELOAD_PC();
     DISPATCH_GC();
@@ -952,14 +952,14 @@ void Interpreter::doPopFieldWithIndex(uint8_t fieldIndex) {
 }
 
 void Interpreter::doSend(uint8_t* site) {
-    vm_oop_t receiver =
-        GetFrame()->GetStackElement(SendSite::GetNumberOfArguments(site) - 1);
+    vm_oop_t receiver = GetFrame()->GetStackElement(
+        site[SendSite::numberOfArguments] - 1);
     assert(IsValidObject(receiver));
     VMClass* receiverClass = CLASS_OF(receiver);
     recordStat(ReceiverType, receiverClass);
 
-    if (receiverClass == SendSite::GetReceiverClass(site)) {
-        auto* invokable = (VMInvokable*)SendSite::GetTarget(site);
+    if (receiverClass == SendSite::GetReceiverClass(site, BC_SEND)) {
+        auto* invokable = (VMInvokable*)SendSite::GetTarget(site, BC_SEND);
         recordStat(CallStats, receiverClass, invokable);
         invokable->Invoke(GetFrame());
     } else {
@@ -973,8 +973,8 @@ void Interpreter::doUnarySend(uint8_t* site) {
     VMClass* receiverClass = CLASS_OF(receiver);
     recordStat(ReceiverType, receiverClass);
 
-    if (receiverClass == SendSite::GetReceiverClass(site)) {
-        auto* invokable = (VMInvokable*)SendSite::GetTarget(site);
+    if (receiverClass == SendSite::GetReceiverClass(site, BC_SEND_1)) {
+        auto* invokable = (VMInvokable*)SendSite::GetTarget(site, BC_SEND_1);
         recordStat(CallStats, receiverClass, invokable);
         invokable->Invoke1(GetFrame());
     } else {
@@ -986,8 +986,9 @@ void Interpreter::doSuperSend(uint8_t* site) {
 #ifdef FRUCTUS
     // the image writer links every super send, so invokables need no holder
     // to find the superclass
-    assert(SendSite::GetReceiverClass(site) != nullptr);
-    ((VMInvokable*)SendSite::GetTarget(site))->Invoke(GetFrame());
+    assert(SendSite::GetReceiverClass(site, BC_SUPER_SEND) != nullptr);
+    ((VMInvokable*)SendSite::GetTarget(site, BC_SUPER_SEND))
+        ->Invoke(GetFrame());
 }
 #else
     // a linked super send has its invokable whatever the receiver is

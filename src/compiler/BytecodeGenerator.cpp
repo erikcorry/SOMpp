@@ -321,10 +321,10 @@ void EmitPOPFIELD(MethodGenerationContext& mgenc, const Parser& parser,
  */
 static void emitSendSite(MethodGenerationContext& mgenc, uint8_t bytecode,
                          VMSymbol* msg, som_int_t stackEffect) {
-    uint8_t site[SendSite::length];
+    uint8_t site[SendSite::maxLength];
     SendSite::Init(site, bytecode, Signature::GetNumberOfArguments(msg), msg);
     mgenc.AddBytecode(bytecode, stackEffect);
-    for (size_t i = 1; i < SendSite::length; i++) {
+    for (size_t i = 1; i < SendSite::Length(bytecode); i++) {
         mgenc.AddBytecodeArgument(site[i]);
     }
 }

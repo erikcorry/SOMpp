@@ -745,8 +745,8 @@ void VMMethod::MergeScopeInto(MethodGenerationContext& mgenc) {
 
 #ifndef FRUCTUS
 std::vector<uint8_t> VMMethod::ResizeWords(
-    size_t wordSize,
-    const std::function<void(void*, uint8_t*)>& writeWord) const {
+    size_t wordSize, const std::function<void(void*, uint8_t*)>& writeWord,
+    bool unaryNumberOfArguments) const {
     const uint8_t* bytecodes = GetBytecodes();
     // where each bytecode goes
     std::vector<size_t> newIndex(bcLength + 1);
@@ -756,7 +756,8 @@ std::vector<uint8_t> VMMethod::ResizeWords(
         uint8_t const bc = bytecodes[i];
         newIndex[i] = n;
         n += Bytecode::GetBytecodeLength(bc) +
-             GetNumberOfWords(bc) * (wordSize - sizeof(void*));
+             GetNumberOfWords(bc) * (wordSize - sizeof(void*)) +
+             (unaryNumberOfArguments && bc == BC_SEND_1 ? 1 : 0);
     }
     newIndex[bcLength] = n;
 
@@ -769,9 +770,13 @@ std::vector<uint8_t> VMMethod::ResizeWords(
         size_t const numBytes =
             Bytecode::GetBytecodeLength(bc) - numWords * sizeof(void*);
         memcpy(out, &bytecodes[i], numBytes);
+        size_t numOutBytes = numBytes;
+        if (unaryNumberOfArguments && bc == BC_SEND_1) {
+            out[numOutBytes++] = 1;
+        }
         for (uint8_t w = 0; w < numWords; w++) {
             writeWord(LoadWord(&bytecodes[i + numBytes + w * sizeof(void*)]),
-                      out + numBytes + w * wordSize);
+                      out + numOutBytes + w * wordSize);
         }
         if (!IsJumpBytecode(bc)) {
             continue;
@@ -806,7 +811,8 @@ std::vector<uint8_t> VMMethod::ResizeWords(
  * The hash of the bytecodes with each word replaced by a byte, which is the
  * index of its first occurrence in the method, so that it doesn't depend on
  * where the objects are. The sends are unlinked when the primitives are
- * loaded, which is when this is used.
+ * loaded, which is when this is used. A unary send has its number of
+ * arguments, which it used to, to keep the hashes the primitives have.
  */
 size_t VMMethod::GetBytecodeHash() const {
     std::vector<void*> words;
@@ -820,7 +826,8 @@ size_t VMMethod::GetBytecodeHash() const {
                 words.push_back(word);
             }
             *out = index;
-        });
+        },
+        true);
     return murmur3_32(bcs.data(), bcs.size(), 0x00000000);
 }
 #endif

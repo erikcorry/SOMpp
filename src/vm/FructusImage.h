@@ -127,11 +127,16 @@ constexpr size_t VMSetter_argIndex = 8;
 constexpr size_t VMSetter_numberOfArguments = 10;
 constexpr size_t VMSetter_size = 12;
 
-/** A send bytecode and its inline cache, see interpreter/SendSite.h. */
+/**
+ * A send bytecode and its inline cache, see interpreter/SendSite.h. A unary
+ * send has no number of arguments, so its cache is a byte earlier.
+ */
 constexpr size_t SendSite_numberOfArguments = 1;
 constexpr size_t SendSite_target = 2;
 constexpr size_t SendSite_receiverClass = 4;
 constexpr size_t SendSite_length = 6;
+constexpr size_t SendSite_unaryTarget = 1;
+constexpr size_t SendSite_unaryLength = 5;
 
 /**
  * VMPrimitive and VMSafe*Primitive: a Prim, which is just a routine. A

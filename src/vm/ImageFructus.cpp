@@ -163,9 +163,12 @@ void FructusImage::CheckLayout() {
     CHECK_SIZE(VMString, L::VMString_size);
 
     static_assert(SendSite::numberOfArguments == L::SendSite_numberOfArguments);
-    static_assert(SendSite::target == L::SendSite_target);
-    static_assert(SendSite::receiverClass == L::SendSite_receiverClass);
-    static_assert(SendSite::length == L::SendSite_length);
+    static_assert(SendSite::Target(BC_SEND) == L::SendSite_target);
+    static_assert(SendSite::ReceiverClass(BC_SEND) ==
+                  L::SendSite_receiverClass);
+    static_assert(SendSite::Length(BC_SEND) == L::SendSite_length);
+    static_assert(SendSite::Target(BC_SEND_1) == L::SendSite_unaryTarget);
+    static_assert(SendSite::Length(BC_SEND_1) == L::SendSite_unaryLength);
 
     CHECK_FIELD(VMInvokable, gcField, gcField);
     CHECK_FIELD(VMInvokable, signature, VMInvokable_signature);

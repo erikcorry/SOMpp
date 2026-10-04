@@ -172,11 +172,13 @@ public:
 
     /**
      * The bytecodes with each word `wordSize` long, and the jumps adjusted.
-     * `writeWord(word, out)` writes each of them.
+     * `writeWord(word, out)` writes each of them. With
+     * `unaryNumberOfArguments`, a unary send has the number of arguments
+     * like the other sends, see SendSite.h.
      */
     [[nodiscard]] std::vector<uint8_t> ResizeWords(
-        size_t wordSize,
-        const std::function<void(void*, uint8_t*)>& writeWord) const;
+        size_t wordSize, const std::function<void(void*, uint8_t*)>& writeWord,
+        bool unaryNumberOfArguments = false) const;
 #endif
 
     /** The selector of the send at `bytecodeIndex`, see SendSite.h. */
