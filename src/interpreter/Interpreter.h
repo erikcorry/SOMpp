@@ -107,14 +107,8 @@ private:
     void doPushArgument(uint8_t argIndex, uint8_t contextLevel);
     void doPushField(uint8_t fieldIndex);
     void doPushFieldWithIndex(uint8_t fieldIndex);
-    void doPushBlock(uint8_t constantIndex);
-
-    inline void doPushConstant(uint8_t constantIndex) {
-        vm_oop_t constant = method->GetConstantWithIndex(constantIndex);
-        GetFrame()->Push(constant);
-    }
-
-    bool doPushGlobal(uint8_t constantIndex);
+    void doPushBlock(VMInvokable* blockMethod);
+    bool doPushGlobal(VMSymbol* globalName);
     void doPop();
     void doPopLocal(uint8_t bc1, uint8_t bc2);
     void doPopLocalWithIndex(uint8_t localIndex);

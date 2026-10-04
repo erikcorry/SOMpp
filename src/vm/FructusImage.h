@@ -20,9 +20,11 @@
  *    at run time.
  *  - Each class adds a global to the som_globals section.
  *  - A method of a class is the global symbol <class label>.<mangled
- *    selector>, for the super sends in other files. The sends carry their
- *    inline caches, see interpreter/SendSite.h: they are unlinked, but a
- *    super send is linked already, since it doesn't depend on the receiver.
+ *    selector>, for the super sends in other files. A method has no
+ *    constants: its bytecodes refer to the objects they push, see
+ *    interpreter/bytecodes.h. The sends carry their inline caches, see
+ *    interpreter/SendSite.h: they are unlinked, but a super send is linked
+ *    already, since it doesn't depend on the receiver.
  *  - A primitive is an object in the image like a method, which refers to
  *    its routine by name, see primitives/FructusPrimitives.h. Nothing is
  *    installed at run time.
@@ -88,10 +90,8 @@ constexpr size_t VMMethod_numberOfLocals = 8;
 constexpr size_t VMMethod_maximumNumberOfStackElements = 10;
 constexpr size_t VMMethod_bcLength = 12;
 constexpr size_t VMMethod_numberOfArguments = 14;
-constexpr size_t VMMethod_numberOfConstants = 16;
-constexpr size_t VMMethod_indexableFields = 18;
-constexpr size_t VMMethod_bytecodes = 20;
-constexpr size_t VMMethod_size = 22;
+/** The bytecodes come right after the method. */
+constexpr size_t VMMethod_size = 16;
 
 constexpr size_t VMLiteralReturn_literal = 8;
 constexpr size_t VMLiteralReturn_numberOfArguments = 10;

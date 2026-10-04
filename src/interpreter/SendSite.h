@@ -5,8 +5,7 @@
  *
  *   bytecode, numberOfArguments, target, receiverClass
  *
- * target and receiverClass are words at any alignment, so they're read and
- * written with memcpy, which is an unaligned load or store.
+ * target and receiverClass are words, see bytecodes.h.
  *
  * A send starts out unlinked: the target is the selector and the
  * receiverClass is null. The first time it's executed it's linked, and is
@@ -19,13 +18,12 @@
  * A super send doesn't depend on the receiver: once it's linked, the target
  * is the invokable and the receiverClass is the superclass it was found in.
  *
- * On the host the GC walks the targets and classes, see VMMethod. On
- * fructus they are never moved or freed, so it doesn't.
  */
 
 #include <cstddef>
 #include <cstdint>
-#include <string.h>
+
+#include "bytecodes.h"
 
 class VMClass;
 class VMInvokable;
@@ -36,16 +34,6 @@ constexpr size_t numberOfArguments = 1;
 constexpr size_t target = 2;
 constexpr size_t receiverClass = target + sizeof(void*);
 constexpr size_t length = receiverClass + sizeof(void*);
-
-inline void* LoadWord(const uint8_t* p) {
-    void* value = nullptr;
-    memcpy((void*)&value, p, sizeof(value));
-    return value;
-}
-
-inline void StoreWord(uint8_t* p, const void* value) {
-    memcpy(p, (const void*)&value, sizeof(value));
-}
 
 inline uint8_t GetNumberOfArguments(const uint8_t* site) {
     return site[numberOfArguments];

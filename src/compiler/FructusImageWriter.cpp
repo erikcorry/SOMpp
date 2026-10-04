@@ -572,16 +572,10 @@ void FructusImage::AsmFile::writeInvokableHeader(ObjectWriter& w, VMInvokable* i
 
 void FructusImage::AsmFile::writeMethod(VMMethod* method, const std::string& label) {
     ObjectWriter w(out, label);
-    size_t const numberOfConstants = method->numberOfConstants;
-    // the sends are shorter on fructus
-    std::vector<uint8_t> const fructusBytecodes = method->ResizeSendSites(
-        L::SendSite_length, [method](size_t i, uint8_t* site) {
-            site[0] = method->bytecodes[i];
-            site[L::SendSite_numberOfArguments] =
-                method->bytecodes[i + SendSite::numberOfArguments];
-        });
+    // the words are shorter on fructus, and writeBytecodes() writes them
+    std::vector<uint8_t> const fructusBytecodes =
+        method->ResizeWords(L::word, [](void* /*word*/, uint8_t* /*out*/) {});
     size_t const bcLength = fructusBytecodes.size();
-    size_t const bytecodes = L::VMMethod_size + numberOfConstants * L::word;
 
     writeInvokableHeader(w, method, Vtable("8VMMethod"), "Method");
     w.Word(L::VMMethod_numberOfLocals, (int64_t)method->numberOfLocals,
@@ -592,25 +586,13 @@ void FructusImage::AsmFile::writeMethod(VMMethod* method, const std::string& lab
     w.Word(L::VMMethod_bcLength, (int64_t)bcLength, "bcLength");
     w.Byte(L::VMMethod_numberOfArguments, method->numberOfArguments,
            "numberOfArguments");
-    w.Word(L::VMMethod_numberOfConstants, (int64_t)numberOfConstants,
-           "numberOfConstants");
-    w.Word(L::VMMethod_indexableFields, w.Self(L::VMMethod_size),
-           "indexableFields");
-    w.Word(L::VMMethod_bytecodes, w.Self(bytecodes), "bytecodes");
-
-    for (size_t i = 0; i < numberOfConstants; i++) {
-        w.Word(L::VMMethod_size + i * L::word,
-               Ref(load_ptr(method->indexableFields[i])),
-               "constant " + std::to_string(i));
-    }
-    writeBytecodes(w, bytecodes, method, fructusBytecodes);
-    w.End(L::VMMethod_size +
-          L::PaddedSize(bcLength + numberOfConstants * L::word));
+    writeBytecodes(w, L::VMMethod_size, method, fructusBytecodes);
+    w.End(L::VMMethod_size + L::PaddedSize(bcLength));
 }
 
 /**
- * The bytecodes as ResizeSendSites() made them for fructus, with the inline
- * caches of the sends, which are at the same bytecode as on the host.
+ * The bytecodes as ResizeWords() made them for fructus, with the words, which
+ * are at the same bytecode as on the host.
  */
 void FructusImage::AsmFile::writeBytecodes(
     ObjectWriter& w, size_t offset, VMMethod* method,
@@ -619,7 +601,7 @@ void FructusImage::AsmFile::writeBytecodes(
     size_t i = 0;
     size_t n = 0;
     while (i < bcLength) {
-        uint8_t const bc = method->bytecodes[i];
+        uint8_t const bc = method->GetBytecode(i);
         size_t const length = Bytecode::GetBytecodeLength(bc);
         if (length == 0 || i + length > bcLength) {
             Fail("bad bytecode " + std::to_string(bc) + " in " +
@@ -631,17 +613,35 @@ void FructusImage::AsmFile::writeBytecodes(
             n += L::SendSite_length;
             continue;
         }
+        // the bytes, and the word of a PUSH_CONSTANT, PUSH_BLOCK or
+        // PUSH_GLOBAL
+        bool const hasWord = GetNumberOfWords(bc) != 0;
+        size_t const numBytes = hasWord ? 1 : length;
+        size_t const fructusLength = hasWord ? 1 + L::word : length;
         std::ostringstream line;
         line << "\t.byte\t";
-        for (size_t j = 0; j < length; j++) {
+        for (size_t j = 0; j < numBytes; j++) {
             line << (j == 0 ? "" : ", ") << (unsigned)fructusBytecodes[n + j];
         }
         std::string name = Bytecode::GetBytecodeName(fructusBytecodes[n]);
         name.erase(name.find_last_not_of(' ') + 1);
-        line << "\t; " << name << "\n";
-        w.Raw(offset + n, length, line.str());
+        line << "\t; " << name;
+        if (hasWord) {
+            vm_oop_t word = method->GetConstant(i);
+            if (bc == BC_PUSH_GLOBAL) {
+                line << " " << Printable((VMSymbol*)word);
+            } else if (bc == BC_PUSH_CONSTANT) {
+                line << " "
+                     << (IS_TAGGED(word)
+                             ? std::to_string((int64_t)SMALL_INT_VAL(word))
+                             : Describe(word));
+            }
+            line << "\n\t.short\t" << Ref(word);
+        }
+        line << "\n";
+        w.Raw(offset + n, fructusLength, line.str());
         i += length;
-        n += length;
+        n += fructusLength;
     }
     if (n != fructusBytecodes.size()) {
         Fail("the bytecodes of " + describe(method) + " don't add up");
@@ -654,9 +654,9 @@ void FructusImage::AsmFile::writeBytecodes(
  */
 void FructusImage::AsmFile::writeSendSite(ObjectWriter& w, size_t offset,
                                           VMMethod* method, size_t index) {
-    uint8_t const bc = method->bytecodes[index];
+    uint8_t const bc = method->GetBytecode(index);
     uint8_t const numArgs =
-        method->bytecodes[index + SendSite::numberOfArguments];
+        method->GetBytecode(index + SendSite::numberOfArguments);
     VMSymbol* selector = method->GetSendSelector(index);
     std::string name = Bytecode::GetBytecodeName(bc);
     name.erase(name.find_last_not_of(' ') + 1);
@@ -802,20 +802,12 @@ void FructusImage::ImageWriter::addGlobalsOf(VMInvokable* inv) {
         return;
     }
     for (size_t i = 0; i < method->bcLength;
-         i += Bytecode::GetBytecodeLength(method->bytecodes[i])) {
-        if (method->bytecodes[i] == BC_PUSH_GLOBAL) {
-            auto* name = static_cast<VMSymbol*>(
-                method->GetConstantWithIndex(method->bytecodes[i + 1]));
+         i += Bytecode::GetBytecodeLength(method->GetBytecode(i))) {
+        if (method->GetBytecode(i) == BC_PUSH_GLOBAL) {
+            auto* name = static_cast<VMSymbol*>(method->GetConstant(i));
             addClass(name->GetStdString().c_str(), false);
-        }
-    }
-    // blocks
-    for (size_t i = 0; i < method->numberOfConstants; i++) {
-        vm_oop_t constant = load_ptr(method->indexableFields[i]);
-        if (!IS_TAGGED(constant)) {
-            if (auto* block = dynamic_cast<VMMethod*>(AS_OBJ(constant))) {
-                addGlobalsOf(block);
-            }
+        } else if (method->GetBytecode(i) == BC_PUSH_BLOCK) {
+            addGlobalsOf(static_cast<VMInvokable*>(method->GetConstant(i)));
         }
     }
 }
@@ -882,33 +874,16 @@ void FructusImage::ImageWriter::installPrimitives(VMClass* cls) {
 /** No bytecode pushes a symbol or a method. */
 void FructusImage::ImageWriter::checkPushes(VMClass* cls, VMMethod* method) {
     for (size_t i = 0; i < method->bcLength;
-         i += Bytecode::GetBytecodeLength(method->bytecodes[i])) {
-        uint8_t const bc = method->bytecodes[i];
-        size_t index = 0;
-        switch (bc) {
-            case BC_PUSH_CONSTANT:
-                index = method->bytecodes[i + 1];
-                break;
-            case BC_PUSH_CONSTANT_0:
-            case BC_PUSH_CONSTANT_1:
-            case BC_PUSH_CONSTANT_2:
-                index = bc - BC_PUSH_CONSTANT_0;
-                break;
-            default:
-                continue;
-        }
-        vm_oop_t constant = method->GetConstantWithIndex(index);
-        if (IsDispatchOnly(constant)) {
-            Fail(Printable(cls->GetName()) + ">>#" +
-                 Printable(method->GetSignature()) + " pushes " +
-                 Describe(constant) + ", but the program can't have it");
-        }
-    }
-    for (size_t i = 0; i < method->numberOfConstants; i++) {
-        vm_oop_t constant = load_ptr(method->indexableFields[i]);
-        if (!IS_TAGGED(constant)) {
-            if (auto* block = dynamic_cast<VMMethod*>(AS_OBJ(constant))) {
-                checkPushes(cls, block);
+         i += Bytecode::GetBytecodeLength(method->GetBytecode(i))) {
+        uint8_t const bc = method->GetBytecode(i);
+        if (bc == BC_PUSH_BLOCK) {
+            checkPushes(cls, static_cast<VMMethod*>(method->GetConstant(i)));
+        } else if (bc == BC_PUSH_CONSTANT) {
+            vm_oop_t constant = method->GetConstant(i);
+            if (IsDispatchOnly(constant)) {
+                Fail(Printable(cls->GetName()) + ">>#" +
+                     Printable(method->GetSignature()) + " pushes " +
+                     Describe(constant) + ", but the program can't have it");
             }
         }
     }

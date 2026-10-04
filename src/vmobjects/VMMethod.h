@@ -35,6 +35,7 @@
 #ifndef FRUCTUS
 #include "../compiler/LexicalScope.h"
 #endif
+#include "../interpreter/bytecodes.h"
 #include "../vm/Globals.h"
 #include "../vm/Print.h"
 #include "VMInteger.h"
@@ -105,11 +106,11 @@ public:
     typedef GCMethod Stored;
 
 #ifdef FRUCTUS
-    VMMethod(VMSymbol* signature, size_t bcCount, size_t numberOfConstants,
-             size_t numLocals, size_t maxStackDepth);
+    VMMethod(VMSymbol* signature, size_t bcCount, size_t numLocals,
+             size_t maxStackDepth);
 #else
-    VMMethod(VMSymbol* signature, size_t bcCount, size_t numberOfConstants,
-             size_t numLocals, size_t maxStackDepth, LexicalScope* lexicalScope,
+    VMMethod(VMSymbol* signature, size_t bcCount, size_t numLocals,
+             size_t maxStackDepth, LexicalScope* lexicalScope,
              BackJump* inlinedLoops);
 
     ~VMMethod() override { delete lexicalScope; }
@@ -124,9 +125,7 @@ public:
     }
 
     [[nodiscard]] inline size_t GetObjectSize() const override {
-        size_t const additionalBytes =
-            PADDED_SIZE(bcLength + (numberOfConstants * sizeof(VMObject*)));
-        return additionalBytes + sizeof(VMMethod);
+        return sizeof(VMMethod) + PADDED_SIZE(bcLength);
     }
 
     [[nodiscard]] size_t GetMaximumNumberOfStackElements() const {
@@ -143,12 +142,12 @@ public:
     [[nodiscard]] size_t GetBytecodeHash() const;
 
     /**
-     * The bytecodes with each send `siteLength` long, and the jumps over
-     * them adjusted. `writeSite(index, site)` writes the send at `index`.
+     * The bytecodes with each word `wordSize` long, and the jumps adjusted.
+     * `writeWord(word, out)` writes each of them.
      */
-    [[nodiscard]] std::vector<uint8_t> ResizeSendSites(
-        size_t siteLength,
-        const std::function<void(size_t, uint8_t*)>& writeSite) const;
+    [[nodiscard]] std::vector<uint8_t> ResizeWords(
+        size_t wordSize,
+        const std::function<void(void*, uint8_t*)>& writeWord) const;
 #endif
 
     /** The selector of the send at `bytecodeIndex`, see SendSite.h. */
@@ -157,33 +156,21 @@ public:
     void SetHolder(VMClass* hld) override;
     void SetHolderAll(VMClass* hld) const;
 
+    /**
+     * The constant of the PUSH_CONSTANT, the method of the PUSH_BLOCK, or
+     * the name of the PUSH_GLOBAL at `bytecodeIndex`.
+     */
     [[nodiscard]] inline vm_oop_t GetConstant(size_t bytecodeIndex) const {
-        return GetConstantWithIndex(bytecodes[bytecodeIndex + 1]);
-    }
-
-    [[nodiscard]] inline vm_oop_t GetConstantWithIndex(uint8_t index) const {
-        if (unlikely(index >= GetNumberOfIndexableFields())) {
-            ErrorPrint("Error: Constant index out of range\n");
-            return nullptr;
-        }
-        return GetIndexableField(index);
-    }
-
-    /** A constant that is a selector or the name of a global. */
-    [[nodiscard]] inline VMSymbol* GetSymbolWithIndex(uint8_t index) const {
-#ifdef FRUCTUS
-        // a symbol isn't an object on fructus, see VMSymbol.h
-        return reinterpret_cast<VMSymbol*>(GetConstantWithIndex(index));
-#else
-        return static_cast<VMSymbol*>(GetConstantWithIndex(index));
-#endif
+        return (vm_oop_t)GetWordOperand(&GetBytecodes()[bytecodeIndex]);
     }
 
     [[nodiscard]] inline uint8_t GetBytecode(size_t indx) const {
-        return bytecodes[indx];
+        return GetBytecodes()[indx];
     }
 
-    inline void SetBytecode(size_t indx, uint8_t val) { bytecodes[indx] = val; }
+    inline void SetBytecode(size_t indx, uint8_t val) {
+        GetBytecodes()[indx] = val;
+    }
 
 #ifdef UNSAFE_FRAME_OPTIMIZATION
     void SetCachedFrame(VMFrame* frame);
@@ -192,26 +179,13 @@ public:
 
     void WalkObjects(walk_heap_fn /*unused*/) override;
 
-    [[nodiscard]] inline size_t GetNumberOfIndexableFields() const {
-        return numberOfConstants;
-    }
-
     [[nodiscard]] VMMethod* CloneForMovingGC() const override;
-
-    inline void SetIndexableField(size_t idx, vm_oop_t item) {
-        store_ptr(indexableFields[idx], item);
-    }
 
     VMFrame* Invoke(VMFrame* frame) override;
     VMFrame* Invoke1(VMFrame* frame) override;
 
-    void MarkObjectAsInvalid() override {
-        VMInvokable::MarkObjectAsInvalid();
-        indexableFields = (gc_oop_t*)INVALID_GC_POINTER;
-    }
-
     [[nodiscard]] bool IsMarkedInvalid() const override {
-        return indexableFields == (gc_oop_t*)INVALID_GC_POINTER;
+        return signature == (GCSymbol*)INVALID_GC_POINTER;
     }
 
     DECLARE_AS_DEBUG_STRING(override)
@@ -235,7 +209,10 @@ public:
     void Dump(const char* indent, bool printObjects) override;
 #endif
 
-    [[nodiscard]] inline uint8_t* GetBytecodes() const { return bytecodes; }
+    /** The bytecodes come right after the method. */
+    [[nodiscard]] inline uint8_t* GetBytecodes() const {
+        return (uint8_t*)(this + 1);
+    }
 
 private:
 #ifndef FRUCTUS
@@ -254,15 +231,10 @@ private:
 
     make_testable(public);
 
-    [[nodiscard]] inline vm_oop_t GetIndexableField(size_t idx) const {
-        return load_ptr(indexableFields[idx]);
-    }
-
     const size_t numberOfLocals;
     const size_t maximumNumberOfStackElements;
     const size_t bcLength;
     const uint8_t numberOfArguments;
-    const size_t numberOfConstants;
 
     make_testable(private);
 #ifndef FRUCTUS
@@ -277,6 +249,4 @@ private:
 #ifdef BYTECODE_HEATMAP
     uint64_t* heatmap;
 #endif
-    gc_oop_t* indexableFields;
-    uint8_t* bytecodes;
 };

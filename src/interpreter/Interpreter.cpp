@@ -95,9 +95,6 @@ vm_oop_t Interpreter::Start() {
                                        &&LABEL_BC_PUSH_FIELD_1,
                                        &&LABEL_BC_PUSH_BLOCK,
                                        &&LABEL_BC_PUSH_CONSTANT,
-                                       &&LABEL_BC_PUSH_CONSTANT_0,
-                                       &&LABEL_BC_PUSH_CONSTANT_1,
-                                       &&LABEL_BC_PUSH_CONSTANT_2,
                                        &&LABEL_BC_PUSH_0,
                                        &&LABEL_BC_PUSH_1,
                                        &&LABEL_BC_PUSH_NIL,
@@ -234,37 +231,13 @@ LABEL_BC_PUSH_FIELD_1:
     DISPATCH_NOGC();
 
 LABEL_BC_PUSH_BLOCK:
-    PROLOGUE(2);
-    doPushBlock(pc[-1]);
+    PROLOGUE(1 + sizeof(void*));
+    doPushBlock((VMInvokable*)LoadWord(pc - sizeof(void*)));
     DISPATCH_GC();
 
 LABEL_BC_PUSH_CONSTANT:
-    PROLOGUE(2);
-    doPushConstant(pc[-1]);
-    DISPATCH_NOGC();
-
-LABEL_BC_PUSH_CONSTANT_0:
-    PROLOGUE(1);
-    {
-        vm_oop_t constant = method->GetIndexableField(0);
-        GetFrame()->Push(constant);
-    }
-    DISPATCH_NOGC();
-
-LABEL_BC_PUSH_CONSTANT_1:
-    PROLOGUE(1);
-    {
-        vm_oop_t constant = method->GetIndexableField(1);
-        GetFrame()->Push(constant);
-    }
-    DISPATCH_NOGC();
-
-LABEL_BC_PUSH_CONSTANT_2:
-    PROLOGUE(1);
-    {
-        vm_oop_t constant = method->GetIndexableField(2);
-        GetFrame()->Push(constant);
-    }
+    PROLOGUE(1 + sizeof(void*));
+    GetFrame()->Push((vm_oop_t)LoadWord(pc - sizeof(void*)));
     DISPATCH_NOGC();
 
 LABEL_BC_PUSH_0:
@@ -291,13 +264,15 @@ LABEL_BC_PUSH_NIL:
     DISPATCH_NOGC();
 
 LABEL_BC_PUSH_GLOBAL:
-    PROLOGUE(2);
-    if (!doPushGlobal(pc[-1])) {
-        // sends #unknownGlobal:, which pushes a new frame
-        SAVE_PC();
-        SendUnknownGlobal(
-            method->GetSymbolWithIndex(pc[-1]));
-        RELOAD_PC();
+    PROLOGUE(1 + sizeof(void*));
+    {
+        auto* globalName = (VMSymbol*)LoadWord(pc - sizeof(void*));
+        if (!doPushGlobal(globalName)) {
+            // sends #unknownGlobal:, which pushes a new frame
+            SAVE_PC();
+            SendUnknownGlobal(globalName);
+            RELOAD_PC();
+        }
     }
     DISPATCH_GC();
 
@@ -884,10 +859,7 @@ void Interpreter::doReturnFieldWithIndex(uint8_t fieldIndex) {
     popFrameAndPushResult(o);
 }
 
-void Interpreter::doPushBlock(uint8_t constantIndex) {
-    vm_oop_t block = method->GetConstantWithIndex(constantIndex);
-    auto* blockMethod = static_cast<VMInvokable*>(block);
-
+void Interpreter::doPushBlock(VMInvokable* blockMethod) {
     uint8_t const numOfArgs = blockMethod->GetNumberOfArguments();
 
     GetFrame()->Push(Universe::NewBlock(blockMethod, GetFrame(), numOfArgs));
@@ -895,9 +867,7 @@ void Interpreter::doPushBlock(uint8_t constantIndex) {
 
 // Returns false if the global is unknown, and Start() has to send
 // #unknownGlobal:.
-bool Interpreter::doPushGlobal(uint8_t constantIndex) {
-    auto* globalName =
-        method->GetSymbolWithIndex(constantIndex);
+bool Interpreter::doPushGlobal(VMSymbol* globalName) {
     vm_oop_t global = Universe::GetGlobal(globalName);
 
     if (global == nullptr) {

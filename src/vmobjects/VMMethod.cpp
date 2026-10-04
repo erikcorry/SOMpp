@@ -67,18 +67,15 @@
 #include "VMSymbol.h"
 
 #ifdef FRUCTUS
-VMMethod::VMMethod(VMSymbol* signature, size_t bcCount,
-                   size_t numberOfConstants, size_t numLocals,
+VMMethod::VMMethod(VMSymbol* signature, size_t bcCount, size_t numLocals,
                    size_t maxStackDepth)
     : VMInvokable(signature), numberOfLocals(numLocals),
       maximumNumberOfStackElements(maxStackDepth), bcLength(bcCount),
       numberOfArguments(signature == nullptr
                             ? 0
-                            : Signature::GetNumberOfArguments(signature)),
-      numberOfConstants(numberOfConstants) {
+                            : Signature::GetNumberOfArguments(signature)) {
 #else
-VMMethod::VMMethod(VMSymbol* signature, size_t bcCount,
-                   size_t numberOfConstants, size_t numLocals,
+VMMethod::VMMethod(VMSymbol* signature, size_t bcCount, size_t numLocals,
                    size_t maxStackDepth, LexicalScope* lexicalScope,
                    BackJump* inlinedLoops)
     : VMInvokable(signature), numberOfLocals(numLocals),
@@ -86,18 +83,11 @@ VMMethod::VMMethod(VMSymbol* signature, size_t bcCount,
       numberOfArguments(signature == nullptr
                             ? 0
                             : Signature::GetNumberOfArguments(signature)),
-      numberOfConstants(numberOfConstants), lexicalScope(lexicalScope),
-      inlinedLoops(inlinedLoops) {
+      lexicalScope(lexicalScope), inlinedLoops(inlinedLoops) {
 #endif
 #ifdef UNSAFE_FRAME_OPTIMIZATION
     cachedFrame = nullptr;
 #endif
-
-    indexableFields = (gc_oop_t*)(&indexableFields + 2);
-    for (size_t i = 0; i < numberOfConstants; ++i) {
-        indexableFields[i] = nilObject;
-    }
-    bytecodes = (uint8_t*)(&indexableFields + 2 + GetNumberOfIndexableFields());
 
 #ifdef BYTECODE_HEATMAP
     heatmap = new uint64_t[bcCount]();
@@ -113,14 +103,6 @@ VMMethod* VMMethod::CloneForMovingGC() const {
     memcpy(SHIFTED_PTR(clone, sizeof(VMObject)),
            SHIFTED_PTR(this, sizeof(VMObject)),
            GetObjectSize() - sizeof(VMObject));
-    clone->indexableFields = (gc_oop_t*)(&(clone->indexableFields) + 2);
-
-    size_t const numIndexableFields = GetNumberOfIndexableFields();
-    clone->bytecodes =
-        (uint8_t*)(&(clone->indexableFields) + 2 + numIndexableFields);
-
-    // Use of GetNumberOfIndexableFields() is problematic here, because it may
-    // be invalid object while cloning/moving within GC
     return clone;
 }
 
@@ -133,34 +115,27 @@ void VMMethod::WalkObjects(walk_heap_fn walk) {
     }
 #endif
 
-    size_t const numIndexableFields = GetNumberOfIndexableFields();
-    for (size_t i = 0; i < numIndexableFields; ++i) {
-        if (indexableFields[i] != nullptr) {
-            indexableFields[i] = walk(indexableFields[i]);
-        }
-    }
-
 #ifndef FRUCTUS
-    // the inline caches, see SendSite.h
+    // the words in the bytecodes, see bytecodes.h
+    uint8_t* bytecodes = GetBytecodes();
     for (size_t i = 0; i < bcLength;
          i += Bytecode::GetBytecodeLength(bytecodes[i])) {
-        if (!IsSendBytecode(bytecodes[i])) {
-            continue;
-        }
-        uint8_t* site = &bytecodes[i];
-        SendSite::StoreWord(site + SendSite::target,
-                            walk((gc_oop_t)SendSite::GetTarget(site)));
-        if (SendSite::GetReceiverClass(site) != nullptr) {
-            SendSite::StoreWord(
-                site + SendSite::receiverClass,
-                walk((gc_oop_t)SendSite::GetReceiverClass(site)));
+        uint8_t const bc = bytecodes[i];
+        uint8_t const numWords = GetNumberOfWords(bc);
+        uint8_t* word = &bytecodes[i] + Bytecode::GetBytecodeLength(bc) -
+                        numWords * sizeof(void*);
+        for (uint8_t w = 0; w < numWords; w++, word += sizeof(void*)) {
+            // an unlinked send has no receiverClass yet
+            if (LoadWord(word) != nullptr) {
+                StoreWord(word, walk((gc_oop_t)LoadWord(word)));
+            }
         }
     }
 #endif
 }
 
 VMSymbol* VMMethod::GetSendSelector(size_t bytecodeIndex) const {
-    const uint8_t* site = &bytecodes[bytecodeIndex];
+    const uint8_t* site = &GetBytecodes()[bytecodeIndex];
     assert(IsSendBytecode(site[0]));
     void* target = SendSite::GetTarget(site);
     if (SendSite::GetReceiverClass(site) == nullptr) {
@@ -203,13 +178,10 @@ void VMMethod::SetHolder(VMClass* hld) {
 }
 
 void VMMethod::SetHolderAll(VMClass* hld) const {
-    size_t const numIndexableFields = GetNumberOfIndexableFields();
-    for (size_t i = 0; i < numIndexableFields; ++i) {
-        vm_oop_t o = GetIndexableField(i);
-        if (!IS_TAGGED(o)) {
-            if (IsVMInvokable(o)) {
-                static_cast<VMInvokable*>(AS_OBJ(o))->SetHolder(hld);
-            }
+    for (size_t i = 0; i < bcLength;
+         i += Bytecode::GetBytecodeLength(GetBytecode(i))) {
+        if (GetBytecode(i) == BC_PUSH_BLOCK) {
+            static_cast<VMInvokable*>(GetConstant(i))->SetHolder(hld);
         }
     }
 }
@@ -262,6 +234,7 @@ void VMMethod::inlineInto(MethodGenerationContext& mgenc,
     std::priority_queue<BackJump> backJumps = createBackJumpHeap();
     std::priority_queue<BackJumpPatch> backJumpsToPatch;
 
+    uint8_t* bytecodes = GetBytecodes();
     size_t i = 0;
     const size_t numBytecodes = GetNumberOfBytecodes();
     while (i < numBytecodes) {
@@ -403,14 +376,6 @@ void VMMethod::inlineInto(MethodGenerationContext& mgenc,
             }
             case BC_PUSH_CONSTANT: {
                 vm_oop_t literal = GetConstant(i);
-                EmitPUSHCONSTANT(mgenc, parser, literal);
-                break;
-            }
-            case BC_PUSH_CONSTANT_0:
-            case BC_PUSH_CONSTANT_1:
-            case BC_PUSH_CONSTANT_2: {
-                const uint8_t literalIdx = bytecode - BC_PUSH_CONSTANT_0;
-                vm_oop_t literal = GetIndexableField(literalIdx);
                 EmitPUSHCONSTANT(mgenc, parser, literal);
                 break;
             }
@@ -583,6 +548,7 @@ void VMMethod::prepareBackJumpToCurrentAddress(
 
 void VMMethod::AdaptAfterOuterInlined(
     uint8_t removedCtxLevel, MethodGenerationContext& mgencWithInlined) {
+    uint8_t* bytecodes = GetBytecodes();
     size_t i = 0;
     size_t const numBytecodes = GetNumberOfBytecodes();
 
@@ -594,9 +560,6 @@ void VMMethod::AdaptAfterOuterInlined(
             case BC_DUP:
             case BC_DUP_SECOND:
             case BC_PUSH_CONSTANT:
-            case BC_PUSH_CONSTANT_0:
-            case BC_PUSH_CONSTANT_1:
-            case BC_PUSH_CONSTANT_2:
             case BC_PUSH_0:
             case BC_PUSH_1:
             case BC_PUSH_NIL:
@@ -773,18 +736,19 @@ void VMMethod::MergeScopeInto(MethodGenerationContext& mgenc) {
 #endif
 
 #ifndef FRUCTUS
-std::vector<uint8_t> VMMethod::ResizeSendSites(
-    size_t siteLength,
-    const std::function<void(size_t, uint8_t*)>& writeSite) const {
+std::vector<uint8_t> VMMethod::ResizeWords(
+    size_t wordSize,
+    const std::function<void(void*, uint8_t*)>& writeWord) const {
+    const uint8_t* bytecodes = GetBytecodes();
     // where each bytecode goes
     std::vector<size_t> newIndex(bcLength + 1);
     size_t n = 0;
     for (size_t i = 0; i < bcLength;
          i += Bytecode::GetBytecodeLength(bytecodes[i])) {
+        uint8_t const bc = bytecodes[i];
         newIndex[i] = n;
-        n += IsSendBytecode(bytecodes[i])
-                 ? siteLength
-                 : Bytecode::GetBytecodeLength(bytecodes[i]);
+        n += Bytecode::GetBytecodeLength(bc) +
+             GetNumberOfWords(bc) * (wordSize - sizeof(void*));
     }
     newIndex[bcLength] = n;
 
@@ -793,11 +757,14 @@ std::vector<uint8_t> VMMethod::ResizeSendSites(
          i += Bytecode::GetBytecodeLength(bytecodes[i])) {
         uint8_t const bc = bytecodes[i];
         uint8_t* out = &result[newIndex[i]];
-        if (IsSendBytecode(bc)) {
-            writeSite(i, out);
-            continue;
+        uint8_t const numWords = GetNumberOfWords(bc);
+        size_t const numBytes =
+            Bytecode::GetBytecodeLength(bc) - numWords * sizeof(void*);
+        memcpy(out, &bytecodes[i], numBytes);
+        for (uint8_t w = 0; w < numWords; w++) {
+            writeWord(LoadWord(&bytecodes[i + numBytes + w * sizeof(void*)]),
+                      out + numBytes + w * wordSize);
         }
-        memcpy(out, &bytecodes[i], Bytecode::GetBytecodeLength(bc));
         if (!IsJumpBytecode(bc)) {
             continue;
         }
@@ -828,23 +795,23 @@ std::vector<uint8_t> VMMethod::ResizeSendSites(
 }
 
 /**
- * The hash of the bytecodes with sends as they were before they had inline
- * caches, the bytecode and the index of the selector, so that it's the same
- * however the caches are linked, and the hashes of the primitives still
- * match.
+ * The hash of the bytecodes with each word replaced by a byte, which is the
+ * index of its first occurrence in the method, so that it doesn't depend on
+ * where the objects are. The sends are unlinked when the primitives are
+ * loaded, which is when this is used.
  */
 size_t VMMethod::GetBytecodeHash() const {
+    std::vector<void*> words;
     std::vector<uint8_t> const bcs =
-        ResizeSendSites(2, [this](size_t i, uint8_t* out) {
-            VMSymbol* selector = GetSendSelector(i);
+        ResizeWords(1, [&words](void* word, uint8_t* out) {
             size_t index = 0;
-            while (index < numberOfConstants &&
-                   GetIndexableField(index) != selector) {
+            while (index < words.size() && words[index] != word) {
                 index++;
             }
-            assert(index < numberOfConstants);
-            out[0] = bytecodes[i];
-            out[1] = index;
+            if (index == words.size()) {
+                words.push_back(word);
+            }
+            *out = index;
         });
     return murmur3_32(bcs.data(), bcs.size(), 0x00000000);
 }

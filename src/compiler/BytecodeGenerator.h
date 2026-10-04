@@ -51,8 +51,8 @@ void EmitPUSHBLOCK(MethodGenerationContext& mgenc, const Parser& parser,
                    VMInvokable* block);
 void EmitPUSHCONSTANT(MethodGenerationContext& mgenc, const Parser& parser,
                       vm_oop_t cst);
-void EmitPUSHCONSTANT(MethodGenerationContext& mgenc, uint8_t literalIndex);
-void EmitPUSHCONSTANTString(MethodGenerationContext& mgenc, VMString* str);
+/** A PUSH_CONSTANT even if there's a shorter bytecode for the constant. */
+void EmitPUSHCONSTANT(MethodGenerationContext& mgenc, vm_oop_t cst);
 void EmitPUSHGLOBAL(MethodGenerationContext& mgenc, const Parser& parser,
                     VMSymbol* global);
 void EmitPOP(MethodGenerationContext& mgenc);

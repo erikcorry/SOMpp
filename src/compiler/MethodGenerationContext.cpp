@@ -37,7 +37,6 @@
 #include <vector>
 
 #include "../interpreter/bytecodes.h"
-#include "../misc/VectorUtil.h"
 #include "../vm/Globals.h"
 #include "../vm/Print.h"
 #include "../vm/Universe.h"
@@ -67,24 +66,15 @@ VMInvokable* MethodGenerationContext::Assemble() {
         return trivialMethod;
     }
 
-    // create a method instance with the given number of bytecodes and literals
-    size_t const numLiterals = literals.size();
+    // create a method instance with the given number of bytecodes
     size_t const numLocals = locals.size();
     VMMethod* meth =
-        Universe::NewMethod(signature, bytecode.size(), numLiterals, numLocals,
+        Universe::NewMethod(signature, bytecode.size(), numLocals,
                             maxStackDepth, lexicalScope, inlinedLoops);
 
-    // copy literals into the method
-    for (size_t i = 0; i < numLiterals; i++) {
-        vm_oop_t l = literals[i];
-        meth->SetIndexableField(i, l);
-    }
-
-    // copy bytecodes into method
-    size_t const bc_size = bytecode.size();
-    for (size_t i = 0; i < bc_size; i++) {
-        meth->SetBytecode(i, bytecode[i]);
-    }
+    // copy bytecodes into method, with the objects they refer to, which
+    // need no write barrier, since the method is new
+    memcpy(meth->GetBytecodes(), bytecode.data(), bytecode.size());
 
     // return the method - the holder field is to be set later on!
     return meth;
@@ -139,13 +129,9 @@ VMTrivialMethod* MethodGenerationContext::assembleLiteralReturn(
         case BC_PUSH_NIL: {
             return MakeLiteralReturn(signature, arguments, load_ptr(nilObject));
         }
-        case BC_PUSH_CONSTANT_0:
-        case BC_PUSH_CONSTANT_1:
-        case BC_PUSH_CONSTANT_2:
         case BC_PUSH_CONSTANT: {
-            if (literals.size() == 1) {
-                return MakeLiteralReturn(signature, arguments, literals.at(0));
-            }
+            return MakeLiteralReturn(signature, arguments,
+                                     (vm_oop_t)GetWordOperand(&bytecode[0]));
         }
 
         default: {
@@ -162,13 +148,7 @@ VMTrivialMethod* MethodGenerationContext::assembleGlobalReturn() {
         return nullptr;
     }
 
-    if (literals.size() != 1) {
-        ErrorExit(
-            "Unexpected situation when trying to create trivial method that "
-            "reads a global. New Bytecode?");
-    }
-
-    auto* globalName = (VMSymbol*)literals.at(0);
+    auto* globalName = (VMSymbol*)GetWordOperand(&bytecode[0]);
     return MakeGlobalReturn(signature, arguments, globalName);
 }
 
@@ -291,10 +271,6 @@ VMInvokable* MethodGenerationContext::AssemblePrimitive(bool classSide) {
 
 MethodGenerationContext::~MethodGenerationContext() = default;
 
-int8_t MethodGenerationContext::FindLiteralIndex(vm_oop_t lit) {
-    return (int8_t)IndexOf(literals, lit);
-}
-
 som_int_t MethodGenerationContext::GetFieldIndex(VMSymbol* field) {
     som_int_t const idx = holderGenc.GetFieldIndex(field);
     return idx;
@@ -376,38 +352,12 @@ void MethodGenerationContext::AddLocal(std::string& local,
     locals.emplace_back(local, index, false, coord);
 }
 
-uint8_t MethodGenerationContext::AddLiteral(vm_oop_t lit,
-                                            const Parser& parser) {
-    assert(!AS_OBJ(lit)->IsMarkedInvalid());
-
-    size_t const index = literals.size();
-
-    if (index > std::numeric_limits<int8_t>::max()) {
-        parser.ParseError(
-            "The method has too many literals. You may be able to split up "
-            "this method into multiple.");
-    }
-
-    literals.push_back(lit);
-    return index;
-}
-
-uint8_t MethodGenerationContext::AddLiteralIfAbsent(vm_oop_t lit,
-                                                    const Parser& parser) {
-    som_int_t const idx = IndexOf(literals, lit);
-    if (idx != -1) {
-        assert(idx < 256);
-        assert(idx >= 0 && (size_t)idx < literals.size() &&
-               "Expect index to be inside the literals vector.");
-        return (uint8_t)idx;
-    }
-    return AddLiteral(lit, parser);
-}
-
-void MethodGenerationContext::UpdateLiteral(vm_oop_t oldValue, uint8_t index,
-                                            vm_oop_t newValue) {
-    assert(literals.at(index) == oldValue);
-    literals[index] = newValue;
+void MethodGenerationContext::UpdateConstant(size_t bytecodeIndex,
+                                             vm_oop_t oldValue,
+                                             vm_oop_t newValue) {
+    assert(bytecode.at(bytecodeIndex) == BC_PUSH_CONSTANT);
+    assert(GetWordOperand(&bytecode[bytecodeIndex]) == oldValue);
+    StoreWord(&bytecode[bytecodeIndex + 1], newValue);
 }
 
 bool MethodGenerationContext::AddLocalIfAbsent(std::string& local,
@@ -494,37 +444,26 @@ bool MethodGenerationContext::hasTwoLiteralBlockArguments() {
     return LastBytecodeIs(1, BC_PUSH_BLOCK);
 }
 
-/**
- * This works only, because we have a simple forward-pass parser,
- * and inlining, where this is used, happens right after the block was added.
- * This also means, we need to remove blocks in reverse order.
- */
-VMInvokable* MethodGenerationContext::getLastBlockMethodAndFreeLiteral(
-    uint8_t blockLiteralIdx) {
-    assert(blockLiteralIdx == literals.size() - 1);
-    auto* block = (VMInvokable*)literals.back();
-    literals.pop_back();
-    return block;
+/** The method of a PUSH_BLOCK that is one of the last bytecodes. */
+VMInvokable* MethodGenerationContext::getLastBlockMethod(size_t indexFromEnd) {
+    size_t const index = getOffsetOfLastBytecode(indexFromEnd);
+    assert(bytecode.at(index) == BC_PUSH_BLOCK);
+    return (VMInvokable*)GetWordOperand(&bytecode[index]);
 }
 
 VMInvokable* MethodGenerationContext::extractBlockMethodAndRemoveBytecode() {
-    uint8_t const blockLitIdx = bytecode.at(bytecode.size() - 1);
-
-    vm_oop_t toBeInlined = getLastBlockMethodAndFreeLiteral(blockLitIdx);
+    VMInvokable* toBeInlined = getLastBlockMethod(0);
 
     removeLastBytecodes(1);
 
-    return (VMInvokable*)toBeInlined;
+    return toBeInlined;
 }
 
 std::tuple<VMInvokable*, VMInvokable*>
 MethodGenerationContext::extractBlockMethodsAndRemoveBytecodes() {
-    uint8_t const block1LitIdx = bytecode.at(bytecode.size() - 3);
-    uint8_t const block2LitIdx = bytecode.at(bytecode.size() - 1);
-
     // grab the blocks' methods for inlining
-    VMInvokable* toBeInlined2 = getLastBlockMethodAndFreeLiteral(block2LitIdx);
-    VMInvokable* toBeInlined1 = getLastBlockMethodAndFreeLiteral(block1LitIdx);
+    VMInvokable* toBeInlined1 = getLastBlockMethod(1);
+    VMInvokable* toBeInlined2 = getLastBlockMethod(0);
 
     removeLastBytecodes(2);
 
@@ -536,7 +475,6 @@ bool MethodGenerationContext::InlineThenBranch(const Parser& parser,
     // HACK: We do assume that the receiver on the stack is a boolean,
     // HACK: similar to the IfTrueIfFalseNode.
     // HACK: We don't support anything but booleans at the moment.
-    assert(Bytecode::GetBytecodeLength(BC_PUSH_BLOCK) == 2);
     if (!hasOneLiteralBlockArgument()) {
         return false;
     }
@@ -568,7 +506,6 @@ bool MethodGenerationContext::InlineThenElseBranches(const Parser& parser,
         return false;
     }
 
-    assert(Bytecode::GetBytecodeLength(BC_PUSH_BLOCK) == 2);
 
     std::tuple<VMInvokable*, VMInvokable*> methods =
         extractBlockMethodsAndRemoveBytecodes();
@@ -606,7 +543,6 @@ bool MethodGenerationContext::InlineWhile(const Parser& parser,
         return false;
     }
 
-    assert(Bytecode::GetBytecodeLength(BC_PUSH_BLOCK) == 2);
 
     std::tuple<VMInvokable*, VMInvokable*> methods =
         extractBlockMethodsAndRemoveBytecodes();
@@ -636,7 +572,6 @@ bool MethodGenerationContext::InlineAndOr(const Parser& parser, bool isOr) {
     // HACK: similar to the IfTrueIfFalseNode.
     // HACK: We don't support anything but booleans at the moment.
 
-    assert(Bytecode::GetBytecodeLength(BC_PUSH_BLOCK) == 2);
     if (!hasOneLiteralBlockArgument()) {
         return false;
     }
@@ -667,7 +602,6 @@ bool MethodGenerationContext::InlineToDo(const Parser& parser) {
     // HACK: We do assume that the receiver on the stack is a integer,
     // HACK: similar to the other inlined messages.
     // HACK: We don't support anything but integer at the moment.
-    assert(Bytecode::GetBytecodeLength(BC_PUSH_BLOCK) == 2);
     if (!hasOneLiteralBlockArgument()) {
         return false;
     }

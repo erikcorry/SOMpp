@@ -233,10 +233,10 @@ void obtain_vtables_of_known_classes(VMSymbol* someValidSymbol) {
 #endif
 
 #ifdef FRUCTUS
-    auto* mth = new (GetHeap<HEAP_CLS>(), 0) VMMethod(nullptr, 0, 0, 0, 0);
+    auto* mth = new (GetHeap<HEAP_CLS>(), 0) VMMethod(nullptr, 0, 0, 0);
 #else
     auto* mth = new (GetHeap<HEAP_CLS>(), 0)
-        VMMethod(nullptr, 0, 0, 0, 0, nullptr, nullptr);
+        VMMethod(nullptr, 0, 0, 0, nullptr, nullptr);
 #endif
     vt_method = get_vtable(mth);
     vt_object = get_vtable(load_ptr(nilObject));

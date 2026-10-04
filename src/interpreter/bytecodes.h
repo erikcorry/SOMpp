@@ -27,6 +27,7 @@
  */
 
 #include <assert.h>
+#include <string.h>
 
 #include "../misc/defs.h"
 
@@ -43,63 +44,60 @@
 #define BC_PUSH_ARGUMENT           7
 #define BC_PUSH_SELF               8
 #define BC_PUSH_ARG_1              9
-#define BC_PUSH_ARG_2             10
-#define BC_PUSH_FIELD             11
-#define BC_PUSH_FIELD_0           12
-#define BC_PUSH_FIELD_1           13
-#define BC_PUSH_BLOCK             14
-#define BC_PUSH_CONSTANT          15
-#define BC_PUSH_CONSTANT_0        16
-#define BC_PUSH_CONSTANT_1        17
-#define BC_PUSH_CONSTANT_2        18
-#define BC_PUSH_0                 19
-#define BC_PUSH_1                 20
-#define BC_PUSH_NIL               21
-#define BC_PUSH_GLOBAL            22
-#define BC_POP                    23
-#define BC_POP_LOCAL              24
-#define BC_POP_LOCAL_0            25
-#define BC_POP_LOCAL_1            26
-#define BC_POP_LOCAL_2            27
-#define BC_POP_ARGUMENT           28
-#define BC_POP_FIELD              29
-#define BC_POP_FIELD_0            30
-#define BC_POP_FIELD_1            31
-#define BC_SEND                   32
-#define BC_SEND_1                 33
-#define BC_SUPER_SEND             34
-#define BC_RETURN_LOCAL           35
-#define BC_RETURN_NON_LOCAL       36
-#define BC_RETURN_SELF            37
-#define BC_RETURN_FIELD_0         38
-#define BC_RETURN_FIELD_1         39
-#define BC_RETURN_FIELD_2         40
-#define BC_INC                    41
-#define BC_DEC                    42
-#define BC_INC_FIELD              43
-#define BC_INC_FIELD_PUSH         44
-#define BC_JUMP                   45
-#define BC_JUMP_ON_FALSE_POP      46
-#define BC_JUMP_ON_TRUE_POP       47
-#define BC_JUMP_ON_FALSE_TOP_NIL  48
-#define BC_JUMP_ON_TRUE_TOP_NIL   49
-#define BC_JUMP_ON_NOT_NIL_POP    50
-#define BC_JUMP_ON_NIL_POP        51
-#define BC_JUMP_ON_NOT_NIL_TOP_TOP 52
-#define BC_JUMP_ON_NIL_TOP_TOP    53
-#define BC_JUMP_IF_GREATER        54
-#define BC_JUMP_BACKWARD          55
-#define BC_JUMP2                  56
-#define BC_JUMP2_ON_FALSE_POP     57
-#define BC_JUMP2_ON_TRUE_POP      58
-#define BC_JUMP2_ON_FALSE_TOP_NIL 59
-#define BC_JUMP2_ON_TRUE_TOP_NIL  60
-#define BC_JUMP2_ON_NOT_NIL_POP   61
-#define BC_JUMP2_ON_NIL_POP       62
-#define BC_JUMP2_ON_NOT_NIL_TOP_TOP 63
-#define BC_JUMP2_ON_NIL_TOP_TOP   64
-#define BC_JUMP2_IF_GREATER       65
-#define BC_JUMP2_BACKWARD         66
+#define BC_PUSH_ARG_2              10
+#define BC_PUSH_FIELD              11
+#define BC_PUSH_FIELD_0            12
+#define BC_PUSH_FIELD_1            13
+#define BC_PUSH_BLOCK              14
+#define BC_PUSH_CONSTANT           15
+#define BC_PUSH_0                  16
+#define BC_PUSH_1                  17
+#define BC_PUSH_NIL                18
+#define BC_PUSH_GLOBAL             19
+#define BC_POP                     20
+#define BC_POP_LOCAL               21
+#define BC_POP_LOCAL_0             22
+#define BC_POP_LOCAL_1             23
+#define BC_POP_LOCAL_2             24
+#define BC_POP_ARGUMENT            25
+#define BC_POP_FIELD               26
+#define BC_POP_FIELD_0             27
+#define BC_POP_FIELD_1             28
+#define BC_SEND                    29
+#define BC_SEND_1                  30
+#define BC_SUPER_SEND              31
+#define BC_RETURN_LOCAL            32
+#define BC_RETURN_NON_LOCAL        33
+#define BC_RETURN_SELF             34
+#define BC_RETURN_FIELD_0          35
+#define BC_RETURN_FIELD_1          36
+#define BC_RETURN_FIELD_2          37
+#define BC_INC                     38
+#define BC_DEC                     39
+#define BC_INC_FIELD               40
+#define BC_INC_FIELD_PUSH          41
+#define BC_JUMP                    42
+#define BC_JUMP_ON_FALSE_POP       43
+#define BC_JUMP_ON_TRUE_POP        44
+#define BC_JUMP_ON_FALSE_TOP_NIL   45
+#define BC_JUMP_ON_TRUE_TOP_NIL    46
+#define BC_JUMP_ON_NOT_NIL_POP     47
+#define BC_JUMP_ON_NIL_POP         48
+#define BC_JUMP_ON_NOT_NIL_TOP_TOP 49
+#define BC_JUMP_ON_NIL_TOP_TOP     50
+#define BC_JUMP_IF_GREATER         51
+#define BC_JUMP_BACKWARD           52
+#define BC_JUMP2                   53
+#define BC_JUMP2_ON_FALSE_POP      54
+#define BC_JUMP2_ON_TRUE_POP       55
+#define BC_JUMP2_ON_FALSE_TOP_NIL  56
+#define BC_JUMP2_ON_TRUE_TOP_NIL   57
+#define BC_JUMP2_ON_NOT_NIL_POP    58
+#define BC_JUMP2_ON_NIL_POP        59
+#define BC_JUMP2_ON_NOT_NIL_TOP_TOP 60
+#define BC_JUMP2_ON_NIL_TOP_TOP    61
+#define BC_JUMP2_IF_GREATER        62
+#define BC_JUMP2_BACKWARD          63
 
 #define _LAST_BYTECODE BC_JUMP2_BACKWARD
 
@@ -140,6 +138,31 @@ private:
 
 inline uint16_t ComputeOffset(uint8_t byte1, uint8_t byte2) {
     return ((uint16_t)byte1) | (uint16_t)(((uint16_t)byte2) << 8U);
+}
+
+/**
+ * Some operands are words, pointers to objects: the constant of
+ * PUSH_CONSTANT, the block method of PUSH_BLOCK, the name of PUSH_GLOBAL, and
+ * the inline cache of a send, see SendSite.h. They come after the byte
+ * operands at any alignment, so they're read and written with memcpy, which
+ * is an unaligned load or store. On the host the GC walks them, see VMMethod.
+ * On fructus they are never moved or freed, so it doesn't.
+ */
+uint8_t GetNumberOfWords(uint8_t bc);
+
+inline void* LoadWord(const uint8_t* p) {
+    void* value = nullptr;
+    memcpy((void*)&value, p, sizeof(value));
+    return value;
+}
+
+inline void StoreWord(uint8_t* p, const void* value) {
+    memcpy(p, (const void*)&value, sizeof(value));
+}
+
+/** The operand of a bytecode that has only a word, like PUSH_CONSTANT. */
+inline void* GetWordOperand(const uint8_t* bytecode) {
+    return LoadWord(bytecode + 1);
 }
 
 /** A send, which carries an inline cache, see SendSite.h. */

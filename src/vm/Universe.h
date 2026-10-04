@@ -86,13 +86,11 @@ public:
     static VMFrame* NewFrame(VMFrame* /*previousFrame*/, VMMethod* /*method*/);
 #ifdef FRUCTUS
     static VMMethod* NewMethod(VMSymbol* /*signature*/,
-                               size_t numberOfBytecodes,
-                               size_t numberOfConstants, size_t numLocals,
+                               size_t numberOfBytecodes, size_t numLocals,
                                size_t maxStackDepth);
 #else
     static VMMethod* NewMethod(VMSymbol* /*signature*/,
-                               size_t numberOfBytecodes,
-                               size_t numberOfConstants, size_t numLocals,
+                               size_t numberOfBytecodes, size_t numLocals,
                                size_t maxStackDepth,
                                LexicalScope* /*lexicalScope*/,
                                vector<BackJump>& inlinedLoops);

@@ -181,9 +181,6 @@ void FructusImage::CheckLayout() {
                 VMMethod_maximumNumberOfStackElements);
     CHECK_FIELD(VMMethod, bcLength, VMMethod_bcLength);
     CHECK_FIELD(VMMethod, numberOfArguments, VMMethod_numberOfArguments);
-    CHECK_FIELD(VMMethod, numberOfConstants, VMMethod_numberOfConstants);
-    CHECK_FIELD(VMMethod, indexableFields, VMMethod_indexableFields);
-    CHECK_FIELD(VMMethod, bytecodes, VMMethod_bytecodes);
     CHECK_SIZE(VMMethod, L::VMMethod_size);
 
     CHECK_FIELD(VMLiteralReturn, literal, VMLiteralReturn_literal);

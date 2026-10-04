@@ -62,6 +62,21 @@ void Emit3(MethodGenerationContext& mgenc, uint8_t bytecode, uint8_t idx,
     mgenc.AddBytecodeArgument(ctx);
 }
 
+/**
+ * A bytecode with a word, see bytecodes.h. Nothing is collected while
+ * compiling, so the object can be in the bytecodes before they are in a
+ * method.
+ */
+static void emitWithWord(MethodGenerationContext& mgenc, uint8_t bytecode,
+                         const void* word, som_int_t stackEffect) {
+    uint8_t operand[sizeof(void*)];
+    StoreWord(operand, word);
+    mgenc.AddBytecode(bytecode, stackEffect);
+    for (uint8_t byte : operand) {
+        mgenc.AddBytecodeArgument(byte);
+    }
+}
+
 void EmitHALT(MethodGenerationContext& mgenc) {
     Emit1(mgenc, BC_HALT, 0);
 }
@@ -161,13 +176,12 @@ void EmitPUSHFIELD(MethodGenerationContext& mgenc, const Parser& parser,
     EmitPushFieldWithIndex(mgenc, idx);
 }
 
-void EmitPUSHBLOCK(MethodGenerationContext& mgenc, const Parser& parser,
+void EmitPUSHBLOCK(MethodGenerationContext& mgenc, const Parser& /*parser*/,
                    VMInvokable* block) {
-    const uint8_t idx = mgenc.AddLiteralIfAbsent(block, parser);
-    Emit2(mgenc, BC_PUSH_BLOCK, idx, 1);
+    emitWithWord(mgenc, BC_PUSH_BLOCK, block, 1);
 }
 
-void EmitPUSHCONSTANT(MethodGenerationContext& mgenc, const Parser& parser,
+void EmitPUSHCONSTANT(MethodGenerationContext& mgenc, const Parser& /*parser*/,
                       vm_oop_t cst) {
     // this isn't very robust with respect to initialization order
     // so, we check here, and hope it's working, but alternatively
@@ -191,29 +205,11 @@ void EmitPUSHCONSTANT(MethodGenerationContext& mgenc, const Parser& parser,
         return;
     }
 
-    const uint8_t idx = mgenc.AddLiteralIfAbsent(cst, parser);
-    if (idx == 0) {
-        Emit1(mgenc, BC_PUSH_CONSTANT_0, 1);
-        return;
-    }
-    if (idx == 1) {
-        Emit1(mgenc, BC_PUSH_CONSTANT_1, 1);
-        return;
-    }
-    if (idx == 2) {
-        Emit1(mgenc, BC_PUSH_CONSTANT_2, 1);
-        return;
-    }
-
-    Emit2(mgenc, BC_PUSH_CONSTANT, idx, 1);
+    EmitPUSHCONSTANT(mgenc, cst);
 }
 
-void EmitPUSHCONSTANT(MethodGenerationContext& mgenc, uint8_t literalIndex) {
-    Emit2(mgenc, BC_PUSH_CONSTANT, literalIndex, 1);
-}
-
-void EmitPUSHCONSTANTString(MethodGenerationContext& mgenc, VMString* str) {
-    Emit2(mgenc, BC_PUSH_CONSTANT, mgenc.FindLiteralIndex(str), 1);
+void EmitPUSHCONSTANT(MethodGenerationContext& mgenc, vm_oop_t cst) {
+    emitWithWord(mgenc, BC_PUSH_CONSTANT, cst, 1);
 }
 
 void EmitPUSHGLOBAL(MethodGenerationContext& mgenc, const Parser& parser,
@@ -225,8 +221,7 @@ void EmitPUSHGLOBAL(MethodGenerationContext& mgenc, const Parser& parser,
     } else if (global == SymbolFor("false")) {
         EmitPUSHCONSTANT(mgenc, parser, load_ptr(falseObject));
     } else {
-        const uint8_t idx = mgenc.AddLiteralIfAbsent(global, parser);
-        Emit2(mgenc, BC_PUSH_GLOBAL, idx, 1);
+        emitWithWord(mgenc, BC_PUSH_GLOBAL, global, 1);
     }
 }
 
@@ -329,20 +324,16 @@ static void emitSendSite(MethodGenerationContext& mgenc, uint8_t bytecode,
     }
 }
 
-void EmitSEND(MethodGenerationContext& mgenc, const Parser& parser,
+void EmitSEND(MethodGenerationContext& mgenc, const Parser& /*parser*/,
               VMSymbol* msg) {
-    // the selector is a literal too, for VMMethod::GetBytecodeHash()
-    mgenc.AddLiteralIfAbsent(msg, parser);
-
     const uint8_t numArgs = Signature::GetNumberOfArguments(msg);
     const som_int_t stackEffect = -numArgs + 1;  // +1 for the result
 
     emitSendSite(mgenc, numArgs == 1 ? BC_SEND_1 : BC_SEND, msg, stackEffect);
 }
 
-void EmitSUPERSEND(MethodGenerationContext& mgenc, const Parser& parser,
+void EmitSUPERSEND(MethodGenerationContext& mgenc, const Parser& /*parser*/,
                    VMSymbol* msg) {
-    mgenc.AddLiteralIfAbsent(msg, parser);
     const uint8_t numArgs = Signature::GetNumberOfArguments(msg);
     const som_int_t stackEffect = -numArgs + 1;  // +1 for the result
 

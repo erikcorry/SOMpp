@@ -225,61 +225,37 @@ void Disassembler::dumpMethod(uint8_t* bytecodes, size_t numberOfBytecodes,
             }
 
             case BC_PUSH_BLOCK: {
-                size_t const indent_size = strlen(indent) + 1 + 1;
-                char* nindent = new char[indent_size];
-                DebugPrint("block: (index: %d) ", bytecodes[bc_idx + 1]);
-
-                if (method != nullptr && printObjects) {
-                    if (snprintf(nindent, indent_size, "%s\t", indent) < 0) {
-                        ErrorExit("snprintf failed");
-                    }
-                    static_cast<VMInvokable*>(method->GetConstant(bc_idx))
-                        ->Dump(indent, printObjects);
+                auto* block =
+                    (VMInvokable*)GetWordOperand(&bytecodes[bc_idx]);
+                DebugPrint("block: ");
+                if (printObjects) {
+                    block->Dump(indent, printObjects);
                 } else {
-                    DebugPrint("\n");
+                    DebugPrint("%p\n", (void*)block);
                 }
-                delete[] nindent;
                 break;
             }
             case BC_PUSH_CONSTANT: {
-                if (method != nullptr && printObjects) {
-                    vm_oop_t constant = method->GetConstant(bc_idx);
+                auto constant = (vm_oop_t)GetWordOperand(&bytecodes[bc_idx]);
+                if (printObjects) {
                     VMClass const* const cl = CLASS_OF(constant);
                     if (cl == nullptr) {
-                        DebugPrint("(index: %d) value: (%s) ",
-                                   bytecodes[bc_idx + 1],
-                                   "class==nullptr");
+                        DebugPrint("value: (%s) ", "class==nullptr");
                     } else {
                         VMSymbol const* const cname = cl->GetName();
-                        DebugPrint("(index: %d) value: (%s) ",
-                                   bytecodes[bc_idx + 1],
+                        DebugPrint("value: (%s) ",
                                    cname->GetStdString().c_str());
                     }
                     dispatch(constant);
                 } else {
-                    DebugPrint("(index: %d)", bytecodes[bc_idx + 1]);
+                    DebugPrint("%p", (void*)constant);
                 }
                 DebugPrint("\n");
                 break;
             }
             case BC_PUSH_GLOBAL: {
-                if (method != nullptr && printObjects) {
-                    vm_oop_t cst = method->GetConstant(bc_idx);
-                    if (cst != nullptr) {
-                        auto* name = static_cast<VMSymbol*>(cst);
-                        if (name != nullptr) {
-                            DebugPrint("(index: %d) value: %s\n",
-                                       bytecodes[bc_idx + 1],
-                                       name->GetStdString().c_str());
-                        } else {
-                            DebugPrint("(index: %d) value: !nullptr!: error!\n",
-                                       bytecodes[bc_idx + 1]);
-                        }
-                        break;
-                    }
-                }
-
-                DebugPrint("(index: %d)\n", bytecodes[bc_idx + 1]);
+                auto* name = (VMSymbol*)GetWordOperand(&bytecodes[bc_idx]);
+                DebugPrint("value: %s\n", name->GetStdString().c_str());
                 break;
             }
             case BC_POP_LOCAL:
@@ -424,12 +400,11 @@ void Disassembler::printNth(uint8_t idx, VMFrame* frame, const char* op) {
     DebugPrint(">\n");
 }
 
-void Disassembler::printConstantAccess(vm_oop_t constant, uint8_t index) {
+void Disassembler::printConstantAccess(vm_oop_t constant) {
     VMClass const* const c = CLASS_OF(constant);
     VMSymbol const* const cname = c->GetName();
 
-    DebugPrint("(index: %d) value: (%s) ", index,
-               cname->GetStdString().c_str());
+    DebugPrint("value: (%s) ", cname->GetStdString().c_str());
     dispatch(constant);
     DebugPrint("\n");
 }
@@ -555,7 +530,7 @@ void Disassembler::DumpBytecode(VMFrame* frame, VMMethod* method,
             break;
         }
         case BC_PUSH_BLOCK: {
-            DebugPrint("block: (index: %d) ", BC_1);
+            DebugPrint("block: ");
             auto* invk = dynamic_cast<VMInvokable*>(
                 (AbstractVMObject*)method->GetConstant(bc_idx));
             invk->Dump("$", true);
@@ -563,22 +538,7 @@ void Disassembler::DumpBytecode(VMFrame* frame, VMMethod* method,
         }
         case BC_PUSH_CONSTANT: {
             vm_oop_t constant = method->GetConstant(bc_idx);
-            printConstantAccess(constant, BC_1);
-            break;
-        }
-        case BC_PUSH_CONSTANT_0: {
-            vm_oop_t constant = method->GetIndexableField(0);
-            printConstantAccess(constant, 0);
-            break;
-        }
-        case BC_PUSH_CONSTANT_1: {
-            vm_oop_t constant = method->GetIndexableField(1);
-            printConstantAccess(constant, 1);
-            break;
-        }
-        case BC_PUSH_CONSTANT_2: {
-            vm_oop_t constant = method->GetIndexableField(2);
-            printConstantAccess(constant, 2);
+            printConstantAccess(constant);
             break;
         }
         case BC_PUSH_GLOBAL: {
@@ -597,7 +557,7 @@ void Disassembler::DumpBytecode(VMFrame* frame, VMMethod* method,
                 c_cname = "nullptr";
             }
 
-            DebugPrint("(index: %d)value: %s <(%s) ", BC_1,
+            DebugPrint("value: %s <(%s) ",
                        name->GetStdString().c_str(), c_cname);
             dispatch(o);
             DebugPrint(">\n");

@@ -51,7 +51,6 @@ public:
     VMInvokable* Assemble();
     VMInvokable* AssemblePrimitive(bool classSide);
 
-    int8_t FindLiteralIndex(vm_oop_t lit);
     bool FindVar(std::string& var, som_int_t* index, int* context,
                  bool* isArgument);
     bool HasField(VMSymbol* field);
@@ -67,9 +66,9 @@ public:
 
     void SetPrimitive(bool prim = true);
 
-    uint8_t AddLiteral(vm_oop_t lit, const Parser& parser);
-    uint8_t AddLiteralIfAbsent(vm_oop_t lit, const Parser& parser);
-    void UpdateLiteral(vm_oop_t oldValue, uint8_t index, vm_oop_t newValue);
+    /** Change the constant of the PUSH_CONSTANT at `bytecodeIndex`. */
+    void UpdateConstant(size_t bytecodeIndex, vm_oop_t oldValue,
+                        vm_oop_t newValue);
 
     void MarkFinished();
 
@@ -153,7 +152,7 @@ private:
     extractBlockMethodsAndRemoveBytecodes();
     VMInvokable* extractBlockMethodAndRemoveBytecode();
 
-    VMInvokable* getLastBlockMethodAndFreeLiteral(uint8_t blockLiteralIdx);
+    VMInvokable* getLastBlockMethod(size_t indexFromEnd);
 
     void completeJumpsAndEmitReturningNil(const Parser& parser,
                                           size_t loopBeginIdx,
@@ -172,7 +171,6 @@ private:
     std::vector<Variable> arguments;
     bool primitive{false};
     std::vector<Variable> locals;
-    std::vector<vm_oop_t> literals;
     bool finished{false};
     std::vector<uint8_t> bytecode;
     LexicalScope* lexicalScope{nullptr};
@@ -185,7 +183,4 @@ private:
     std::vector<BackJump> inlinedLoops;
 
     bool isCurrentlyInliningABlock{false};
-
-    make_testable(public);
-    vm_oop_t GetLiteral(size_t idx) { return literals.at(idx); }
 };

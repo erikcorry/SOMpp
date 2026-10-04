@@ -311,12 +311,12 @@ VMMethod* Universe::createBootstrapMethod(VMClass* holder,
                                           uint8_t numArgsOfMsgSend) {
 #ifdef FRUCTUS
     VMMethod* bootstrapMethod =
-        NewMethod(&som_sym_bootstrap, 1, 0, 0, numArgsOfMsgSend);
+        NewMethod(&som_sym_bootstrap, 1, 0, numArgsOfMsgSend);
 #else
     vector<BackJump> inlinedLoops;
     auto* bootStrapScope = new LexicalScope(nullptr, {}, {});
     VMMethod* bootstrapMethod =
-        NewMethod(SymbolFor("bootstrap"), 1, 0, 0, numArgsOfMsgSend,
+        NewMethod(SymbolFor("bootstrap"), 1, 0, numArgsOfMsgSend,
                   bootStrapScope, inlinedLoops);
 #endif
 
@@ -1019,19 +1019,16 @@ void Universe::WalkGlobals(walk_heap_fn walk) {
 
 #ifdef FRUCTUS
 VMMethod* Universe::NewMethod(VMSymbol* signature, size_t numberOfBytecodes,
-                              size_t numberOfConstants, size_t numLocals,
-                              size_t maxStackDepth) {
-    // method needs space for the bytecodes and the pointers to the constants
-    size_t const additionalBytes = PADDED_SIZE(
-        numberOfBytecodes + (numberOfConstants * sizeof(VMObject*)));
+                              size_t numLocals, size_t maxStackDepth) {
+    // method needs space for the bytecodes
+    size_t const additionalBytes = PADDED_SIZE(numberOfBytecodes);
     return new (GetHeap<HEAP_CLS>(), additionalBytes)
-        VMMethod(signature, numberOfBytecodes, numberOfConstants, numLocals,
-                 maxStackDepth);
+        VMMethod(signature, numberOfBytecodes, numLocals, maxStackDepth);
 }
 #else
 VMMethod* Universe::NewMethod(VMSymbol* signature, size_t numberOfBytecodes,
-                              size_t numberOfConstants, size_t numLocals,
-                              size_t maxStackDepth, LexicalScope* lexicalScope,
+                              size_t numLocals, size_t maxStackDepth,
+                              LexicalScope* lexicalScope,
                               vector<BackJump>& inlinedLoops) {
     assert(lexicalScope != nullptr &&
            "A method is expected to have a lexical scope");
@@ -1050,12 +1047,11 @@ VMMethod* Universe::NewMethod(VMSymbol* signature, size_t numberOfBytecodes,
         inlinedLoopsArr[i] = BackJump();
     }
 
-    // method needs space for the bytecodes and the pointers to the constants
-    size_t const additionalBytes = PADDED_SIZE(
-        numberOfBytecodes + (numberOfConstants * sizeof(VMObject*)));
+    // method needs space for the bytecodes
+    size_t const additionalBytes = PADDED_SIZE(numberOfBytecodes);
     auto* result = new (GetHeap<HEAP_CLS>(), additionalBytes)
-        VMMethod(signature, numberOfBytecodes, numberOfConstants, numLocals,
-                 maxStackDepth, lexicalScope, inlinedLoopsArr);
+        VMMethod(signature, numberOfBytecodes, numLocals, maxStackDepth,
+                 lexicalScope, inlinedLoopsArr);
 
     recordStat(Allocation, "VMMethod", result->GetObjectSize());
     return result;

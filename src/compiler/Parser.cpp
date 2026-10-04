@@ -819,12 +819,10 @@ void Parser::literalArray(MethodGenerationContext& mgenc) {
     VMSymbol* newMessage = SymbolFor("new:");
     VMSymbol* atPutMessage = SymbolFor("at:put:");
 
-    const uint8_t arraySizeLiteralIndex =
-        mgenc.AddLiteral(arraySizePlaceholder, *this);
-
     // create bytecode sequence for instantiating new array
     EmitPUSHGLOBAL(mgenc, *this, arrayClassName);
-    EmitPUSHCONSTANT(mgenc, arraySizeLiteralIndex);
+    size_t const arraySizeIndex = mgenc.OffsetOfNextInstruction();
+    EmitPUSHCONSTANT(mgenc, arraySizePlaceholder);
     EmitSEND(mgenc, *this, newMessage);
 
     som_int_t i = 1;
@@ -838,8 +836,7 @@ void Parser::literalArray(MethodGenerationContext& mgenc) {
     }
 
     // replace the placeholder with the actual array size
-    mgenc.UpdateLiteral(arraySizePlaceholder, arraySizeLiteralIndex,
-                        NEW_INT(i - 1));
+    mgenc.UpdateConstant(arraySizeIndex, arraySizePlaceholder, NEW_INT(i - 1));
 
     expect(EndTerm);
 }
