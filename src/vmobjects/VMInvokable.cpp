@@ -38,14 +38,18 @@ bool VMInvokable::IsPrimitive() const {
 
 void VMInvokable::WalkObjects(walk_heap_fn walk) {
     signature = static_cast<GCSymbol*>(walk(signature));
+#ifndef FRUCTUS
     if (holder != nullptr) {
         holder = static_cast<GCClass*>(walk(holder));
     }
+#endif
 }
 
+#ifndef FRUCTUS
 void VMInvokable::SetHolder(VMClass* hld) {
     store_ptr(holder, hld);
 }
+#endif
 
 #ifndef FRUCTUS
 const Variable* VMInvokable::GetArgument(size_t /*unused*/, size_t /*unused*/) {

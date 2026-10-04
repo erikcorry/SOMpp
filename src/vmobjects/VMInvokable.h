@@ -81,15 +81,20 @@ public:
         return load_ptr(signature);
     }
 
+#ifndef FRUCTUS
+    // fructus links the super sends in the image, so it needs no holders
     [[nodiscard]] VMClass* GetHolder() const { return load_ptr(holder); }
 
     virtual void SetHolder(VMClass* hld);
+#endif
 
     void WalkObjects(walk_heap_fn /*unused*/) override;
 
     void MarkObjectAsInvalid() override {
         signature = (GCSymbol*)INVALID_GC_POINTER;
+#ifndef FRUCTUS
         holder = (GCClass*)INVALID_GC_POINTER;
+#endif
     }
 
 #ifndef FRUCTUS
@@ -104,5 +109,7 @@ protected:
 #endif
 
     GCSymbol* signature;
+#ifndef FRUCTUS
     GCClass* holder{nullptr};
+#endif
 };

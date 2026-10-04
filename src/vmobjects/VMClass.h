@@ -70,10 +70,14 @@ public:
     void SetInstanceFields(VMArray* instFields);
 #endif
     [[nodiscard]] VMArray* GetInstanceInvokables() const;
+#ifndef FRUCTUS
     void SetInstanceInvokables(VMArray* /*invokables*/);
+#endif
     [[nodiscard]] size_t GetNumberOfInstanceInvokables() const;
     [[nodiscard]] VMInvokable* GetInstanceInvokable(size_t index) const;
+#ifndef FRUCTUS
     void SetInstanceInvokable(size_t index, VMInvokable* invokable);
+#endif
     VMInvokable* LookupInvokable(VMSymbol* name);
 #ifndef FRUCTUS
     // fructus has no reflection on field names

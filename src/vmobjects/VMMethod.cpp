@@ -169,6 +169,7 @@ VMFrame* VMMethod::Invoke1(VMFrame* frame) {
     return frm;
 }
 
+#ifndef FRUCTUS
 void VMMethod::SetHolder(VMClass* hld) {
     VMInvokable::SetHolder(hld);
     SetHolderAll(hld);
@@ -182,6 +183,7 @@ void VMMethod::SetHolderAll(VMClass* hld) const {
         }
     }
 }
+#endif
 
 #ifndef FRUCTUS
 void VMMethod::Dump(const char* indent, bool printObjects) {

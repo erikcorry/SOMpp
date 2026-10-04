@@ -983,6 +983,13 @@ void Interpreter::doUnarySend(uint8_t* site) {
 }
 
 void Interpreter::doSuperSend(uint8_t* site) {
+#ifdef FRUCTUS
+    // the image writer links every super send, so invokables need no holder
+    // to find the superclass
+    assert(SendSite::GetReceiverClass(site) != nullptr);
+    ((VMInvokable*)SendSite::GetTarget(site))->Invoke(GetFrame());
+}
+#else
     // a linked super send has its invokable whatever the receiver is
     if (SendSite::GetReceiverClass(site) != nullptr) {
         auto* invokable = (VMInvokable*)SendSite::GetTarget(site);
@@ -1004,9 +1011,6 @@ void Interpreter::doSuperSend(uint8_t* site) {
         write_barrier(method, super);
         invokable->Invoke(GetFrame());
     } else {
-#ifdef FRUCTUS
-        triggerDoesNotUnderstand(signature, super);
-#else
         uint8_t const numOfArgs = Signature::GetNumberOfArguments(signature);
         vm_oop_t receiver = GetFrame()->GetStackElement(numOfArgs - 1);
         VMArray* argumentsArray = Universe::NewArray(numOfArgs);
@@ -1018,9 +1022,9 @@ void Interpreter::doSuperSend(uint8_t* site) {
         vm_oop_t arguments[] = {signature, argumentsArray};
 
         AS_OBJ(receiver)->Send(SymbolFor(doesNotUnderstand), arguments, 2);
-#endif
     }
 }
+#endif
 
 void Interpreter::doReturnLocal() {
     vm_oop_t result = GetFrame()->Pop();

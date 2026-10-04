@@ -146,7 +146,7 @@ public:
      * The bytecodes come right after numberOfArguments, an odd offset, since
      * the bytecodes don't need aligning. ImageFructus.cpp checks it.
      */
-    static constexpr size_t headerSize = 13;
+    static constexpr size_t headerSize = 11;
 
     [[nodiscard]] inline size_t GetObjectSize() const override {
         return PADDED_SIZE(headerSize + bcLength);
@@ -182,8 +182,10 @@ public:
     /** The selector of the send at `bytecodeIndex`, see SendSite.h. */
     [[nodiscard]] VMSymbol* GetSendSelector(size_t bytecodeIndex) const;
 
+#ifndef FRUCTUS
     void SetHolder(VMClass* hld) override;
     void SetHolderAll(VMClass* hld) const;
+#endif
 
     /**
      * The constant of the PUSH_CONSTANT, the method of the PUSH_BLOCK, or

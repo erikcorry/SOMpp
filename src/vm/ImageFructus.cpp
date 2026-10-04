@@ -170,7 +170,6 @@ void FructusImage::CheckLayout() {
 
     CHECK_FIELD(VMInvokable, gcField, gcField);
     CHECK_FIELD(VMInvokable, signature, VMInvokable_signature);
-    CHECK_FIELD(VMInvokable, holder, VMInvokable_holder);
 
     CHECK_FIELD(VMMethod, bcLength, VMMethod_bcLength);
     CHECK_FIELD(VMMethod, numberOfLocals, VMMethod_numberOfLocals);

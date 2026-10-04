@@ -699,7 +699,6 @@ void FructusImage::AsmFile::writeInvokableHeader(ObjectWriter& w, VMInvokable* i
                                    const std::string& comment) {
     writeHeader(w, vtable, comment + " " + describe(inv));
     w.Word(L::VMInvokable_signature, Ref(ImageSignature(inv)), "signature");
-    w.Word(L::VMInvokable_holder, Ref(inv->GetHolder()), "holder");
 }
 
 void FructusImage::AsmFile::writeMethod(VMMethod* method, const std::string& label) {
@@ -835,13 +834,17 @@ void FructusImage::AsmFile::writeSendSite(ObjectWriter& w, size_t offset,
     if (bc == BC_SUPER_SEND) {
         VMClass* holder = method->GetHolder();
         auto* super = static_cast<VMClass*>(holder->GetSuperClass());
-        if (VMInvokable* inv = super->LookupInvokable(selector)) {
-            target = Ref(inv);
-            receiverClass = Ref(super);
-            comment += " in " + Printable(super->GetName());
-        } else {
-            comment += ", not understood";
+        VMInvokable* inv = super->LookupInvokable(selector);
+        if (inv == nullptr) {
+            // the invokables have no holder to find the superclass with at
+            // run time, see Interpreter::doSuperSend()
+            Fail(describe(method) + " sends #" + Printable(selector) +
+                 " to super, which " + Printable(super->GetName()) +
+                 " doesn't understand");
         }
+        target = Ref(inv);
+        receiverClass = Ref(super);
+        comment += " in " + Printable(super->GetName());
     }
 
     std::ostringstream line;

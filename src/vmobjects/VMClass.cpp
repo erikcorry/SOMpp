@@ -156,6 +156,8 @@ VMSymbol* VMClass::GetInstanceFieldName(size_t index) const {
 }
 #endif
 
+#ifndef FRUCTUS
+// the image has the classes on fructus, whose invokables have no holder
 void VMClass::SetInstanceInvokables(VMArray* invokables) {
     store_ptr(instanceInvokables, invokables);
     vm_oop_t nil = load_ptr(nilObject);
@@ -171,6 +173,7 @@ void VMClass::SetInstanceInvokables(VMArray* invokables) {
         }
     }
 }
+#endif
 
 size_t VMClass::GetNumberOfInstanceInvokables() const {
     return load_ptr(instanceInvokables)->GetNumberOfIndexableFields();
@@ -181,6 +184,7 @@ VMInvokable* VMClass::GetInstanceInvokable(size_t index) const {
         load_ptr(instanceInvokables)->GetIndexableField(index));
 }
 
+#ifndef FRUCTUS
 void VMClass::SetInstanceInvokable(size_t index, VMInvokable* invokable) {
     load_ptr(instanceInvokables)->SetIndexableField(index, invokable);
 
@@ -189,6 +193,7 @@ void VMClass::SetInstanceInvokable(size_t index, VMInvokable* invokable) {
         invokable->SetHolder(this);
     }
 }
+#endif
 
 VMInvokable* VMClass::LookupInvokable(VMSymbol* name) {
     assert(IsValidObject(this));

@@ -24,7 +24,9 @@
  *    constants: its bytecodes refer to the objects they push, see
  *    interpreter/bytecodes.h. The sends carry their inline caches, see
  *    interpreter/SendSite.h: they are unlinked, but a super send is linked
- *    already, since it doesn't depend on the receiver.
+ *    already, since it doesn't depend on the receiver, so an invokable has
+ *    no holder to find the superclass with, and a super send that isn't
+ *    understood is an error of the image writer.
  *  - A primitive is an object in the image like a method, which refers to
  *    its routine by name, see primitives/FructusPrimitives.h. Nothing is
  *    installed at run time.
@@ -96,31 +98,31 @@ constexpr size_t VMString_size = 8;
 constexpr size_t selectorLimit = 0x1000;
 
 constexpr size_t VMInvokable_signature = 4;
-constexpr size_t VMInvokable_holder = 6;
+// no holder: the image writer links the super sends, see Interpreter.cpp
 
-constexpr size_t VMMethod_bcLength = 8;
-constexpr size_t VMMethod_numberOfLocals = 10;
-constexpr size_t VMMethod_maximumNumberOfStackElements = 11;
-constexpr size_t VMMethod_numberOfArguments = 12;
+constexpr size_t VMMethod_bcLength = 6;
+constexpr size_t VMMethod_numberOfLocals = 8;
+constexpr size_t VMMethod_maximumNumberOfStackElements = 9;
+constexpr size_t VMMethod_numberOfArguments = 10;
 /** The bytecodes come right after the header, unaligned. */
-constexpr size_t VMMethod_size = 13;
+constexpr size_t VMMethod_size = 11;
 
-constexpr size_t VMLiteralReturn_literal = 8;
-constexpr size_t VMLiteralReturn_numberOfArguments = 10;
-constexpr size_t VMLiteralReturn_size = 12;
+constexpr size_t VMLiteralReturn_literal = 6;
+constexpr size_t VMLiteralReturn_numberOfArguments = 8;
+constexpr size_t VMLiteralReturn_size = 10;
 
-constexpr size_t VMGlobalReturn_globalName = 8;
-constexpr size_t VMGlobalReturn_numberOfArguments = 10;
-constexpr size_t VMGlobalReturn_size = 12;
+constexpr size_t VMGlobalReturn_globalName = 6;
+constexpr size_t VMGlobalReturn_numberOfArguments = 8;
+constexpr size_t VMGlobalReturn_size = 10;
 
-constexpr size_t VMGetter_fieldIndex = 8;
-constexpr size_t VMGetter_numberOfArguments = 10;
-constexpr size_t VMGetter_size = 12;
+constexpr size_t VMGetter_fieldIndex = 6;
+constexpr size_t VMGetter_numberOfArguments = 8;
+constexpr size_t VMGetter_size = 10;
 
-constexpr size_t VMSetter_fieldIndex = 8;
-constexpr size_t VMSetter_argIndex = 10;
-constexpr size_t VMSetter_numberOfArguments = 12;
-constexpr size_t VMSetter_size = 14;
+constexpr size_t VMSetter_fieldIndex = 6;
+constexpr size_t VMSetter_argIndex = 8;
+constexpr size_t VMSetter_numberOfArguments = 10;
+constexpr size_t VMSetter_size = 12;
 
 /** A send bytecode and its inline cache, see interpreter/SendSite.h. */
 constexpr size_t SendSite_numberOfArguments = 1;
@@ -133,13 +135,13 @@ constexpr size_t SendSite_length = 6;
  * VMPrimitive has the number of arguments too, which a VMSafe*Primitive's
  * kind gives.
  */
-constexpr size_t VMPrimitive_prim = 8;
-constexpr size_t VMPrimitive_numberOfArguments = 10;
-constexpr size_t VMPrimitive_size = 12;
-constexpr size_t VMSafePrimitive_size = 10;
+constexpr size_t VMPrimitive_prim = 6;
+constexpr size_t VMPrimitive_numberOfArguments = 8;
+constexpr size_t VMPrimitive_size = 10;
+constexpr size_t VMSafePrimitive_size = 8;
 
-constexpr size_t VMEvaluationPrimitive_numberOfArguments = 8;
-constexpr size_t VMEvaluationPrimitive_size = 10;
+constexpr size_t VMEvaluationPrimitive_numberOfArguments = 6;
+constexpr size_t VMEvaluationPrimitive_size = 8;
 
 /** Small integers are tagged, so they have 15 bits. */
 constexpr long smallIntMin = -(1L << 14);

@@ -321,7 +321,11 @@ VMMethod* Universe::createBootstrapMethod(VMClass* holder,
 #endif
 
     bootstrapMethod->SetBytecode(0, BC_HALT);
+#ifdef FRUCTUS
+    (void)holder;  // invokables have no holder on fructus
+#else
     bootstrapMethod->SetHolder(holder);
+#endif
     return bootstrapMethod;
 }
 
