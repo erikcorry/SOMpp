@@ -356,6 +356,8 @@ private:
     void collectClasses(const std::vector<std::string>& arguments);
     void checkClosedWorld();
     void checkPushes(VMClass* cls, VMMethod* method);
+    void checkClassFields(VMClass* metaclass, VMInvokable* inv,
+                          VMMethod* method);
     void installPrimitives(VMClass* cls);
     void addClass(const char* name, bool required);
     void addGlobalsOf(VMClass* cls);
@@ -497,6 +499,11 @@ void FructusImage::AsmFile::writeHeader(ObjectWriter& w, const std::string& vtab
     w.Word(L::gcField, 0, "gcField");
 }
 
+/** The fields of every class, see VMClass::VMClassNumberOfFields. */
+const char* const classFields[] = {"name", "instanceFields",
+                                   "instanceInvokables", "superClass"};
+constexpr size_t superClassField = 3;
+
 /** VMObject, VMClass, VMArray: a header, and fields that are all oops. */
 void FructusImage::AsmFile::writeVMObject(VMObject* obj, const std::string& label) {
     ObjectWriter w(out, label);
@@ -525,9 +532,6 @@ void FructusImage::AsmFile::writeVMObject(VMObject* obj, const std::string& labe
            "numberOfFields");
     w.Word(L::VMObject_clazz, Ref(obj->GetClass()), "class");
 
-    static const char* const classFields[] = {"name", "instanceFields",
-                                              "instanceInvokables",
-                                              "superClass"};
     bool const isClass = dynamic_cast<VMClass*>(obj) != nullptr;
     // the program can get at the other objects, and at the class-side
     // fields of classes
@@ -918,6 +922,64 @@ void FructusImage::ImageWriter::checkPushes(VMClass* cls, VMMethod* method) {
  * The program can't have symbols or methods, and its primitives are known
  * when it's linked.
  */
+/**
+ * The class side can get at the fields of the class, but the program can't
+ * have the name, a symbol, or the arrays of field names and invokables, and
+ * only the VM changes them. `method` is `inv` or one of its blocks.
+ */
+void FructusImage::ImageWriter::checkClassFields(VMClass* metaclass,
+                                                 VMInvokable* inv,
+                                                 VMMethod* method) {
+    auto check = [&](size_t index, bool write) {
+        if (index >= VMClass::VMClassNumberOfFields ||
+            (index == superClassField && !write)) {
+            return;
+        }
+        std::string const field = classFields[index];
+        Fail(Printable(metaclass->GetName()) + ">>#" +
+             Printable(inv->GetSignature()) +
+             (write ? " changes the class's " + field + ", which only the VM can"
+                    : " reads the class's " + field +
+                          ", which the program can't have"));
+    };
+
+    if (method == nullptr) {
+        if (auto* getter = dynamic_cast<VMGetter*>(inv)) {
+            check(getter->fieldIndex, false);
+        } else if (auto* setter = dynamic_cast<VMSetter*>(inv)) {
+            check(setter->fieldIndex, true);
+        } else if (auto* m = dynamic_cast<VMMethod*>(inv)) {
+            checkClassFields(metaclass, inv, m);
+        }
+        return;
+    }
+
+    for (size_t i = 0; i < method->bcLength;
+         i += Bytecode::GetBytecodeLength(method->GetBytecode(i))) {
+        uint8_t const bc = method->GetBytecode(i);
+        // the field index, of the bytecodes that have one
+        auto operand = [&]() { return method->GetBytecode(i + 1); };
+        switch (bc) {
+            case BC_PUSH_BLOCK:
+                checkClassFields(metaclass, inv,
+                                 static_cast<VMMethod*>(method->GetConstant(i)));
+                break;
+            case BC_PUSH_FIELD: check(operand(), false); break;
+            case BC_PUSH_FIELD_0: check(0, false); break;
+            case BC_PUSH_FIELD_1: check(1, false); break;
+            case BC_RETURN_FIELD_0: check(0, false); break;
+            case BC_RETURN_FIELD_1: check(1, false); break;
+            case BC_RETURN_FIELD_2: check(2, false); break;
+            case BC_POP_FIELD: check(operand(), true); break;
+            case BC_POP_FIELD_0: check(0, true); break;
+            case BC_POP_FIELD_1: check(1, true); break;
+            case BC_INC_FIELD: check(operand(), true); break;
+            case BC_INC_FIELD_PUSH: check(operand(), true); break;
+            default: break;
+        }
+    }
+}
+
 void FructusImage::ImageWriter::checkClosedWorld() {
     for (VMClass* cls : classes) {
         installPrimitives(cls);
@@ -933,6 +995,9 @@ void FructusImage::ImageWriter::checkClosedWorld() {
                                         c));
                 if (auto* method = dynamic_cast<VMMethod*>(inv)) {
                     checkPushes(cls, method);
+                }
+                if (c == cls->GetClass()) {
+                    checkClassFields(c, inv, nullptr);
                 }
             }
         }
