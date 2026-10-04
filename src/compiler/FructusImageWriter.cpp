@@ -145,6 +145,26 @@ std::string Vtable(const char* mangledClassName) {
            std::to_string(L::vtableOffset);
 }
 
+/**
+ * The signature of `inv` in the image. The parser names a block's method
+ * $blockMethod@<line>, which only shows in stack traces, so instead the
+ * blocks with the same number of arguments share the signature of their
+ * #value, and the image has no symbol for each block.
+ */
+VMSymbol* ImageSignature(VMInvokable* inv) {
+    VMSymbol* sig = inv->GetSignature();
+    if (dynamic_cast<VMMethod*>(inv) == nullptr ||
+        sig->GetStdString().rfind("$blockMethod@", 0) != 0) {
+        return sig;
+    }
+    // value, value:, value:with:, ... with the block itself an argument
+    std::string selector = "value";
+    for (uint8_t i = 1; i < inv->GetNumberOfArguments(); i++) {
+        selector += i == 1 ? ":" : "with:";
+    }
+    return SymbolFor(selector);
+}
+
 /** Symbols and methods are only for dispatch, the program can't have them. */
 bool IsDispatchOnly(vm_oop_t obj) {
     if (IS_TAGGED(obj)) {
@@ -566,7 +586,7 @@ void FructusImage::AsmFile::writeInvokableHeader(ObjectWriter& w, VMInvokable* i
                                    const std::string& vtable,
                                    const std::string& comment) {
     writeHeader(w, vtable, comment + " " + describe(inv));
-    w.Word(L::VMInvokable_signature, Ref(inv->GetSignature()), "signature");
+    w.Word(L::VMInvokable_signature, Ref(ImageSignature(inv)), "signature");
     w.Word(L::VMInvokable_holder, Ref(inv->GetHolder()), "holder");
 }
 
