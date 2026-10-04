@@ -58,7 +58,22 @@ MethodGenerationContext::MethodGenerationContext(ClassGenerationContext& holder,
     : holderGenc(holder), outerGenc(outer),
       maxContextLevel(outer == nullptr ? 0 : outer->GetMaxContextLevel() + 1),
       blockMethod(outer != nullptr),
-      last4Bytecodes({BC_INVALID, BC_INVALID, BC_INVALID, BC_INVALID}) {}
+      last4Bytecodes({BC_INVALID, BC_INVALID, BC_INVALID, BC_INVALID}) {
+    // a block is in the source of its method
+    if (outer != nullptr) {
+        lexer = outer->lexer;
+    }
+}
+
+uint16_t MethodGenerationContext::currentLine() const {
+    if (fixedLine != 0) {
+        return fixedLine;
+    }
+    // the lexer is past the token the parser is at, which is usually on the
+    // same line
+    size_t const line = lexer == nullptr ? 0 : lexer->GetCurrentLineNumber();
+    return line > UINT16_MAX ? UINT16_MAX : (uint16_t)line;
+}
 
 VMInvokable* MethodGenerationContext::Assemble() {
     VMTrivialMethod* trivialMethod = assembleTrivialMethod();
@@ -75,6 +90,8 @@ VMInvokable* MethodGenerationContext::Assemble() {
     // copy bytecodes into method, with the objects they refer to, which
     // need no write barrier, since the method is new
     memcpy(meth->GetBytecodes(), bytecode.data(), bytecode.size());
+    assert(lines.size() == bytecode.size());
+    meth->SetLines(lines);
 
     // return the method - the holder field is to be set later on!
     return meth;
@@ -387,6 +404,7 @@ void MethodGenerationContext::AddBytecode(uint8_t bc, som_int_t stackEffect) {
     maxStackDepth = max(maxStackDepth, currentStackDepth);
 
     bytecode.push_back(bc);
+    lines.push_back(currentLine());
 
     last4Bytecodes[0] = last4Bytecodes[1];
     last4Bytecodes[1] = last4Bytecodes[2];
@@ -396,6 +414,7 @@ void MethodGenerationContext::AddBytecode(uint8_t bc, som_int_t stackEffect) {
 
 void MethodGenerationContext::AddBytecodeArgument(uint8_t arg) {
     bytecode.push_back(arg);
+    lines.push_back(currentLine());
 }
 
 size_t MethodGenerationContext::AddBytecodeArgumentAndGetIndex(size_t bc) {
@@ -434,6 +453,7 @@ void MethodGenerationContext::removeLastBytecodes(size_t numBytecodes) {
 
     assert(bytesToRemove > 0);
     bytecode.erase(bytecode.end() - bytesToRemove, bytecode.end());
+    lines.erase(lines.end() - bytesToRemove, lines.end());
 }
 
 bool MethodGenerationContext::hasOneLiteralBlockArgument() {
@@ -815,11 +835,12 @@ void MethodGenerationContext::removeLastBytecodeAt(size_t indexFromEnd) {
 
     bytecode.erase(bytecode.begin() + bcOffset,
                    bytecode.begin() + bcOffset + bcLength);
+    lines.erase(lines.begin() + bcOffset, lines.begin() + bcOffset + bcLength);
 }
 
 void MethodGenerationContext::RemoveLastPopForBlockLocalReturn() {
     if (LastBytecodeIs(0, BC_POP)) {
-        bytecode.pop_back();
+        RemoveLastBytecode();
         return;
     }
 
@@ -833,6 +854,7 @@ void MethodGenerationContext::RemoveLastPopForBlockLocalReturn() {
             (ptrdiff_t)Bytecode::GetBytecodeLength(lastBytecodeAt(0));
         assert(IsPopSmthBytecode(bytecode.at(index)));
         bytecode.insert(bytecode.begin() + index, BC_DUP);
+        lines.insert(lines.begin() + index, lines.at(index));
 
         last4Bytecodes[0] = last4Bytecodes[1];
         last4Bytecodes[1] = last4Bytecodes[2];

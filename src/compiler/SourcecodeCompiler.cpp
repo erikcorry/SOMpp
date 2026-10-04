@@ -26,6 +26,7 @@
 
 #include "SourcecodeCompiler.h"
 
+#include <filesystem>
 #include <fstream>
 #include <ios>
 #include <sstream>
@@ -65,11 +66,19 @@ VMClass* SourcecodeCompiler::CompileClass(const std::string& path,
         showCompilationError(file, Str.str().c_str());
         return nullptr;
     }
+    sourceFiles[cnameC] = std::filesystem::absolute(fname).string();
 
 #ifdef COMPILER_DEBUG
     ErrorPrint("Compilation finished\n");
 #endif
     return result;
+}
+
+std::map<std::string, std::string> SourcecodeCompiler::sourceFiles;
+
+std::string SourcecodeCompiler::SourceFile(const std::string& name) {
+    auto const it = sourceFiles.find(name);
+    return it == sourceFiles.end() ? "" : it->second;
 }
 
 VMClass* SourcecodeCompiler::CompileClassString(const std::string& stream,

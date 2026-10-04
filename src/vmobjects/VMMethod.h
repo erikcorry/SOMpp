@@ -113,7 +113,23 @@ public:
              size_t maxStackDepth, LexicalScope* lexicalScope,
              BackJump* inlinedLoops);
 
-    ~VMMethod() override { delete lexicalScope; }
+    ~VMMethod() override {
+        delete lexicalScope;
+        delete lines;
+    }
+
+    /** The source line of each byte of the bytecodes. */
+    void SetLines(const std::vector<uint16_t>& bytecodeLines) {
+        delete lines;
+        lines = new std::vector<uint16_t>(bytecodeLines);
+    }
+
+    /** The source line of the bytecode at `bytecodeIndex`, or 0. */
+    [[nodiscard]] uint16_t GetLine(size_t bytecodeIndex) const {
+        return lines == nullptr || bytecodeIndex >= lines->size()
+                   ? 0
+                   : (*lines)[bytecodeIndex];
+    }
 #endif
 
     [[nodiscard]] inline size_t GetNumberOfLocals() const {
@@ -264,6 +280,7 @@ private:
 #ifndef FRUCTUS
     LexicalScope* lexicalScope;
     BackJump* inlinedLoops;
+    std::vector<uint16_t>* lines{nullptr};
 #endif
 
 #ifdef UNSAFE_FRAME_OPTIMIZATION

@@ -42,6 +42,8 @@ class Parser;
 
 enum JumpCondition : std::uint8_t { ON_TRUE, ON_FALSE, ON_NIL, ON_NOT_NIL };
 
+class Lexer;
+
 class MethodGenerationContext {
 public:
     explicit MethodGenerationContext(ClassGenerationContext& holder,
@@ -90,7 +92,24 @@ public:
 
     [[nodiscard]] bool IsFinished() const { return finished; }
 
-    void RemoveLastBytecode() { bytecode.pop_back(); };
+    void RemoveLastBytecode() {
+        bytecode.pop_back();
+        lines.pop_back();
+    };
+
+    /** Where the line of each bytecode comes from, see `lines`. */
+    void SetLexer(const Lexer* lex) { lexer = lex; }
+
+    /**
+     * Give the bytecodes added from now on `line`, instead of the lexer's,
+     * or with 0 the lexer's again: an inlined block's bytecodes keep their
+     * lines, and a send has the line it starts on. Answers the one before.
+     */
+    uint16_t SetLine(uint16_t line) {
+        uint16_t const previous = fixedLine;
+        fixedLine = line;
+        return previous;
+    }
     void RemoveLastPopForBlockLocalReturn();
 
     uint8_t GetNumberOfArguments();
@@ -127,6 +146,8 @@ public:
     bool LastBytecodeIs(size_t indexFromEnd, uint8_t bytecode);
 
 private:
+    [[nodiscard]] uint16_t currentLine() const;
+
     VMTrivialMethod* assembleTrivialMethod();
     VMTrivialMethod* assembleLiteralReturn(uint8_t pushCandidate);
     VMTrivialMethod* assembleGlobalReturn();
@@ -173,6 +194,11 @@ private:
     std::vector<Variable> locals;
     bool finished{false};
     std::vector<uint8_t> bytecode;
+    // the source line of each byte of the bytecodes, for the debug info of
+    // the fructus image, see VMMethod::GetLine()
+    std::vector<uint16_t> lines;
+    const Lexer* lexer{nullptr};
+    uint16_t fixedLine{0};
     LexicalScope* lexicalScope{nullptr};
 
     size_t currentStackDepth{0};

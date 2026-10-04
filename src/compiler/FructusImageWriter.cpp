@@ -6,6 +6,7 @@
  * objects as symbolic address constants for the linker.
  */
 
+#include <algorithm>
 #include <cstdint>
 #include <deque>
 #include <fstream>
@@ -33,6 +34,7 @@
 #include "../vmobjects/VMString.h"
 #include "../vmobjects/VMSymbol.h"
 #include "../vmobjects/VMTrivialMethod.h"
+#include "SourcecodeCompiler.h"
 
 namespace L = FructusLayout;
 
@@ -297,8 +299,11 @@ private:
     void writeGlobalReturn(VMGlobalReturn* inv, const std::string& label);
     void writeGetter(VMGetter* inv, const std::string& label);
     void writeSetter(VMSetter* inv, const std::string& label);
-    void writeBytecodes(ObjectWriter& w, size_t offset, VMMethod* method,
-                        const std::vector<uint8_t>& fructusBytecodes);
+    // the offset and source line where each line starts
+    using Lines = std::vector<std::pair<size_t, uint16_t>>;
+    Lines writeBytecodes(ObjectWriter& w, size_t offset, VMMethod* method,
+                         const std::vector<uint8_t>& fructusBytecodes);
+    void writeDebugInfo();
     void writeSendSite(ObjectWriter& w, size_t offset, VMMethod* method,
                        size_t index);
     std::string describe(VMInvokable* inv);
@@ -310,6 +315,17 @@ private:
     std::map<std::string, VMSymbol*> symbols;  // by label, for stable output
     std::set<AbstractVMObject*> globals;
     VMClass* owner = nullptr;
+
+    /** The bytecodes of a method or block, for writeDebugInfo(). */
+    struct DebugMethod {
+        std::string name;
+        size_t file;        // in debugFiles, from 1
+        std::string start;  // the address of the first bytecode
+        size_t length;
+        Lines lines;
+    };
+    std::vector<DebugMethod> debugMethods;
+    std::vector<std::string> debugFiles;
 };
 
 class FructusImage::ImageWriter {
@@ -460,6 +476,101 @@ void FructusImage::AsmFile::Finish() {
             << "\t.globl\t" << label << "\n";
         writeSymbol(sym, label);
     }
+
+    writeDebugInfo();
+}
+
+/**
+ * DWARF 3 for the methods and blocks, which costs fructus nothing, since
+ * the debug sections aren't loaded: a compile unit with a subprogram for
+ * each, named like Foo>>#bar:, and a line table, so that addr2line can say
+ * where a pc in a stack trace is. Like gcc for fructus, a 4-byte offset is
+ * a 2-byte one and 0, since there is no 4-byte relocation.
+ */
+void FructusImage::AsmFile::writeDebugInfo() {
+    if (debugMethods.empty()) {
+        return;
+    }
+
+    out << "\n\t.section\t.debug_abbrev,\"\",@progbits\n"
+        << ".Ldebug_abbrev:\n"
+        // 1: DW_TAG_compile_unit, with children
+        << "\t.byte\t1, 0x11, 1\n"
+        // DW_AT_name string, DW_AT_low_pc addr, DW_AT_ranges data4,
+        // DW_AT_stmt_list data4
+        << "\t.byte\t0x03, 0x08, 0x11, 0x01, 0x55, 0x06, 0x10, 0x06, 0, 0\n"
+        // 2: DW_TAG_subprogram, without
+        << "\t.byte\t2, 0x2e, 0\n"
+        // DW_AT_name string, DW_AT_low_pc addr, DW_AT_high_pc addr
+        << "\t.byte\t0x03, 0x08, 0x11, 0x01, 0x12, 0x01, 0, 0\n"
+        << "\t.byte\t0\n";
+
+    out << "\n\t.section\t.debug_info,\"\",@progbits\n"
+        << "\t.short\t.Ldebug_info_end-.Ldebug_info_start, 0\n"
+        << ".Ldebug_info_start:\n"
+        << "\t.short\t3\n"
+        << "\t.short\t.Ldebug_abbrev, 0\n"
+        << "\t.byte\t" << L::word << "\n"
+        << "\t.byte\t1\n"
+        << "\t.string\t" << Quote(debugFiles[0].data(), debugFiles[0].size())
+        << "\n"
+        << "\t.short\t0\n"
+        << "\t.short\t.Ldebug_ranges, 0\n"
+        << "\t.short\t.Ldebug_line, 0\n";
+    for (DebugMethod const& m : debugMethods) {
+        out << "\t.byte\t2\n"
+            << "\t.string\t" << Quote(m.name.data(), m.name.size()) << "\n"
+            << "\t.short\t" << m.start << ", " << m.start << "+" << m.length
+            << "\n";
+    }
+    out << "\t.byte\t0\n"
+        << ".Ldebug_info_end:\n";
+
+    out << "\n\t.section\t.debug_ranges,\"\",@progbits\n"
+        << ".Ldebug_ranges:\n";
+    for (DebugMethod const& m : debugMethods) {
+        out << "\t.short\t" << m.start << ", " << m.start << "+" << m.length
+            << "\n";
+    }
+    out << "\t.short\t0, 0\n";
+
+    out << "\n\t.section\t.debug_line,\"\",@progbits\n"
+        << ".Ldebug_line:\n"
+        << "\t.short\t.Ldebug_line_end-.Ldebug_line_start, 0\n"
+        << ".Ldebug_line_start:\n"
+        << "\t.short\t3\n"
+        << "\t.short\t.Ldebug_line_program-.Ldebug_line_header, 0\n"
+        << ".Ldebug_line_header:\n"
+        // minimum_instruction_length, default_is_stmt, line_base, line_range,
+        // opcode_base, and the lengths of the standard opcodes
+        << "\t.byte\t1, 1, -5, 14, 13\n"
+        << "\t.byte\t0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 1\n"
+        << "\t.byte\t0\n";  // no include_directories
+    for (std::string const& file : debugFiles) {
+        out << "\t.string\t" << Quote(file.data(), file.size()) << "\n"
+            << "\t.byte\t0, 0, 0\n";
+    }
+    out << "\t.byte\t0\n"
+        << ".Ldebug_line_program:\n";
+    for (DebugMethod const& m : debugMethods) {
+        // a sequence for each, which starts at line 1
+        out << "\t.byte\t4, " << m.file << "\t; " << m.name << "\n";
+        int64_t line = 1;
+        for (auto const& [offset, l] : m.lines) {
+            // DW_LNE_set_address, DW_LNS_advance_line, DW_LNS_copy
+            out << "\t.byte\t0, 3, 2\n"
+                << "\t.short\t" << m.start << "+" << offset << "\n"
+                << "\t.byte\t3\n"
+                << "\t.sleb128\t" << ((int64_t)l - line) << "\n"
+                << "\t.byte\t1\n";
+            line = l;
+        }
+        // DW_LNE_end_sequence after the last bytecode
+        out << "\t.byte\t0, 3, 2\n"
+            << "\t.short\t" << m.start << "+" << m.length << "\n"
+            << "\t.byte\t0, 1, 1\n";
+    }
+    out << ".Ldebug_line_end:\n";
 }
 
 void FructusImage::AsmFile::write(AbstractVMObject* obj, const std::string& label) {
@@ -615,22 +726,52 @@ void FructusImage::AsmFile::writeMethod(VMMethod* method, const std::string& lab
            "maximumNumberOfStackElements");
     w.Byte(L::VMMethod_numberOfArguments, method->numberOfArguments,
            "numberOfArguments");
-    writeBytecodes(w, L::VMMethod_size, method, fructusBytecodes);
+    Lines lines = writeBytecodes(w, L::VMMethod_size, method, fructusBytecodes);
     w.End(L::PaddedSize(L::VMMethod_size + bcLength));
+
+    // the debug info has the method's file, and the lines, which the host
+    // has for its bytecodes
+    VMClass* holder = method->GetHolder();
+    std::string className =
+        holder == nullptr ? "" : holder->GetName()->GetStdString();
+    std::string const metaclassSuffix = " class";
+    if (className.size() > metaclassSuffix.size() &&
+        className.compare(className.size() - metaclassSuffix.size(),
+                          metaclassSuffix.size(), metaclassSuffix) == 0) {
+        className.erase(className.size() - metaclassSuffix.size());
+    }
+    std::string file = SourcecodeCompiler::SourceFile(className);
+    if (file.empty()) {
+        file = className + ".som";
+    }
+    auto it = std::find(debugFiles.begin(), debugFiles.end(), file);
+    if (it == debugFiles.end()) {
+        it = debugFiles.insert(debugFiles.end(), file);
+    }
+    debugMethods.push_back({describe(method),
+                            (size_t)(it - debugFiles.begin()) + 1,
+                            w.Self(L::VMMethod_size), bcLength,
+                            std::move(lines)});
 }
 
 /**
  * The bytecodes as ResizeWords() made them for fructus, with the words, which
  * are at the same bytecode as on the host.
  */
-void FructusImage::AsmFile::writeBytecodes(
+FructusImage::AsmFile::Lines FructusImage::AsmFile::writeBytecodes(
     ObjectWriter& w, size_t offset, VMMethod* method,
     const std::vector<uint8_t>& fructusBytecodes) {
     size_t const bcLength = method->bcLength;
+    Lines lines;
     size_t i = 0;
     size_t n = 0;
     while (i < bcLength) {
         uint8_t const bc = method->GetBytecode(i);
+        uint16_t const sourceLine = method->GetLine(i);
+        if (sourceLine != 0 &&
+            (lines.empty() || lines.back().second != sourceLine)) {
+            lines.emplace_back(n, sourceLine);
+        }
         size_t const length = Bytecode::GetBytecodeLength(bc);
         if (length == 0 || i + length > bcLength) {
             Fail("bad bytecode " + std::to_string(bc) + " in " +
@@ -675,6 +816,7 @@ void FructusImage::AsmFile::writeBytecodes(
     if (n != fructusBytecodes.size()) {
         Fail("the bytecodes of " + describe(method) + " don't add up");
     }
+    return lines;
 }
 
 /**

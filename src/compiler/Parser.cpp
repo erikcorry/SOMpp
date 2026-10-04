@@ -207,6 +207,7 @@ void Parser::Classdef(ClassGenerationContext& cgenc) {
     while (symIsIdentifier() || sym == Keyword || sym == OperatorSequence ||
            symIn(binaryOpSyms)) {
         MethodGenerationContext mgenc(cgenc);
+        mgenc.SetLexer(&lexer);
         std::string self = strSelf;
         mgenc.AddArgument(self, lexer.GetCurrentSource(), this);
 
@@ -225,6 +226,7 @@ void Parser::Classdef(ClassGenerationContext& cgenc) {
         while (symIsIdentifier() || sym == Keyword || sym == OperatorSequence ||
                symIn(binaryOpSyms)) {
             MethodGenerationContext mgenc(cgenc);
+            mgenc.SetLexer(&lexer);
             std::string self = strSelf;
             mgenc.AddArgument(self, lexer.GetCurrentSource(), this);
 
@@ -671,6 +673,9 @@ bool Parser::binaryOperand(MethodGenerationContext& mgenc) {
 }
 
 void Parser::keywordMessage(MethodGenerationContext& mgenc, bool super) {
+    // the send is on the line of its first keyword, not of its last argument
+    auto const line = (uint16_t)std::min<size_t>(lexer.GetCurrentLineNumber(),
+                                                 UINT16_MAX);
     std::string kw = keyword();
     int numParts = 1;
 
@@ -714,11 +719,13 @@ void Parser::keywordMessage(MethodGenerationContext& mgenc, bool super) {
 
     VMSymbol* msg = SymbolFor(kw);
 
+    uint16_t const previousLine = mgenc.SetLine(line);
     if (super) {
         EmitSUPERSEND(mgenc, *this, msg);
     } else {
         EmitSEND(mgenc, *this, msg);
     }
+    mgenc.SetLine(previousLine);
 }
 
 void Parser::formula(MethodGenerationContext& mgenc) {

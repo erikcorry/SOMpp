@@ -237,9 +237,12 @@ void VMMethod::inlineInto(MethodGenerationContext& mgenc,
     uint8_t* bytecodes = GetBytecodes();
     size_t i = 0;
     const size_t numBytecodes = GetNumberOfBytecodes();
+    // the bytecodes keep their lines in the method they're inlined into
+    uint16_t const outerLine = mgenc.SetLine(GetLine(0));
     while (i < numBytecodes) {
         prepareBackJumpToCurrentAddress(backJumps, backJumpsToPatch, i, mgenc);
         patchJumpToCurrentAddress(i, jumps, mgenc);
+        mgenc.SetLine(GetLine(i));
 
         const uint8_t bytecode = bytecodes[i];
         const uint8_t bcLength = Bytecode::GetBytecodeLength(bytecode);
@@ -514,6 +517,7 @@ void VMMethod::inlineInto(MethodGenerationContext& mgenc,
 
         i += bcLength;
     }
+    mgenc.SetLine(outerLine);
 
     assert(jumps.empty());
 }

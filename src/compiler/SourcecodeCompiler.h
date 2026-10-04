@@ -26,6 +26,9 @@
  THE SOFTWARE.
  */
 
+#include <map>
+#include <string>
+
 #include "../misc/defs.h"
 #include "../vmobjects/ObjectFormats.h"
 #include "Parser.h"
@@ -37,7 +40,12 @@ public:
     static VMClass* CompileClassString(const std::string& stream,
                                        VMClass* systemClass);
 
+    /** The absolute path of the file the class `name` came from, or "". */
+    static std::string SourceFile(const std::string& name);
+
 private:
+    static std::map<std::string, std::string> sourceFiles;
+
     static void showCompilationError(const std::string& filename,
                                      const char* message);
     static VMClass* compile(Parser& parser, VMClass* systemClass);
