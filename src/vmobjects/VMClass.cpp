@@ -151,14 +151,8 @@ PrimInstallResult VMClass::InstallPrimitive(VMInvokable* invokable,
 #ifndef FRUCTUS
 // fructus has no reflection on field names
 VMSymbol* VMClass::GetInstanceFieldName(size_t index) const {
-    size_t const numSuperInstanceFields = numberOfSuperInstanceFields();
-    if (index >= numSuperInstanceFields) {
-        index -= numSuperInstanceFields;
-        return static_cast<VMSymbol*>(
-            load_ptr(instanceFields)->GetIndexableField(index));
-    }
-    assert(HasSuperClass());
-    return ((VMClass*)load_ptr(superClass))->GetInstanceFieldName(index);
+    return static_cast<VMSymbol*>(
+        load_ptr(instanceFields)->GetIndexableField(index));
 }
 #endif
 
@@ -221,8 +215,7 @@ VMInvokable* VMClass::LookupInvokable(VMSymbol* name) {
 // fructus has no reflection on field names
 som_int_t VMClass::LookupFieldIndex(VMSymbol* name) const {
     size_t const numInstanceFields = GetNumberOfInstanceFields();
-    for (size_t i = 0; i <= numInstanceFields; ++i) {
-        // even with GetNumberOfInstanceFields == 0 there is the class field
+    for (size_t i = 0; i < numInstanceFields; ++i) {
         if (name == GetInstanceFieldName(i)) {
             return (som_int_t)i;
         }
@@ -231,9 +224,10 @@ som_int_t VMClass::LookupFieldIndex(VMSymbol* name) const {
 }
 #endif
 
+// the instance fields include those of the superclasses, see
+// ClassGenerationContext::SetInstanceFieldsOfSuper()
 size_t VMClass::GetNumberOfInstanceFields() const {
-    return load_ptr(instanceFields)->GetNumberOfIndexableFields() +
-           numberOfSuperInstanceFields();
+    return load_ptr(instanceFields)->GetNumberOfIndexableFields();
 }
 
 #ifndef FRUCTUS
@@ -259,13 +253,6 @@ void VMClass::LoadPrimitives(bool showWarning) {
                                        showWarning);
 }
 #endif
-
-size_t VMClass::numberOfSuperInstanceFields() const {
-    if (HasSuperClass()) {
-        return ((VMClass*)load_ptr(superClass))->GetNumberOfInstanceFields();
-    }
-    return 0;
-}
 
 #if DEBUG
 std::string VMClass::AsDebugString() const {

@@ -846,13 +846,17 @@ VMBlock* Universe::NewBlock(VMInvokable* method, VMFrame* context,
 }
 
 VMClass* Universe::NewClass(VMClass* classOfClass) {
+    // the fields of a class include those of Class, which are the fields of
+    // VMClass, and then its class variables
     size_t const numFields = classOfClass->GetNumberOfInstanceFields();
     VMClass* result = nullptr;
 
-    if (numFields != 0U) {
-        size_t const additionalBytes = numFields * sizeof(VMObject*);
+    if (numFields > VMClass::VMClassNumberOfFields) {
+        size_t const numClassVariables =
+            numFields - VMClass::VMClassNumberOfFields;
+        size_t const additionalBytes = numClassVariables * sizeof(VMObject*);
         result = new (GetHeap<HEAP_CLS>(), additionalBytes)
-            VMClass(numFields, additionalBytes);
+            VMClass(numClassVariables, additionalBytes);
     } else {
         result = new (GetHeap<HEAP_CLS>(), 0) VMClass;
     }

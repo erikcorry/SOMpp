@@ -94,11 +94,10 @@ public:
 
     DECLARE_AS_DEBUG_STRING(override)
 
-private:
-    [[nodiscard]] size_t numberOfSuperInstanceFields() const;
-
+    /** The fields of every class: name, instanceFields and so on. */
     static const size_t VMClassNumberOfFields;
 
+private:
     make_testable(public);
 
     // Remember to update Parser::superclass when the fields are changed
