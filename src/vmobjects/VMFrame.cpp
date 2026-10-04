@@ -227,21 +227,38 @@ void VMFrame::SetArgument(uint8_t index, uint8_t contextLevel, vm_oop_t value) {
 }
 
 void VMFrame::PrintStackTrace() const {
-    VMMethod const* const meth = GetMethod();
+    for (VMFrame const* frame = this; frame != nullptr;
+         frame = load_ptr(frame->previousFrame)) {
+        VMMethod const* const meth = frame->GetMethod();
 
-    if (meth->GetHolder() == load_ptr(nilObject)) {
-        Print("nil");
-    } else {
-        VMSymbol const* name = meth->GetHolder()->GetName();
-        PrintChars(name->GetRawChars(), name->GetStringLength());
+        if (meth->GetHolder() == load_ptr(nilObject)) {
+            Print("nil");
+        } else {
+            VMSymbol const* name = meth->GetHolder()->GetName();
+            PrintChars(name->GetRawChars(), name->GetStringLength());
+        }
+        VMSymbol const* sig = meth->GetSignature();
+        Print(">>#");
+        PrintChars(sig->GetRawChars(), sig->GetStringLength());
+        Print("\n");
     }
-    VMSymbol const* sig = meth->GetSignature();
-    Print(">>#");
-    PrintChars(sig->GetRawChars(), sig->GetStringLength());
+
+#ifdef FRUCTUS
+    // where each frame is, just after its send: tools/fructus-trace makes
+    // them into source lines with the debug info of the image
+    Print("pcs:");
+    for (VMFrame const* frame = this; frame != nullptr;
+         frame = load_ptr(frame->previousFrame)) {
+        auto pc = (uintptr_t)(frame->GetMethod()->GetBytecodes() +
+                              frame->GetBytecodeIndex());
+        char hex[] = " 0000";
+        for (size_t i = 4; i > 0; i--, pc >>= 4U) {
+            hex[i] = "0123456789abcdef"[pc & 0xfU];
+        }
+        Print(hex);
+    }
     Print("\n");
-    if (previousFrame != nullptr) {
-        load_ptr(previousFrame)->PrintStackTrace();
-    }
+#endif
 }
 
 void VMFrame::CopyArgumentsFrom(VMFrame* frame) {

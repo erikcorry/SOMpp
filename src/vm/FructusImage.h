@@ -31,6 +31,10 @@
  *  - _universe.s holds nil, true, false, the system object and their
  *    globals, the program's main class, its arguments, the block classes,
  *    and the symbols the VM uses.
+ *  - Each file has DWARF debug info, which isn't loaded: a subprogram for
+ *    each method and block, and the source line of each bytecode. A stack
+ *    trace ends with the pc of each frame, which tools/fructus-trace turns
+ *    into source lines with it.
  *
  * The world is closed: the program's symbols and methods are only for
  * dispatch and field names. No bytecode pushes them, and no object the

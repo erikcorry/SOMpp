@@ -1,0 +1,63 @@
+#!/usr/bin/env python3
+"""
+Turn the stack traces of SOM++ on fructus into source lines.
+
+    tools/fructus-trace build-fructus/SOM++ [output]
+
+Copies the output of the program (a file, or stdin), and after each stack
+trace, which ends with a line of pcs (see VMFrame::PrintStackTrace()), gives
+the method or block and the source line of each frame, from the debug info
+the image writer puts in the ELF file (see FructusImageWriter.cpp).
+
+The addr2line for fructus is $FRUCTUS_ADDR2LINE, fructus-elf-addr2line, or
+the one in ~/fructus/build/binutils.
+"""
+
+import os
+import shutil
+import subprocess
+import sys
+
+
+def addr2line_command():
+    if "FRUCTUS_ADDR2LINE" in os.environ:
+        return os.environ["FRUCTUS_ADDR2LINE"]
+    installed = shutil.which("fructus-elf-addr2line")
+    if installed:
+        return installed
+    return os.path.expanduser("~/fructus/build/binutils/binutils/addr2line")
+
+
+def lookup(elf, pcs):
+    """(function, file:line) of each pc, which is just after its send."""
+    # the bytecode the frame is at is the one before the pc
+    addresses = ["0x%x" % (pc - 1) for pc in pcs]
+    # addr2line gives the first lookup in a compile unit the name of the ELF
+    # symbol, and after that the one in the debug info, so look them all up
+    # twice and take the second
+    result = subprocess.run(
+        [addr2line_command(), "-f", "-e", elf] + addresses * 2,
+        capture_output=True, text=True, check=True)
+    lines = result.stdout.splitlines()[2 * len(pcs):]
+    return list(zip(lines[0::2], lines[1::2]))
+
+
+def main():
+    if len(sys.argv) not in (2, 3):
+        sys.exit(__doc__.strip())
+    elf = sys.argv[1]
+    output = open(sys.argv[2]) if len(sys.argv) == 3 else sys.stdin
+
+    for line in output:
+        sys.stdout.write(line)
+        if not line.startswith("pcs:"):
+            continue
+        pcs = [int(word, 16) for word in line.split()[1:]]
+        for pc, (function, where) in zip(pcs, lookup(elf, pcs)):
+            if where.startswith("??"):
+                where = "no source"
+            print("  %04x %s at %s" % (pc, function, where))
+
+
+if __name__ == "__main__":
+    main()
