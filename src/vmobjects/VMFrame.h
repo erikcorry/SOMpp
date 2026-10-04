@@ -49,8 +49,7 @@ public:
                      VMFrame* previousFrame)
         : totalObjectSize(additionalBytes + sizeof(VMFrame)),
           previousFrame(store_root(previousFrame)), method(store_root(method)),
-          arguments((gc_oop_t*)&(stack_ptr) + 1),
-          locals(arguments + method->GetNumberOfArguments()),
+          locals(arguments() + method->GetNumberOfArguments()),
           stack_ptr(locals + method->GetNumberOfLocals() - 1) {
         // initialize all other fields. Don't need to initialize arguments,
         // because they will be copied in still
@@ -167,12 +166,12 @@ public:
     inline vm_oop_t GetArgument(uint8_t index, uint8_t contextLevel) {
         // get the context
         VMFrame const* context = GetContextLevel(contextLevel);
-        return load_ptr(context->arguments[index]);
+        return load_ptr(context->arguments()[index]);
     }
 
     [[nodiscard]] inline vm_oop_t GetArgumentInCurrentContext(
         uint8_t index) const {
-        return load_ptr(this->arguments[index]);
+        return load_ptr(arguments()[index]);
     }
 
     void SetArgument(uint8_t index, uint8_t contextLevel, vm_oop_t value);
@@ -180,7 +179,7 @@ public:
     void CopyArgumentsFrom(VMFrame* frame);
 
     inline void SetArgument(size_t argIdx, vm_oop_t value) {
-        store_ptr(arguments[argIdx], value);
+        store_ptr(arguments()[argIdx], value);
     }
 
     void WalkObjects(walk_heap_fn /*unused*/) override;
@@ -227,9 +226,17 @@ private:
     GCFrame* previousFrame;
     GCFrame* context{nullptr};
     GCMethod* method;
-    gc_oop_t* arguments;
     gc_oop_t* locals;
     gc_oop_t* stack_ptr;
+
+    /**
+     * The arguments, then the locals and the stack, which come right after
+     * the fields.
+     */
+    [[nodiscard]] gc_oop_t* arguments() const {
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast)
+        return (gc_oop_t*)SHIFTED_PTR(this, sizeof(VMFrame));
+    }
 
     static const size_t VMFrameNumberOfFields;
 

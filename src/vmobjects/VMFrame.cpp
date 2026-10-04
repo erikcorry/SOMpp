@@ -63,8 +63,6 @@ VMFrame* VMFrame::EmergencyFrameFrom(VMFrame* from, size_t extraLength) {
         (gc_oop_t*)SHIFTED_PTR(result, (size_t)from->stack_ptr - (size_t)from);
 
     result->bytecodeIndex = from->bytecodeIndex;
-    // result->arguments is set in VMFrame constructor
-    result->locals = result->arguments + method->GetNumberOfArguments();
 
     // all other fields are indexable via arguments
     // --> until end of Frame
@@ -74,13 +72,13 @@ VMFrame* VMFrame::EmergencyFrameFrom(VMFrame* from, size_t extraLength) {
     size_t i = 0;
 
     // copy all fields from other frame
-    while (from->arguments + i < from_end) {
-        result->arguments[i] = from->arguments[i];
+    while (from->arguments() + i < from_end) {
+        result->arguments()[i] = from->arguments()[i];
         i++;
     }
     // initialize others with nilObject
-    while (result->arguments + i < result_end) {
-        result->arguments[i] = nilObject;
+    while (result->arguments() + i < result_end) {
+        result->arguments()[i] = nilObject;
         i++;
     }
     return result;
@@ -93,29 +91,9 @@ VMFrame* VMFrame::CloneForMovingGC() const {
     void* destination = SHIFTED_PTR(clone, sizeof(VMFrame));
     const void* source = SHIFTED_PTR(this, sizeof(VMFrame));
     memcpy(destination, source, addSpace);
-    clone->arguments =
-        (gc_oop_t*)&(clone->stack_ptr) + 1;  // field after stack_ptr
-
-    // Use of GetMethod() is problematic here, because it may be invalid object
-    // while cloning/moving within GC Use of GetMethod()->GetNumberOfArguments()
-    // is problematic here, because it may be invalid object while
-    // cloning/moving within GC
-
-#if GC_TYPE == GENERATIONAL || GC_TYPE == COPYING || GC_TYPE == DEBUG_COPYING
-    VMMethod const* meth = load_ptr(method);
-    // an old method can be seen by the write barrier, when a send in it is
-    // linked, see SendSite.h
-    if (meth->GetGCField() > MASK_BITS_ALL) {
-        meth = (VMMethod*)meth->GetGCField();
-    }
-//    int64_t numArgs =
-//    meth->GetNumberOfArgumentsPossiblyFollowingForwardingPointer();
-#else
-    VMMethod const* const meth = GetMethod();
-#endif
-    uint8_t const numArgs = meth->GetNumberOfArguments();
-
-    clone->locals = clone->arguments + numArgs;
+    // locals and stack_ptr point into the frame
+    clone->locals =
+        (gc_oop_t*)SHIFTED_PTR(clone, (size_t)locals - (size_t)this);
     clone->stack_ptr =
         (gc_oop_t*)SHIFTED_PTR(clone, (size_t)stack_ptr - (size_t)this);
     return clone;
@@ -145,6 +123,7 @@ void VMFrame::WalkObjects(walk_heap_fn walk) {
 
     // all other fields are indexable via arguments array
     // --> until end of Frame
+    gc_oop_t* const arguments = this->arguments();
     size_t i = 0;
     while (arguments + i <= stack_ptr) {
         if (arguments[i] != nullptr) {
@@ -182,7 +161,7 @@ void VMFrame::PrintStack() const {
 
     for (uint8_t i = 0; i < GetMethod()->GetNumberOfArguments(); i++) {
         Print("   arg " + to_string(i) + ": ");
-        print_oop(arguments[i]);
+        print_oop(arguments()[i]);
     }
 
     size_t local_offset = 0;
@@ -271,7 +250,7 @@ void VMFrame::CopyArgumentsFrom(VMFrame* frame) {
     size_t const num_args = GetMethod()->GetNumberOfArguments();
     for (size_t i = 0; i < num_args; ++i) {
         vm_oop_t stackElem = frame->GetStackElement(num_args - 1 - i);
-        store_ptr(arguments[i], stackElem);
+        store_ptr(arguments()[i], stackElem);
     }
 }
 
