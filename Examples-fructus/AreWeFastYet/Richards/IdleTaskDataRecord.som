@@ -1,0 +1,46 @@
+"
+This benchmark is derived from richards.st, which is
+part of Mario Wolczko's DeltaBlue and Richards collection.
+
+License details:
+  http://web.archive.org/web/20050825101121/http://www.sunlabs.com/people/mario/java_benchmarking/index.html
+"
+IdleTaskDataRecord = RBObject (
+  "THIS IS A CUT-DOWN RICHARDS FOR FRUCTUS: COUNT STARTS AT 1000, NOT 10000,
+   SO ITS RESULTS DON'T COMPARE WITH FULL ARE-WE-FAST-YET RUNS.
+
+   control is a 16-bit shift register, which doesn't fit in the 15-bit
+   integers of fructus, so it is kept as its high and its low byte."
+  | controlHigh controlLow count |
+
+  isControlEven = ( ^ 0 = (controlLow & 1) )
+
+  "control: control / 2"
+  halveControl = (
+    controlLow := (controlLow / 2) + ((controlHigh & 1) * 128).
+    controlHigh := controlHigh / 2
+  )
+
+  "control: (control / 2 bitXor: 53256), where 53256 is 16rD008"
+  halveControlAndFlip = (
+    self halveControl.
+    controlHigh := controlHigh bitXor: 208.
+    controlLow := controlLow bitXor: 8
+  )
+
+  count = ( ^ count )
+
+  count: aCount = (
+    count := aCount
+  )
+
+  create = (
+    controlHigh := 0.
+    controlLow := 1.
+    count := 1000 "10000 in the full run"
+  )
+
+  ----
+
+  create = ( ^ super new create )
+)

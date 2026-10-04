@@ -1,0 +1,21 @@
+"Runs DeltaBlue on fructus, which can't load the benchmark by its name like
+ Harness and Run do. The argument is the number of inner iterations,
+ default 1.
+
+ THESE ARE CUT-DOWN RUNS: ARE-WE-FAST-YET RUNS DELTABLUE WITH 12000 INNER
+ ITERATIONS, AND ON FRUCTUS IT CAN HAVE AT MOST 1538, SINCE THE PROJECTION
+ TEST COMPUTES i * 10 + 1000 IN 15 BITS. SO ITS RESULTS DON'T COMPARE WITH
+ FULL RUNS."
+RunDeltaBlue = (
+    run: args = (
+        | innerIterations |
+        innerIterations := args length > 1
+            ifTrue: [ (args at: 2) asInteger ]
+            ifFalse: [ 1 ].
+        (DeltaBlue new innerBenchmarkLoop: innerIterations)
+            ifTrue: [ 'DeltaBlue (CUT DOWN, NOT AWFY SIZE): ok' println ]
+            ifFalse: [
+                'DeltaBlue (CUT DOWN, NOT AWFY SIZE): incorrect result' println.
+                system exit: 1 ]
+    )
+)

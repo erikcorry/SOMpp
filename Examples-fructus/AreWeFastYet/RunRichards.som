@@ -1,0 +1,20 @@
+"Runs Richards on fructus, which can't load the benchmark by its name like
+ Harness and Run do. The argument is the number of inner iterations,
+ default 1.
+
+ THIS IS A CUT-DOWN RICHARDS: EACH ITERATION DOES A TENTH OF THE WORK OF THE
+ ARE-WE-FAST-YET ONE, SO ITS RESULTS DON'T COMPARE WITH FULL RUNS. See
+ Richards/Scheduler.som."
+RunRichards = (
+    run: args = (
+        | innerIterations |
+        innerIterations := args length > 1
+            ifTrue: [ (args at: 2) asInteger ]
+            ifFalse: [ 1 ].
+        (Richards new innerBenchmarkLoop: innerIterations)
+            ifTrue: [ 'Richards (CUT DOWN, NOT AWFY SIZE): ok' println ]
+            ifFalse: [
+                'Richards (CUT DOWN, NOT AWFY SIZE): incorrect result' println.
+                system exit: 1 ]
+    )
+)
