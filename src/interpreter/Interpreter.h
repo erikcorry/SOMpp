@@ -117,7 +117,12 @@ private:
 
     void sendMiss(uint8_t* site, VMClass* receiverClass);
 
+#ifdef FRUCTUS
+    [[noreturn]] void triggerDoesNotUnderstand(VMSymbol* signature,
+                                               VMClass* cls);
+#else
     void triggerDoesNotUnderstand(VMSymbol* signature);
+#endif
 
     void doDup();
     void doPushLocal(uint8_t bc1, uint8_t bc2);

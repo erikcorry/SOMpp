@@ -735,8 +735,12 @@ void Interpreter::sendMiss(uint8_t* site, VMClass* receiverClass) {
     VMInvokable* invokable = receiverClass->LookupInvokable(selector);
 
     if (invokable == nullptr) {
+#ifdef FRUCTUS
+        triggerDoesNotUnderstand(selector, receiverClass);
+#else
         triggerDoesNotUnderstand(selector);
         return;
+#endif
     }
     if (isUnlinked) {
         SendSite::Link(site, invokable, receiverClass);
@@ -752,16 +756,16 @@ void Interpreter::sendMiss(uint8_t* site, VMClass* receiverClass) {
 }
 
 #ifdef FRUCTUS
-// a closed world: the program can't have the selector, so it's an error
-void Interpreter::triggerDoesNotUnderstand(VMSymbol* signature) {
-    uint8_t const numberOfArgs = Signature::GetNumberOfArguments(signature);
-    vm_oop_t receiver = GetFrame()->GetStackElement(numberOfArgs - 1);
-    VMSymbol const* className = CLASS_OF(receiver)->GetName();
-    ErrorPrint("ERROR: Method ");
-    ErrorPrintChars(signature->GetRawChars(), signature->GetStringLength());
-    ErrorPrint(" not found in class ");
-    ErrorPrintChars(className->GetRawChars(), className->GetStringLength());
-    ErrorPrint("\n");
+// a closed world: the program can't have the selector, so it's an error, and
+// doesNotUnderstand:arguments: is never sent. Selectors and classes have no
+// names, so this is in the form tools/fructus-trace translates.
+void Interpreter::triggerDoesNotUnderstand(VMSymbol* signature, VMClass* cls) {
+    char selector[16];
+    char className[16];
+    FormatTagged(selector, "sel", (uintptr_t)signature);
+    FormatTagged(className, "class", (uintptr_t)cls);
+    ErrorPrintf("ERROR: %s not understood by an instance of %s\n", selector,
+                className);
     GetFrame()->PrintStackTrace();
     Quit(ERR_FAIL);
 }
@@ -887,9 +891,9 @@ bool Interpreter::doPushGlobal(VMSymbol* globalName) {
 #ifdef FRUCTUS
 // all globals are in the image, so this is an error
 void Interpreter::SendUnknownGlobal(VMSymbol* globalName) {
-    ErrorPrint("ERROR: Unknown global ");
-    ErrorPrintChars(globalName->GetRawChars(), globalName->GetStringLength());
-    ErrorPrint("\n");
+    char name[16];
+    FormatTagged(name, "sel", (uintptr_t)globalName);
+    ErrorPrintf("ERROR: Unknown global %s\n", name);
     GetFrame()->PrintStackTrace();
     Quit(ERR_FAIL);
 }
@@ -1001,7 +1005,7 @@ void Interpreter::doSuperSend(uint8_t* site) {
         invokable->Invoke(GetFrame());
     } else {
 #ifdef FRUCTUS
-        triggerDoesNotUnderstand(signature);
+        triggerDoesNotUnderstand(signature, super);
 #else
         uint8_t const numOfArgs = Signature::GetNumberOfArguments(signature);
         vm_oop_t receiver = GetFrame()->GetStackElement(numOfArgs - 1);

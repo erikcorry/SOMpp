@@ -311,7 +311,7 @@ VMMethod* Universe::createBootstrapMethod(VMClass* holder,
                                           uint8_t numArgsOfMsgSend) {
 #ifdef FRUCTUS
     VMMethod* bootstrapMethod =
-        NewMethod(&som_sym_bootstrap, 1, 0, numArgsOfMsgSend);
+        NewMethod(&som_sym_bootstrap, 1, 0, numArgsOfMsgSend, 1);
 #else
     vector<BackJump> inlinedLoops;
     auto* bootStrapScope = new LexicalScope(nullptr, {}, {});
@@ -1023,13 +1023,14 @@ void Universe::WalkGlobals(walk_heap_fn walk) {
 
 #ifdef FRUCTUS
 VMMethod* Universe::NewMethod(VMSymbol* signature, size_t numberOfBytecodes,
-                              size_t numLocals, size_t maxStackDepth) {
+                              size_t numLocals, size_t maxStackDepth,
+                              uint8_t numArgs) {
     // method needs space for the bytecodes, which start inside it
     size_t const additionalBytes =
         PADDED_SIZE(VMMethod::headerSize + numberOfBytecodes) -
         sizeof(VMMethod);
-    return new (GetHeap<HEAP_CLS>(), additionalBytes)
-        VMMethod(signature, numberOfBytecodes, numLocals, maxStackDepth);
+    return new (GetHeap<HEAP_CLS>(), additionalBytes) VMMethod(
+        signature, numberOfBytecodes, numLocals, maxStackDepth, numArgs);
 }
 #else
 VMMethod* Universe::NewMethod(VMSymbol* signature, size_t numberOfBytecodes,

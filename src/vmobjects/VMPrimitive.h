@@ -87,11 +87,16 @@ public:
 
     DECLARE_AS_DEBUG_STRING(override)
 
+#ifdef FRUCTUS
+    // the selector is a number, see VMSymbol.h, so the image has this
+    [[nodiscard]] inline uint8_t GetNumberOfArguments() const final {
+        return numberOfArguments;
+    }
+#else
     [[nodiscard]] inline uint8_t GetNumberOfArguments() const final {
         return Signature::GetNumberOfArguments(load_ptr(signature));
     }
 
-#ifndef FRUCTUS
     void Dump(const char* indent, bool printObjects) override;
 #endif
 
@@ -99,4 +104,7 @@ private:
     make_testable(public);
 
     FramePrim prim;
+#ifdef FRUCTUS
+    uint8_t numberOfArguments;
+#endif
 };

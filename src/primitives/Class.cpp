@@ -28,6 +28,9 @@
 
 #include "FructusPrimitives.h"
 
+#include <string.h>
+
+#include "../vm/Print.h"
 #include "../vm/Universe.h"
 #include "../vmobjects/ObjectFormats.h"
 #include "../vmobjects/VMClass.h"
@@ -39,16 +42,20 @@ vm_oop_t clsNew(vm_oop_t rcvr) {
     return Universe::NewInstance(self);
 }
 
-vm_oop_t clsName(vm_oop_t rcvr) {
-    auto* self = static_cast<VMClass*>(rcvr);
 #ifdef FRUCTUS
-    // the program can't have symbols
-    VMSymbol const* name = self->GetName();
-    return Universe::NewString(name->GetStringLength(), name->GetRawChars());
-#else
-    return self->GetName();
-#endif
+// classes have no names on fructus, so this is class@<address>, which
+// tools/fructus-trace translates
+vm_oop_t clsAsString(vm_oop_t rcvr) {
+    char str[16];
+    FormatTagged(str, "class", (uintptr_t)rcvr);
+    return Universe::NewString(strlen(str), str);
 }
+#else
+static vm_oop_t clsName(vm_oop_t rcvr) {
+    auto* self = static_cast<VMClass*>(rcvr);
+    return self->GetName();
+}
+#endif
 
 vm_oop_t clsSuperclass(vm_oop_t rcvr) {
     auto* self = static_cast<VMClass*>(rcvr);

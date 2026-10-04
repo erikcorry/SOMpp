@@ -33,11 +33,14 @@
 
 class Signature {
 public:
+#ifndef FRUCTUS
+    // on fructus a selector is a number, see VMSymbol.h
     inline static uint8_t GetNumberOfArguments(VMSymbol* sig) {
         return sig->numberOfArgumentsOfSignature;
     }
 
     static bool IsBinary(VMSymbol* sig);
+#endif
 
     static uint8_t DetermineNumberOfArguments(const char* sig, size_t length);
     static bool IsBinary(const char* sig, size_t length);

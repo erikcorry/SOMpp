@@ -24,15 +24,14 @@ THE SOFTWARE.
 "
 
 "Fructus is a closed world: the program can't make or get symbols or
- methods, and there is no reflection. See src/vm/FructusImage.h."
+ methods, there is no reflection, and classes have no names. See
+ src/vm/FructusImage.h."
 
 Class = (
 
-    "Accessing"
-    name     = primitive  "a String"
-
-    "Converting"
-    asString = ( ^self name )
+    "Converting: classes have no names on fructus, so this is
+     class@<address>, which tools/fructus-trace translates"
+    asString = primitive
 
     "Allocation"
     new = primitive

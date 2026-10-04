@@ -10,7 +10,8 @@
  * --gc-sections.
  *
  * The program can't make or get symbols or methods, so there are no
- * primitives that take or answer them, and Class>>name answers a String.
+ * primitives that take or answer them. Classes have no names, so there is
+ * no Class>>name, and Class>>asString answers class@<address>.
  *
  * P(class, classSide, selector, kind, routine), where kind is the routine's
  * type: Frame, Unary, Binary, or Ternary.
@@ -29,7 +30,7 @@
     P(Block, false, "restart", Frame, bRestart)                        \
                                                                        \
     P(Class, false, "new", Unary, clsNew)                              \
-    P(Class, false, "name", Unary, clsName)                            \
+    P(Class, false, "asString", Unary, clsAsString)                    \
     P(Class, false, "superclass", Unary, clsSuperclass)                \
                                                                        \
     P(Integer, false, "+", Binary, intPlus)                            \

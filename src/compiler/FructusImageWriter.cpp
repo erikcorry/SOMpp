@@ -25,6 +25,7 @@
 #include "../vm/Symbols.h"
 #include "../vm/Universe.h"
 #include "../vmobjects/ObjectFormats.h"
+#include "../vmobjects/Signature.h"
 #include "../vmobjects/VMArray.h"
 #include "../vmobjects/VMClass.h"
 #include "../vmobjects/VMEvaluationPrimitive.h"
@@ -259,8 +260,8 @@ private:
 
 /**
  * One .s file: a class and its metaclass, or the universe. Objects that are
- * not classes or symbols are local to the file that first refers to them,
- * and symbols are written by every file that refers to them.
+ * not classes are local to the file that first refers to them. A symbol is
+ * a number, which _selectors.s gives it, see VMSymbol.h.
  */
 class FructusImage::AsmFile {
 public:
@@ -270,7 +271,7 @@ public:
     /** Write an object with a global label. */
     void WriteGlobal(AbstractVMObject* obj, const std::string& label);
 
-    /** Write the local objects and symbols that were referred to. */
+    /** Write the local objects that were referred to. */
     void Finish();
 
     /** The file has the methods of `cls` and its metaclass. */
@@ -287,7 +288,6 @@ private:
                      const std::string& comment);
     void writeVMObject(VMObject* obj, const std::string& label);
     void writeString(VMString* str, const std::string& label);
-    void writeSymbol(VMSymbol* sym, const std::string& label);
     void writeInvokableHeader(ObjectWriter& w, VMInvokable* inv,
                               const std::string& vtable,
                               const std::string& comment);
@@ -312,7 +312,6 @@ private:
     std::ofstream out;
     std::map<AbstractVMObject*, std::string> localLabels;
     std::deque<AbstractVMObject*> pending;
-    std::map<std::string, VMSymbol*> symbols;  // by label, for stable output
     std::set<AbstractVMObject*> globals;
     VMClass* owner = nullptr;
 
@@ -333,6 +332,13 @@ public:
     explicit ImageWriter(std::string dir) : dir(std::move(dir)) {}
 
     void Write(const std::vector<std::string>& arguments);
+
+    /** The label of the number of a selector, see writeSelectors(). */
+    std::string SelectorLabel(VMSymbol* sym) {
+        std::string label = SymbolLabel(sym);
+        selectors[label] = sym;
+        return label;
+    }
 
     /** The label of a class or metaclass in the image. */
     std::string ClassLabel(VMClass* cls) {
@@ -380,8 +386,10 @@ private:
     void addGlobalsOf(VMInvokable* inv);
     void writeClass(VMClass* cls);
     void writeUniverse(const std::vector<std::string>& arguments);
+    void writeSelectors();
 
     std::string dir;
+    std::map<std::string, VMSymbol*> selectors;  // by label, for stable numbers
     std::vector<VMClass*> classes;
     std::deque<VMClass*> toScan;
     std::map<AbstractVMObject*, std::string> classLabels;
@@ -426,9 +434,7 @@ std::string FructusImage::AsmFile::Ref(vm_oop_t obj) {
         return image.ClassLabel(cls);
     }
     if (auto* sym = dynamic_cast<VMSymbol*>(o)) {
-        std::string label = SymbolLabel(sym);
-        symbols[label] = sym;
-        return label;
+        return image.SelectorLabel(sym);
     }
 
     auto const it = localLabels.find(o);
@@ -466,15 +472,6 @@ void FructusImage::AsmFile::Finish() {
             out << "\t.globl\t" << localLabels[obj] << "\n";
         }
         write(obj, localLabels[obj]);
-    }
-
-    // each symbol in a COMDAT group of its own, so the linker keeps one, and
-    // all in the som_symbols section, which is how the GC knows them
-    for (auto& [label, sym] : symbols) {
-        out << "\n\t.section\tsom_symbols,\"awG\",@progbits," << label
-            << ",comdat\n"
-            << "\t.globl\t" << label << "\n";
-        writeSymbol(sym, label);
     }
 
     writeDebugInfo();
@@ -577,9 +574,7 @@ void FructusImage::AsmFile::write(AbstractVMObject* obj, const std::string& labe
     out << "\t.balign\t2\n" << label << ":\n";
 
     // the most derived classes first
-    if (auto* sym = dynamic_cast<VMSymbol*>(obj)) {
-        writeSymbol(sym, label);
-    } else if (auto* str = dynamic_cast<VMString*>(obj)) {
+    if (auto* str = dynamic_cast<VMString*>(obj)) {
         writeString(str, label);
     } else if (auto* method = dynamic_cast<VMMethod*>(obj)) {
         writeMethod(method, label);
@@ -656,7 +651,13 @@ void FructusImage::AsmFile::writeVMObject(VMObject* obj, const std::string& labe
         }
         std::string const fieldComment =
             isClassField ? classFields[i] : "field " + std::to_string(i);
-        w.Word(L::VMObject_size + i * L::word, Ref(field), fieldComment);
+        // the only symbols left are the name of a class and the names of its
+        // fields, which fructus doesn't have, see VMSymbol.h
+        bool const isSymbol = !IS_TAGGED(field) &&
+                              dynamic_cast<VMSymbol*>(AS_OBJ(field)) != nullptr;
+        w.Word(L::VMObject_size + i * L::word,
+               Ref(isSymbol ? load_ptr(nilObject) : field),
+               isSymbol ? fieldComment + ", nil" : fieldComment);
     }
     w.End(size);
 }
@@ -670,24 +671,6 @@ void FructusImage::AsmFile::writeString(VMString* str, const std::string& label)
     w.Raw(L::VMString_size, length,
           "\t.ascii\t" + Quote(str->GetRawChars(), length) + "\n");
     w.End(L::VMString_size + L::PaddedSize(length));
-}
-
-/** A symbol isn't an object on fructus, see VMSymbol.h. */
-void FructusImage::AsmFile::writeSymbol(VMSymbol* sym, const std::string& label) {
-    size_t const length = sym->GetStringLength();
-    if (length > L::VMSymbol_maxLength) {
-        Fail("the symbol #" + Printable(sym) + " is longer than " +
-             std::to_string(L::VMSymbol_maxLength) + " characters");
-    }
-    out << "\t.balign\t2\n" << label << ":\t; Symbol #" << Printable(sym)
-        << "\n";
-    ObjectWriter w(out, label);
-    w.Byte(L::VMSymbol_numberOfArgumentsOfSignature,
-           sym->numberOfArgumentsOfSignature, "numberOfArgumentsOfSignature");
-    w.Byte(L::VMSymbol_length, (uint8_t)length, "length");
-    w.Raw(L::VMSymbol_size, length,
-          "\t.ascii\t" + Quote(sym->GetRawChars(), length) + "\n");
-    w.End(L::VMSymbol_size + L::PaddedSize(length));
 }
 
 std::string FructusImage::AsmFile::describe(VMInvokable* inv) {
@@ -857,21 +840,29 @@ void FructusImage::AsmFile::writeSendSite(ObjectWriter& w, size_t offset,
 void FructusImage::AsmFile::writePrimitive(VMPrimitive* prim,
                                            const std::string& label) {
     ObjectWriter w(out, label);
-    if (const PrimitiveSpec* spec = image.PrimitiveFor(prim)) {
-        writeInvokableHeader(w, prim, Vtable(PrimitiveClass(spec->kind)),
-                             std::string(spec->kind) + " primitive");
-        w.Word(L::VMPrimitive_prim, spec->routine, "routine");
-    } else {
-        // a primitive fructus doesn't have, which fails when it's called
-        if (!prim->IsEmpty()) {
-            Fail("the primitive " + describe(prim) +
-                 " is bound on the host, and fructus doesn't have it");
-        }
-        writeInvokableHeader(w, prim, Vtable("11VMPrimitive"),
-                             "Missing primitive");
-        w.Word(L::VMPrimitive_prim, "som_empty_primitive", "routine");
+    const PrimitiveSpec* spec = image.PrimitiveFor(prim);
+    if (spec == nullptr && !prim->IsEmpty()) {
+        Fail("the primitive " + describe(prim) +
+             " is bound on the host, and fructus doesn't have it");
     }
-    w.End(L::VMPrimitive_size);
+    // without a spec, a primitive fructus doesn't have, which fails when
+    // it's called
+    std::string const kind = spec == nullptr ? "Frame" : spec->kind;
+    writeInvokableHeader(w, prim, Vtable(PrimitiveClass(kind.c_str())),
+                         spec == nullptr ? "Missing primitive"
+                                         : kind + " primitive");
+    w.Word(L::VMPrimitive_prim,
+           spec == nullptr ? "som_empty_primitive" : spec->routine,
+           "routine");
+    if (kind == "Frame") {
+        // a VMPrimitive, whose selector can't tell
+        w.Byte(L::VMPrimitive_numberOfArguments,
+               Signature::GetNumberOfArguments(prim->GetSignature()),
+               "numberOfArguments");
+        w.End(L::VMPrimitive_size);
+    } else {
+        w.End(L::VMSafePrimitive_size);
+    }
 }
 
 void FructusImage::AsmFile::writeEvaluationPrimitive(
@@ -1138,6 +1129,16 @@ void FructusImage::ImageWriter::checkClosedWorld() {
                 if (auto* method = dynamic_cast<VMMethod*>(inv)) {
                     checkPushes(cls, method);
                 }
+                // a message that isn't understood is an error of the VM,
+                // which can't give the program the selector
+                if (inv->GetSignature()->GetStdString() ==
+                    "doesNotUnderstand:arguments:") {
+                    ErrorPrintf(
+                        "Warning: %s>>#doesNotUnderstand:arguments: is never "
+                        "called on fructus, where a message that isn't "
+                        "understood is an error\n",
+                        Printable(c->GetName()).c_str());
+                }
                 if (c == cls->GetClass()) {
                     checkClassFields(c, inv, nullptr);
                 }
@@ -1213,7 +1214,7 @@ void FructusImage::ImageWriter::writeUniverse(
     }
     out << "\t.data\n";
 
-    // the symbols the VM uses
+    // the selectors the VM uses
 #define FRUCTUS_REF_SYMBOL(mangled, selector) file.Ref(SymbolFor(selector));
     FRUCTUS_VM_SYMBOLS(FRUCTUS_REF_SYMBOL)
 #undef FRUCTUS_REF_SYMBOL
@@ -1228,6 +1229,33 @@ void FructusImage::ImageWriter::Write(const std::vector<std::string>& arguments)
         writeClass(cls);
     }
     writeUniverse(arguments);
+    writeSelectors();
+}
+
+/**
+ * The number of each selector and name of a global the files refer to, as
+ * an absolute ELF symbol: 2, 4, 6 and so on, see VMSymbol.h. The symbol
+ * table is how tools/fructus-trace knows them.
+ */
+void FructusImage::ImageWriter::writeSelectors() {
+    std::ofstream out(dir + "/_selectors.s");
+    if (!out) {
+        Fail("can't open " + dir + "/_selectors.s");
+    }
+    out << "; The selectors and the names of the globals, which are numbers\n"
+        << "; Written for fructus by SOM++ -asm, see src/vm/FructusImage.h\n\n";
+    size_t number = L::word;
+    for (auto const& [label, sym] : selectors) {
+        if (number >= L::selectorLimit) {
+            Fail("the program has more than " +
+                 std::to_string(L::selectorLimit / L::word - 1) +
+                 " selectors and globals");
+        }
+        out << "\t.globl\t" << label << "\n"
+            << "\t.set\t" << label << ", " << number << "\t; #"
+            << Printable(sym) << "\n";
+        number += L::word;
+    }
 }
 
 void FructusImage::Write(const std::string& dir,

@@ -28,45 +28,30 @@
 
 
 #include "../misc/defs.h"
+#include "../vm/FructusImage.h"
 #include "ObjectFormats.h"
 #include "VMClass.h"
 #include "VMObject.h"
 #include "VMString.h"
 
 #ifdef FRUCTUS
-// all symbols, which the linker gathers, see vm/FructusImage.h
-extern "C" const char __start_som_symbols[];
-extern "C" const char __stop_som_symbols[];
-
 /**
- * A symbol on fructus is only for dispatch and field names, and is only in
- * the image, see vm/FructusImage.h. The program can't have one, so it isn't
- * an object: it has no vtable and no GC field, and has no references, so the
- * GC tests for symbols with IsSymbol() and leaves them alone.
+ * A selector, or the name of a global, which on fructus isn't an object but
+ * a number the image writer gives it, so a VMSymbol* is never dereferenced.
+ * The numbers are below FructusLayout::selectorLimit, where no object is,
+ * so the GC tests for them with IsSymbol() and leaves them alone. See
+ * vm/FructusImage.h.
  */
 class VMSymbol {
 public:
     typedef GCSymbol Stored;
 
-    /** Whether `obj` points at a symbol. */
+    /** Whether `obj` is a selector. */
     static bool IsSymbol(const void* obj) {
-        return (const char*)obj >= __start_som_symbols &&
-               (const char*)obj < __stop_som_symbols;
+        return (uintptr_t)obj < FructusLayout::selectorLimit;
     }
 
-    [[nodiscard]] size_t GetStringLength() const { return length; }
-
-    /** The chars follow the symbol, and aren't null-terminated. */
-    [[nodiscard]] const char* GetRawChars() const {
-        return (const char*)(this + 1);
-    }
-
-private:
-    uint8_t numberOfArgumentsOfSignature;
-    uint8_t length;
-
-    friend class Signature;
-    friend class FructusImage;
+    VMSymbol() = delete;
 };
 #else
 class VMSymbol : public VMString {

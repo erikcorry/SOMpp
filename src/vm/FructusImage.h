@@ -14,10 +14,10 @@
  *  - A class is the global symbol som_class_<Name>, its metaclass
  *    som_meta_<Name>. A superclass in another file is an undefined symbol,
  *    so a missing class is a link error.
- *  - A symbol is som_sym_<mangled name>, defined in a COMDAT group of the
- *    same name by every file that uses it, so the linker keeps one copy and
- *    symbols stay unique. There is no symbol table, and no symbols are made
- *    at run time.
+ *  - There are no symbols. A selector, or the name of a global, is a
+ *    number, the absolute ELF symbol som_sym_<mangled name>, which
+ *    _selectors.s gives each, see vmobjects/VMSymbol.h. Classes have no
+ *    names: the name of a class and of its fields are nil.
  *  - Each class adds a global to the som_globals section.
  *  - A method of a class is the global symbol <class label>.<mangled
  *    selector>, for the super sends in other files. A method has no
@@ -30,17 +30,23 @@
  *    installed at run time.
  *  - _universe.s holds nil, true, false, the system object and their
  *    globals, the program's main class, its arguments, the block classes,
- *    and the symbols the VM uses.
+ *    and the selectors the VM uses.
  *  - Each file has DWARF debug info, which isn't loaded: a subprogram for
- *    each method and block, and the source line of each bytecode. A stack
- *    trace ends with the pc of each frame, which tools/fructus-trace turns
- *    into source lines with it.
+ *    each method and block, and the source line of each bytecode.
+ *
+ * So fructus prints numbers where it would print names: a stack trace is
+ * the pc of each frame, a selector is sel@<number> and a class is
+ * class@<address>. tools/fructus-trace translates them with the ELF file:
+ * the pcs into methods and source lines with the debug info, and the
+ * selectors and classes with the symbol table.
  *
  * The world is closed: the program's symbols and methods are only for
  * dispatch and field names. No bytecode pushes them, and no object the
  * program can get at has them in a field, see Smalltalk-fructus. So there is
  * no perform, a message that isn't understood or an unknown global is an
- * error of the VM, and since nothing moves, objects hash by their address.
+ * error of the VM, which never sends doesNotUnderstand:arguments: (the
+ * image writer warns about a class that has it), and since nothing moves,
+ * objects hash by their address.
  */
 
 #include <cstddef>
@@ -81,11 +87,12 @@ constexpr size_t VMString_length = 4;
 constexpr size_t VMString_chars = 6;
 constexpr size_t VMString_size = 8;
 
-/** A symbol isn't an object: no vtable or GC field, see VMSymbol.h. */
-constexpr size_t VMSymbol_numberOfArgumentsOfSignature = 0;
-constexpr size_t VMSymbol_length = 1;
-constexpr size_t VMSymbol_size = 2;
-constexpr size_t VMSymbol_maxLength = 255;
+/**
+ * A selector, or the name of a global, is a number, not an object, see
+ * VMSymbol.h: 2, 4, 6 and so on, below this, where no object is. Each is
+ * an absolute ELF symbol, som_sym_<mangled name>, in _selectors.s.
+ */
+constexpr size_t selectorLimit = 0x1000;
 
 constexpr size_t VMInvokable_signature = 4;
 constexpr size_t VMInvokable_holder = 6;
@@ -120,9 +127,15 @@ constexpr size_t SendSite_target = 2;
 constexpr size_t SendSite_receiverClass = 4;
 constexpr size_t SendSite_length = 6;
 
-/** VMPrimitive and VMSafe*Primitive: a Prim, which is just a routine. */
+/**
+ * VMPrimitive and VMSafe*Primitive: a Prim, which is just a routine. A
+ * VMPrimitive has the number of arguments too, which a VMSafe*Primitive's
+ * kind gives.
+ */
 constexpr size_t VMPrimitive_prim = 8;
-constexpr size_t VMPrimitive_size = 10;
+constexpr size_t VMPrimitive_numberOfArguments = 10;
+constexpr size_t VMPrimitive_size = 12;
+constexpr size_t VMSafePrimitive_size = 10;
 
 constexpr size_t VMEvaluationPrimitive_numberOfArguments = 8;
 constexpr size_t VMEvaluationPrimitive_size = 10;
@@ -149,7 +162,7 @@ class VMSymbol;
 constexpr int maxBlockClassArguments = 4;
 
 /**
- * The symbols the VM uses, which the image always has, as
+ * The selectors the VM uses, which the image always has a number for, as
  * P(mangled, selector).
  */
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)

@@ -43,6 +43,21 @@ __attribute__((noreturn)) __attribute__((noinline)) void Quit(int32_t err) {
 }
 
 #ifdef FRUCTUS
+void FormatTagged(char* out, const char* prefix, uintptr_t value) {
+    while (*prefix != 0) {
+        *out++ = *prefix++;
+    }
+    *out++ = '@';
+    int shift = 12;
+    while (shift > 0 && (value >> (unsigned)shift) == 0) {
+        shift -= 4;
+    }
+    for (; shift >= 0; shift -= 4) {
+        *out++ = "0123456789abcdef"[(value >> (unsigned)shift) & 0xfU];
+    }
+    *out = 0;
+}
+
 vm_oop_t IntegerOverflow() {
     ErrorExit("Integer overflow");
 }

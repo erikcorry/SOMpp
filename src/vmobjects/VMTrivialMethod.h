@@ -52,10 +52,6 @@ public:
     }
 #endif
 
-    [[nodiscard]] inline uint8_t GetNumberOfArguments() const final {
-        return Signature::GetNumberOfArguments(load_ptr(signature));
-    }
-
 #ifndef FRUCTUS
     void Dump(const char* indent, bool printObjects) override;
 #endif
@@ -83,6 +79,8 @@ class VMLiteralReturn : public VMTrivialMethod {
 public:
     typedef GCLiteralReturn Stored;
 
+    // the image has them on fructus
+#ifndef FRUCTUS
     VMLiteralReturn(VMSymbol* sig, TRIVIAL_ARGUMENTS_PARAM vm_oop_t literal)
         : VMTrivialMethod(sig TRIVIAL_ARGUMENTS),
           literal(store_with_separate_barrier(literal)),
@@ -90,6 +88,7 @@ public:
         write_barrier(this, sig);
         write_barrier(this, literal);
     }
+#endif
 
     [[nodiscard]] inline size_t GetObjectSize() const override {
         return sizeof(VMLiteralReturn);
@@ -118,6 +117,10 @@ public:
 
     DECLARE_AS_DEBUG_STRING(final)
 
+    [[nodiscard]] inline uint8_t GetNumberOfArguments() const final {
+        return numberOfArguments;
+    }
+
 private:
     gc_oop_t literal;
     uint8_t numberOfArguments;
@@ -129,6 +132,8 @@ class VMGlobalReturn : public VMTrivialMethod {
 public:
     typedef GCGlobalReturn Stored;
 
+    // the image has them on fructus
+#ifndef FRUCTUS
     VMGlobalReturn(VMSymbol* sig, TRIVIAL_ARGUMENTS_PARAM VMSymbol* globalName)
         : VMTrivialMethod(sig TRIVIAL_ARGUMENTS),
           globalName(store_with_separate_barrier(globalName)),
@@ -136,6 +141,7 @@ public:
         write_barrier(this, sig);
         write_barrier(this, globalName);
     }
+#endif
 
     [[nodiscard]] inline size_t GetObjectSize() const override {
         return sizeof(VMGlobalReturn);
@@ -164,6 +170,10 @@ public:
 
     DECLARE_AS_DEBUG_STRING(final)
 
+    [[nodiscard]] inline uint8_t GetNumberOfArguments() const final {
+        return numberOfArguments;
+    }
+
 private:
     GCSymbol* globalName;
     uint8_t numberOfArguments;
@@ -175,11 +185,14 @@ class VMGetter : public VMTrivialMethod {
 public:
     typedef GCGetter Stored;
 
+    // the image has them on fructus
+#ifndef FRUCTUS
     VMGetter(VMSymbol* sig, TRIVIAL_ARGUMENTS_PARAM size_t fieldIndex)
         : VMTrivialMethod(sig TRIVIAL_ARGUMENTS), fieldIndex(fieldIndex),
           numberOfArguments(Signature::GetNumberOfArguments(sig)) {
         write_barrier(this, sig);
     }
+#endif
 
     [[nodiscard]] inline size_t GetObjectSize() const override {
         return sizeof(VMGetter);
@@ -205,6 +218,10 @@ public:
 
     DECLARE_AS_DEBUG_STRING(final)
 
+    [[nodiscard]] inline uint8_t GetNumberOfArguments() const final {
+        return numberOfArguments;
+    }
+
 private:
     size_t fieldIndex;
     uint8_t numberOfArguments;
@@ -216,6 +233,8 @@ class VMSetter : public VMTrivialMethod {
 public:
     typedef GCSetter Stored;
 
+    // the image has them on fructus
+#ifndef FRUCTUS
     VMSetter(VMSymbol* sig, TRIVIAL_ARGUMENTS_PARAM size_t fieldIndex,
              size_t argIndex)
         : VMTrivialMethod(sig TRIVIAL_ARGUMENTS), fieldIndex(fieldIndex),
@@ -223,6 +242,7 @@ public:
           numberOfArguments(Signature::GetNumberOfArguments(sig)) {
         write_barrier(this, sig);
     }
+#endif
 
     [[nodiscard]] inline size_t GetObjectSize() const override {
         return sizeof(VMSetter);
@@ -247,6 +267,10 @@ public:
     void WalkObjects(walk_heap_fn /*walk*/) override;
 
     DECLARE_AS_DEBUG_STRING(final)
+
+    [[nodiscard]] inline uint8_t GetNumberOfArguments() const final {
+        return numberOfArguments;
+    }
 
 private:
     make_testable(public);

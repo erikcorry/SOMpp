@@ -68,12 +68,9 @@
 
 #ifdef FRUCTUS
 VMMethod::VMMethod(VMSymbol* signature, size_t bcCount, size_t numLocals,
-                   size_t maxStackDepth)
+                   size_t maxStackDepth, uint8_t numArgs)
     : VMInvokable(signature), bcLength(bcCount), numberOfLocals(numLocals),
-      maximumNumberOfStackElements(maxStackDepth),
-      numberOfArguments(signature == nullptr
-                            ? 0
-                            : Signature::GetNumberOfArguments(signature)) {
+      maximumNumberOfStackElements(maxStackDepth), numberOfArguments(numArgs) {
 #else
 VMMethod::VMMethod(VMSymbol* signature, size_t bcCount, size_t numLocals,
                    size_t maxStackDepth, LexicalScope* lexicalScope,

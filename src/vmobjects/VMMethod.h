@@ -106,8 +106,9 @@ public:
     typedef GCMethod Stored;
 
 #ifdef FRUCTUS
+    // the signature is a number, which can't tell numArgs, see VMSymbol.h
     VMMethod(VMSymbol* signature, size_t bcCount, size_t numLocals,
-             size_t maxStackDepth);
+             size_t maxStackDepth, uint8_t numArgs);
 #else
     VMMethod(VMSymbol* signature, size_t bcCount, size_t numLocals,
              size_t maxStackDepth, LexicalScope* lexicalScope,

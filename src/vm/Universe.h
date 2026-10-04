@@ -87,7 +87,7 @@ public:
 #ifdef FRUCTUS
     static VMMethod* NewMethod(VMSymbol* /*signature*/,
                                size_t numberOfBytecodes, size_t numLocals,
-                               size_t maxStackDepth);
+                               size_t maxStackDepth, uint8_t numArgs);
 #else
     static VMMethod* NewMethod(VMSymbol* /*signature*/,
                                size_t numberOfBytecodes, size_t numLocals,

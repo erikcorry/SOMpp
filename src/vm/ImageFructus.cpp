@@ -162,11 +162,6 @@ void FructusImage::CheckLayout() {
     CHECK_FIELD(VMString, chars, VMString_chars);
     CHECK_SIZE(VMString, L::VMString_size);
 
-    CHECK_FIELD(VMSymbol, numberOfArgumentsOfSignature,
-                VMSymbol_numberOfArgumentsOfSignature);
-    CHECK_FIELD(VMSymbol, length, VMSymbol_length);
-    CHECK_SIZE(VMSymbol, L::VMSymbol_size);
-
     static_assert(SendSite::numberOfArguments == L::SendSite_numberOfArguments);
     static_assert(SendSite::target == L::SendSite_target);
     static_assert(SendSite::receiverClass == L::SendSite_receiverClass);
@@ -206,13 +201,14 @@ void FructusImage::CheckLayout() {
     CHECK_SIZE(VMSetter, L::VMSetter_size);
 
     CHECK_FIELD(VMPrimitive, prim, VMPrimitive_prim);
+    CHECK_FIELD(VMPrimitive, numberOfArguments, VMPrimitive_numberOfArguments);
     CHECK_SIZE(VMPrimitive, L::VMPrimitive_size);
     CHECK_FIELD(VMSafeUnaryPrimitive, prim, VMPrimitive_prim);
-    CHECK_SIZE(VMSafeUnaryPrimitive, L::VMPrimitive_size);
+    CHECK_SIZE(VMSafeUnaryPrimitive, L::VMSafePrimitive_size);
     CHECK_FIELD(VMSafeBinaryPrimitive, prim, VMPrimitive_prim);
-    CHECK_SIZE(VMSafeBinaryPrimitive, L::VMPrimitive_size);
+    CHECK_SIZE(VMSafeBinaryPrimitive, L::VMSafePrimitive_size);
     CHECK_FIELD(VMSafeTernaryPrimitive, prim, VMPrimitive_prim);
-    CHECK_SIZE(VMSafeTernaryPrimitive, L::VMPrimitive_size);
+    CHECK_SIZE(VMSafeTernaryPrimitive, L::VMSafePrimitive_size);
     static_assert(offsetof(FramePrim, pointer) == 0, "a Prim is its routine");
     static_assert(offsetof(UnaryPrim, pointer) == 0, "a Prim is its routine");
     static_assert(offsetof(BinaryPrim, pointer) == 0, "a Prim is its routine");

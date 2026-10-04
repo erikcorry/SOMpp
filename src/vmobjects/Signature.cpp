@@ -31,9 +31,11 @@
 
 #include "VMSymbol.h"
 
+#ifndef FRUCTUS
 bool Signature::IsBinary(VMSymbol* sig) {
     return sig->numberOfArgumentsOfSignature == 2;
 }
+#endif
 
 uint8_t Signature::DetermineNumberOfArguments(const char* sig,
                                               const size_t length) {

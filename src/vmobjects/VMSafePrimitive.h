@@ -27,10 +27,6 @@ public:
 
     DECLARE_AS_DEBUG_STRING(final)
 
-    [[nodiscard]] inline uint8_t GetNumberOfArguments() const final {
-        return Signature::GetNumberOfArguments(load_ptr(signature));
-    }
-
 #ifndef FRUCTUS
     void Dump(const char* indent, bool printObjects) override;
 #endif
@@ -63,6 +59,11 @@ public:
 
     [[nodiscard]] bool IsMarkedInvalid() const final { return !prim.IsValid(); }
 
+    // the receiver included
+    [[nodiscard]] inline uint8_t GetNumberOfArguments() const final {
+        return 1;
+    }
+
 private:
     UnaryPrim prim;
 };
@@ -94,6 +95,11 @@ public:
 
     [[nodiscard]] bool IsMarkedInvalid() const final { return !prim.IsValid(); }
 
+    // the receiver included
+    [[nodiscard]] inline uint8_t GetNumberOfArguments() const final {
+        return 2;
+    }
+
 private:
     BinaryPrim prim;
 };
@@ -124,6 +130,11 @@ public:
     }
 
     [[nodiscard]] bool IsMarkedInvalid() const final { return !prim.IsValid(); }
+
+    // the receiver included
+    [[nodiscard]] inline uint8_t GetNumberOfArguments() const final {
+        return 3;
+    }
 
 private:
     TernaryPrim prim;
