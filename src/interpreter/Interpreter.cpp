@@ -68,11 +68,7 @@ vm_oop_t Interpreter::Start() {
 #else
   #define HEATMAP_INC() ((void)0)
 #endif
-#define PROLOGUE(bcCount) \
-    {                     \
-        HEATMAP_INC();    \
-        pc += (bcCount);  \
-    }
+#define PROLOGUE() HEATMAP_INC()
 
     // initialization
     method = GetMethod();
@@ -150,133 +146,134 @@ vm_oop_t Interpreter::Start() {
     //
     // THIS IS THE former interpretation loop
 LABEL_BC_HALT:
-    PROLOGUE(1);
-    SAVE_PC();
+    PROLOGUE();
+    SAVE_NEXT_PC(1);
     return GetFrame()->GetStackElement(0);  // handle the halt bytecode
 
 LABEL_BC_DUP:
-    PROLOGUE(1);
+    PROLOGUE();
     doDup();
-    DISPATCH_NOGC();
+    NEXT_NOGC(1);
 
 LABEL_BC_DUP_SECOND:
-    PROLOGUE(1);
+    PROLOGUE();
     {
         vm_oop_t elem = GetFrame()->GetStackElement(1);
         GetFrame()->Push(elem);
     }
-    DISPATCH_NOGC();
+    NEXT_NOGC(1);
 
 LABEL_BC_PUSH_LOCAL:
-    PROLOGUE(3);
-    doPushLocal(pc[-2], pc[-1]);
-    DISPATCH_NOGC();
+    PROLOGUE();
+    doPushLocal(pc[1], pc[2]);
+    NEXT_NOGC(3);
 
 LABEL_BC_PUSH_LOCAL_0:
-    PROLOGUE(1);
+    PROLOGUE();
     doPushLocalWithIndex(0);
-    DISPATCH_NOGC();
+    NEXT_NOGC(1);
 
 LABEL_BC_PUSH_LOCAL_1:
-    PROLOGUE(1);
+    PROLOGUE();
     doPushLocalWithIndex(1);
-    DISPATCH_NOGC();
+    NEXT_NOGC(1);
 
 LABEL_BC_PUSH_LOCAL_2:
-    PROLOGUE(1);
+    PROLOGUE();
     doPushLocalWithIndex(2);
-    DISPATCH_NOGC();
+    NEXT_NOGC(1);
 
 LABEL_BC_PUSH_ARGUMENT:
-    PROLOGUE(3);
-    doPushArgument(pc[-2], pc[-1]);
-    DISPATCH_NOGC();
+    PROLOGUE();
+    doPushArgument(pc[1], pc[2]);
+    NEXT_NOGC(3);
 
 LABEL_BC_PUSH_SELF:
-    PROLOGUE(1);
+    PROLOGUE();
     {
         vm_oop_t argument = GetFrame()->GetArgumentInCurrentContext(0);
         GetFrame()->Push(argument);
     }
-    DISPATCH_NOGC();
+    NEXT_NOGC(1);
 
 LABEL_BC_PUSH_ARG_1:
-    PROLOGUE(1);
+    PROLOGUE();
     {
         vm_oop_t argument = GetFrame()->GetArgumentInCurrentContext(1);
         GetFrame()->Push(argument);
     }
-    DISPATCH_NOGC();
+    NEXT_NOGC(1);
 
 LABEL_BC_PUSH_ARG_2:
-    PROLOGUE(1);
+    PROLOGUE();
     {
         vm_oop_t argument = GetFrame()->GetArgumentInCurrentContext(2);
         GetFrame()->Push(argument);
     }
-    DISPATCH_NOGC();
+    NEXT_NOGC(1);
 
 LABEL_BC_PUSH_FIELD:
-    PROLOGUE(2);
-    doPushField(pc[-1]);
-    DISPATCH_NOGC();
+    PROLOGUE();
+    doPushField(pc[1]);
+    NEXT_NOGC(2);
 
 LABEL_BC_PUSH_FIELD_0:
-    PROLOGUE(1);
+    PROLOGUE();
     doPushFieldWithIndex(0);
-    DISPATCH_NOGC();
+    NEXT_NOGC(1);
 
 LABEL_BC_PUSH_FIELD_1:
-    PROLOGUE(1);
+    PROLOGUE();
     doPushFieldWithIndex(1);
-    DISPATCH_NOGC();
+    NEXT_NOGC(1);
 
 LABEL_BC_PUSH_BLOCK:
-    PROLOGUE(1 + sizeof(void*));
-    doPushBlock((VMInvokable*)LoadWord(pc - sizeof(void*)));
-    DISPATCH_GC();
+    PROLOGUE();
+    doPushBlock((VMInvokable*)LoadWord(pc + 1));
+    NEXT_GC(1 + sizeof(void*));
 
 LABEL_BC_PUSH_CONSTANT:
-    PROLOGUE(1 + sizeof(void*));
-    GetFrame()->Push((vm_oop_t)LoadWord(pc - sizeof(void*)));
-    DISPATCH_NOGC();
+    PROLOGUE();
+    GetFrame()->Push((vm_oop_t)LoadWord(pc + 1));
+    NEXT_NOGC(1 + sizeof(void*));
 
 LABEL_BC_PUSH_0:
-    PROLOGUE(1);
+    PROLOGUE();
     if (USE_TAGGING) {
         GetFrame()->PushNoBarrier(NEW_INT(0));
     } else {
         GetFrame()->Push(NEW_INT(0));
     }
-    DISPATCH_NOGC();
+    NEXT_NOGC(1);
 
 LABEL_BC_PUSH_1:
-    PROLOGUE(1);
+    PROLOGUE();
     if (USE_TAGGING) {
         GetFrame()->PushNoBarrier(NEW_INT(1));
     } else {
         GetFrame()->Push(NEW_INT(1));
     }
-    DISPATCH_NOGC();
+    NEXT_NOGC(1);
 
 LABEL_BC_PUSH_SMALL_INT:
-    PROLOGUE(2);
+    PROLOGUE();
 #if USE_TAGGING
-    GetFrame()->PushNoBarrier(NEW_INT((int8_t)pc[-1]));
+    GetFrame()->PushNoBarrier(NEW_INT((int8_t)pc[1]));
 #else
-    GetFrame()->Push(NEW_INT((int8_t)pc[-1]));
+    GetFrame()->Push(NEW_INT((int8_t)pc[1]));
 #endif
-    DISPATCH_NOGC();
+    NEXT_NOGC(2);
 
 LABEL_BC_PUSH_NIL:
-    PROLOGUE(1);
+    PROLOGUE();
     GetFrame()->PushNoBarrier(load_ptr(nilObject));
-    DISPATCH_NOGC();
+    NEXT_NOGC(1);
 
 LABEL_BC_PUSH_GLOBAL:
-    PROLOGUE(1 + sizeof(void*));
+    PROLOGUE();
     {
-        auto* globalName = (VMSymbol*)LoadWord(pc - sizeof(void*));
+        auto* globalName = (VMSymbol*)LoadWord(pc + 1);
+        pc += 1 + sizeof(void*);
         if (!doPushGlobal(globalName)) {
             // sends #unknownGlobal:, which pushes a new frame
             SAVE_PC();
@@ -287,85 +284,85 @@ LABEL_BC_PUSH_GLOBAL:
     DISPATCH_GC();
 
 LABEL_BC_POP:
-    PROLOGUE(1);
+    PROLOGUE();
     doPop();
-    DISPATCH_NOGC();
+    NEXT_NOGC(1);
 
 LABEL_BC_POP_LOCAL:
-    PROLOGUE(3);
-    doPopLocal(pc[-2], pc[-1]);
-    DISPATCH_NOGC();
+    PROLOGUE();
+    doPopLocal(pc[1], pc[2]);
+    NEXT_NOGC(3);
 
 LABEL_BC_POP_LOCAL_0:
-    PROLOGUE(1);
+    PROLOGUE();
     doPopLocalWithIndex(0);
-    DISPATCH_NOGC();
+    NEXT_NOGC(1);
 
 LABEL_BC_POP_LOCAL_1:
-    PROLOGUE(1);
+    PROLOGUE();
     doPopLocalWithIndex(1);
-    DISPATCH_NOGC();
+    NEXT_NOGC(1);
 
 LABEL_BC_POP_LOCAL_2:
-    PROLOGUE(1);
+    PROLOGUE();
     doPopLocalWithIndex(2);
-    DISPATCH_NOGC();
+    NEXT_NOGC(1);
 
 LABEL_BC_POP_ARGUMENT:
-    PROLOGUE(3);
-    doPopArgument(pc[-2], pc[-1]);
-    DISPATCH_NOGC();
+    PROLOGUE();
+    doPopArgument(pc[1], pc[2]);
+    NEXT_NOGC(3);
 
 LABEL_BC_POP_FIELD:
-    PROLOGUE(2);
-    doPopField(pc[-1]);
-    DISPATCH_NOGC();
+    PROLOGUE();
+    doPopField(pc[1]);
+    NEXT_NOGC(2);
 
 LABEL_BC_POP_FIELD_0:
-    PROLOGUE(1);
+    PROLOGUE();
     doPopFieldWithIndex(0);
-    DISPATCH_NOGC();
+    NEXT_NOGC(1);
 
 LABEL_BC_POP_FIELD_1:
-    PROLOGUE(1);
+    PROLOGUE();
     doPopFieldWithIndex(1);
-    DISPATCH_NOGC();
+    NEXT_NOGC(1);
 
 LABEL_BC_SEND:
-    PROLOGUE(SendSite::length);
-    SAVE_PC();
-    doSend(pc - SendSite::length);
+    PROLOGUE();
+    SAVE_NEXT_PC(SendSite::length);
+    doSend(pc);
     RELOAD_PC();
     DISPATCH_GC();
 
 LABEL_BC_SEND_1:
-    PROLOGUE(SendSite::length);
-    SAVE_PC();
-    doUnarySend(pc - SendSite::length);
+    PROLOGUE();
+    SAVE_NEXT_PC(SendSite::length);
+    doUnarySend(pc);
     RELOAD_PC();
     DISPATCH_GC();
 
 LABEL_BC_SUPER_SEND:
-    PROLOGUE(SendSite::length);
-    SAVE_PC();
-    doSuperSend(pc - SendSite::length);
+    PROLOGUE();
+    SAVE_NEXT_PC(SendSite::length);
+    doSuperSend(pc);
     RELOAD_PC();
     DISPATCH_GC();
 
 LABEL_BC_RETURN_LOCAL:
-    PROLOGUE(1);
+    PROLOGUE();
     doReturnLocal();
     RELOAD_PC();
     DISPATCH_NOGC();
 
 LABEL_BC_RETURN_NON_LOCAL:
-    PROLOGUE(1);
+    PROLOGUE();
     doReturnNonLocal();
     RELOAD_PC();
     DISPATCH_NOGC();
 
 LABEL_BC_RETURN_SELF: {
-    PROLOGUE(1);
+    PROLOGUE();
     assert(GetFrame()->GetContext() == nullptr &&
            "RETURN_SELF is not allowed in blocks");
     popFrameAndPushResult(GetFrame()->GetArgumentInCurrentContext(0));
@@ -374,49 +371,49 @@ LABEL_BC_RETURN_SELF: {
 }
 
 LABEL_BC_RETURN_FIELD_0:
-    PROLOGUE(1);
+    PROLOGUE();
     doReturnFieldWithIndex(0);
     RELOAD_PC();
     DISPATCH_NOGC();
 
 LABEL_BC_RETURN_FIELD_1:
-    PROLOGUE(1);
+    PROLOGUE();
     doReturnFieldWithIndex(1);
     RELOAD_PC();
     DISPATCH_NOGC();
 
 LABEL_BC_RETURN_FIELD_2:
-    PROLOGUE(1);
+    PROLOGUE();
     doReturnFieldWithIndex(2);
     RELOAD_PC();
     DISPATCH_NOGC();
 
 LABEL_BC_INC:
-    PROLOGUE(1);
+    PROLOGUE();
     doInc();
     if (USE_TAGGING) {
-        DISPATCH_NOGC();
+        NEXT_NOGC(1);
     } else {
         // without integer tagging doInc() allocates memory and the IfNil
         // benchmark will allocate, but not reach a GC point, and run out of
         // memory
-        DISPATCH_GC();
+        NEXT_GC(1);
     }
 
 LABEL_BC_DEC:
-    PROLOGUE(1);
+    PROLOGUE();
     doDec();
-    DISPATCH_NOGC();
+    NEXT_NOGC(1);
 
 LABEL_BC_INC_FIELD:
-    PROLOGUE(2);
-    doIncField(pc[-1]);
-    DISPATCH_NOGC();
+    PROLOGUE();
+    doIncField(pc[1]);
+    NEXT_NOGC(2);
 
 LABEL_BC_INC_FIELD_PUSH:
-    PROLOGUE(2);
-    doIncFieldPush(pc[-1]);
-    DISPATCH_NOGC();
+    PROLOGUE();
+    doIncFieldPush(pc[1]);
+    NEXT_NOGC(2);
 
 LABEL_BC_JUMP: {
     uint8_t const offset = pc[1];

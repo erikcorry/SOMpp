@@ -40,6 +40,10 @@
 // and reloaded after anything that may have switched frames or moved it.
 #define SAVE_PC() frame->SetBytecodeIndex(pc - method->GetBytecodes())
 
+// Saves the index of the next bytecode, for a bytecode `bcCount` long.
+#define SAVE_NEXT_PC(bcCount) \
+    frame->SetBytecodeIndex(pc + (bcCount) - method->GetBytecodes())
+
 #define RELOAD_PC() pc = method->GetBytecodes() + frame->GetBytecodeIndex()
 
 #define DISPATCH_NOGC()         \
@@ -55,6 +59,21 @@
             RELOAD_PC();                                    \
         }                                                   \
         goto* loopTargets[*pc];                             \
+    }
+
+// A bytecode reads its operands at positive offsets from pc, then moves pc
+// to the next bytecode as it dispatches. Fructus loads at positive offsets
+// better than at negative ones.
+#define NEXT_NOGC(bcCount) \
+    {                      \
+        pc += (bcCount);   \
+        DISPATCH_NOGC();   \
+    }
+
+#define NEXT_GC(bcCount) \
+    {                    \
+        pc += (bcCount); \
+        DISPATCH_GC();   \
     }
 
 class Interpreter {
