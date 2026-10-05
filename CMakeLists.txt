@@ -93,9 +93,9 @@ if(FRUCTUS)
   # and malloc has what is below it, from 0x1500, for the SOM heap and the
   # rest. Linking says when the program doesn't fit, and running out of
   # memory says when the heap doesn't.
-  set(FRUCTUS_HEAP_END 0x4000 CACHE STRING
+  set(FRUCTUS_HEAP_END 0x7000 CACHE STRING
     "Where the program starts, and malloc's memory ends")
-  set(FRUCTUS_HEAP_SIZE 8192 CACHE STRING "Size of the SOM heap in bytes")
+  set(FRUCTUS_HEAP_SIZE 16384 CACHE STRING "Size of the SOM heap in bytes")
   add_definitions(-DFRUCTUS
                   -DFRUCTUS_HEAP_SIZE=${FRUCTUS_HEAP_SIZE})
   add_link_options(-Wl,--defsym=__heap_end=${FRUCTUS_HEAP_END})
