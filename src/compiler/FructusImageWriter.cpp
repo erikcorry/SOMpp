@@ -459,21 +459,28 @@ std::string FructusImage::AsmFile::IntRef(int64_t value) {
 }
 
 std::string FructusImage::AsmFile::Ref(vm_oop_t obj) {
-    if (IS_TAGGED(obj)) {
-        auto const value = (int64_t)SMALL_INT_VAL(obj);
+    // an integer, which fructus boxes unless it's a small one, see
+    // som_box_int_t, once in each file
+    if (IS_TAGGED(obj) || IsVMBigInteger(obj)) {
+        int64_t value = 0;
+        if (IS_TAGGED(obj)) {
+            value = (int64_t)SMALL_INT_VAL(obj);
+        } else {
+            InfInt const& big = static_cast<VMBigInteger*>(obj)->embeddedInteger;
+            if (big < InfInt(INT64_MIN) || big > InfInt(INT64_MAX)) {
+                Fail("the integer literal " + big.toString() +
+                     " doesn't fit in the 64 bits of fructus");
+            }
+            value = big.toInt64();
+        }
         if (value >= L::smallIntMin && value <= L::smallIntMax) {
             return IntRef(value);
         }
-        // boxed on fructus, see som_box_int_t, once in each file
         VMInteger*& box = boxedIntegers[value];
         if (box == nullptr) {
             box = Universe::NewInteger(value);
         }
         obj = box;
-    } else if (IsVMBigInteger(obj)) {
-        Fail("the integer literal " +
-             static_cast<VMBigInteger*>(obj)->embeddedInteger.toString() +
-             " doesn't fit in the 64 bits of fructus");
     }
 
     auto* o = AS_OBJ(obj);

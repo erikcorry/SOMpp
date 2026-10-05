@@ -5,6 +5,7 @@
  * overflow. Each primitive has a fast path for small integers, and does the
  * rest with 64 bits, signed where it matters.
  */
+#include <limits.h>
 #include <stdio.h>
 
 #include "../misc/ParseInteger.h"
@@ -255,27 +256,29 @@ vm_oop_t intAbs(vm_oop_t self) {
     return value < 0 ? NEW_INT(WrappingAdd(~value, 1)) : self;
 }
 
+/**
+ * libc's printf has 32 bits at most, so the low digits of a wider value come
+ * off nine at a time first. Dividing the signed value uses the same helpers
+ * as / and rem:, and the remainders have its sign.
+ */
 vm_oop_t intAsString(vm_oop_t self) {
-    if (IS_SMALL_INT(self)) {
-        char buffer[8];  // "-16384" and the terminator
-        int const length =
-            snprintf(buffer, sizeof(buffer), "%d", (int)SMALL_INT_VAL(self));
-        return Universe::NewString(length, buffer);
+    constexpr som_box_int_t billion = 1000000000;
+    som_box_int_t value = IntegerValue(self);
+    long groups[2];  // 2^63 / 10^18 fits in 32 bits
+    int numberOfGroups = 0;
+    while (value < LONG_MIN || value > LONG_MAX) {
+        groups[numberOfGroups++] = (long)(value % billion);
+        value /= billion;
     }
-    // the digits from the end, of the magnitude, which fits unsigned
-    char buffer[21];  // "-9223372036854775808"
-    char* const end = buffer + sizeof(buffer);
-    char* start = end;
-    som_box_int_t const value = IntegerValue(self);
-    uint64_t magnitude = value < 0 ? -(uint64_t)value : (uint64_t)value;
-    do {
-        *--start = (char)('0' + (magnitude % 10));
-        magnitude /= 10;
-    } while (magnitude != 0);
-    if (value < 0) {
-        *--start = '-';
+
+    char buffer[22];  // "-9223372036854775808" and the terminator
+    int length = snprintf(buffer, sizeof(buffer), "%ld", (long)value);
+    while (numberOfGroups > 0) {
+        long const group = groups[--numberOfGroups];
+        length += snprintf(buffer + length, sizeof(buffer) - length, "%09ld",
+                           group < 0 ? -group : group);
     }
-    return Universe::NewString(end - start, start);
+    return Universe::NewString(length, buffer);
 }
 
 vm_oop_t intFromString(vm_oop_t /*unused*/, vm_oop_t right) {
