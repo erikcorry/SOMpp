@@ -14,9 +14,9 @@
  *  - A class is the global symbol som_class_<Name>, its metaclass
  *    som_meta_<Name>. A superclass in another file is an undefined symbol,
  *    so a missing class is a link error.
- *  - There are no symbols. A selector, or the name of a global, is a
- *    number, the absolute ELF symbol som_sym_<mangled name>, which
- *    _selectors.s gives each, see vmobjects/VMSymbol.h. Classes have no
+ *  - A selector, or the name of a global, is a number, the absolute ELF
+ *    symbol som_sym_<mangled name>, which _selectors.s gives each, see
+ *    vmobjects/VMSymbol.h, and not an object. Classes have no
  *    names, nor a field for one, and no names of fields, just how many.
  *    Since the class side is compiled on the host, where a class's first
  *    field is its name, the image writer shifts the class side's field
@@ -33,9 +33,15 @@
  *  - A primitive is an object in the image like a method, which refers to
  *    its routine by name, see primitives/FructusPrimitives.h. Nothing is
  *    installed at run time.
+ *  - A #symbol in the program is an object of its own, which has nothing to
+ *    do with the selector of the same name: the global som_symbol_<mangled
+ *    name>, an instance of Symbol, which on fructus is an Object with a
+ *    String of its characters, not a String itself. It's unique, so the
+ *    program can compare symbols with == and use them as keys of identity
+ *    dictionaries, and print them, but it can't send them or make new ones.
  *  - _universe.s holds nil, true, false, the system object and their
  *    globals, the program's main class, its arguments, the block classes,
- *    and the selectors the VM uses.
+ *    the selectors the VM uses, and the #symbols.
  *  - Each file has DWARF debug info, which isn't loaded: a subprogram for
  *    each method and block, and the source line of each bytecode.
  *
@@ -45,7 +51,7 @@
  * the pcs into methods and source lines with the debug info, and the
  * selectors and classes with the symbol table.
  *
- * The world is closed: the program's symbols and methods are only for
+ * The world is closed: the program's selectors and methods are only for
  * dispatch and field names. No bytecode pushes them, and no object the
  * program can get at has them in a field, see Smalltalk-fructus. So there is
  * no perform, a message that isn't understood or an unknown global is an

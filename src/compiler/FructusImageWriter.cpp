@@ -110,6 +110,11 @@ std::string SymbolLabel(const VMSymbol* sym) {
     return "som_sym_" + Mangle(sym);
 }
 
+/** The label of the object a #symbol in the program is, see FructusImage.h. */
+std::string SymbolObjectLabel(const VMSymbol* sym) {
+    return "som_symbol_" + Mangle(sym);
+}
+
 /** A string as a gas string literal. */
 std::string Quote(const char* chars, size_t length) {
     std::string result = "\"";
@@ -168,14 +173,10 @@ VMSymbol* ImageSignature(VMInvokable* inv) {
     return SymbolFor(selector);
 }
 
-/** Symbols and methods are only for dispatch, the program can't have them. */
-bool IsDispatchOnly(vm_oop_t obj) {
-    if (IS_TAGGED(obj)) {
-        return false;
-    }
-    auto* o = AS_OBJ(obj);
-    return dynamic_cast<VMSymbol*>(o) != nullptr ||
-           dynamic_cast<VMInvokable*>(o) != nullptr;
+/** Methods are only for dispatch, the program can't have them. */
+bool IsInvokable(vm_oop_t obj) {
+    return !IS_TAGGED(obj) &&
+           dynamic_cast<VMInvokable*>(AS_OBJ(obj)) != nullptr;
 }
 
 std::string Describe(vm_oop_t obj) {
@@ -260,8 +261,9 @@ private:
 
 /**
  * One .s file: a class and its metaclass, or the universe. Objects that are
- * not classes are local to the file that first refers to them. A symbol is
- * a number, which _selectors.s gives it, see VMSymbol.h.
+ * not classes are local to the file that first refers to them. A selector
+ * is a number, which _selectors.s gives it, see VMSymbol.h, and a #symbol
+ * the program has is an object in _universe.s.
  */
 class FructusImage::AsmFile {
 public:
@@ -270,6 +272,8 @@ public:
 
     /** Write an object with a global label. */
     void WriteGlobal(AbstractVMObject* obj, const std::string& label);
+    /** Write the object for a #symbol, see ImageWriter::writeSymbols(). */
+    void WriteSymbolObject(VMSymbol* sym, const std::string& label);
 
     /** Write the local objects that were referred to. */
     void Finish();
@@ -277,8 +281,13 @@ public:
     /** The file has the methods of `cls` and its metaclass. */
     void SetOwner(VMClass* cls) { owner = cls; }
 
-    /** The assembler expression for a reference to `obj`. */
+    /**
+     * The assembler expression for a reference to `obj`, which the program
+     * can have: a symbol is the object for it, not its selector.
+     */
     std::string Ref(vm_oop_t obj);
+    /** The number of a selector or the name of a global. */
+    std::string SelectorRef(VMSymbol* sym);
     /** The assembler expression for a tagged integer. */
     std::string IntRef(int64_t value);
 
@@ -343,6 +352,27 @@ public:
         return label;
     }
 
+    /** The label of the object for a #symbol, see writeSymbols(). */
+    std::string SymbolObjectRef(VMSymbol* sym) {
+        std::string label = SymbolObjectLabel(sym);
+        symbolObjects[label] = sym;
+        return label;
+    }
+
+    /**
+     * The superclass of `cls` in the image. A symbol isn't a string on
+     * fructus, see writeSymbols(), so Symbol is an Object there.
+     */
+    VMClass* SuperClass(VMClass* cls) {
+        if (cls == load_ptr(symbolClass)) {
+            return load_ptr(objectClass);
+        }
+        if (cls == load_ptr(symbolClass)->GetClass()) {
+            return load_ptr(objectClass)->GetClass();
+        }
+        return static_cast<VMClass*>(cls->GetSuperClass());
+    }
+
     /** The label of a class or metaclass in the image. */
     std::string ClassLabel(VMClass* cls) {
         auto const it = classLabels.find(cls);
@@ -389,10 +419,12 @@ private:
     void addGlobalsOf(VMInvokable* inv);
     void writeClass(VMClass* cls);
     void writeUniverse(const std::vector<std::string>& arguments);
+    void writeSymbols(AsmFile& file);
     void writeSelectors();
 
     std::string dir;
     std::map<std::string, VMSymbol*> selectors;  // by label, for stable numbers
+    std::map<std::string, VMSymbol*> symbolObjects;  // by label
     std::vector<VMClass*> classes;
     std::deque<VMClass*> toScan;
     std::map<AbstractVMObject*, std::string> classLabels;
@@ -440,7 +472,7 @@ std::string FructusImage::AsmFile::Ref(vm_oop_t obj) {
         return image.ClassLabel(cls);
     }
     if (auto* sym = dynamic_cast<VMSymbol*>(o)) {
-        return image.SelectorLabel(sym);
+        return image.SymbolObjectRef(sym);
     }
 
     auto const it = localLabels.find(o);
@@ -464,9 +496,31 @@ std::string FructusImage::AsmFile::Ref(vm_oop_t obj) {
     return label;
 }
 
+std::string FructusImage::AsmFile::SelectorRef(VMSymbol* sym) {
+    return image.SelectorLabel(sym);
+}
+
 void FructusImage::AsmFile::WriteGlobal(AbstractVMObject* obj, const std::string& label) {
     out << "\n\t.globl\t" << label << "\n";
     write(obj, label);
+}
+
+void FructusImage::AsmFile::WriteSymbolObject(VMSymbol* sym,
+                                              const std::string& label) {
+    out << "\n\t.globl\t" << label << "\n"
+        << "\t.balign\t2\n"
+        << label << ":\n";
+    ObjectWriter w(out, label);
+    size_t const size = L::VMObject_size + L::word;
+    writeHeader(w, Vtable("8VMObject"), "Symbol #" + Printable(sym));
+    w.Word(L::VMObject_totalObjectSize, (int64_t)size, "totalObjectSize");
+    w.Word(L::VMObject_numberOfFields, 1, "numberOfFields");
+    w.Word(L::VMObject_clazz, image.ClassLabel(load_ptr(symbolClass)),
+           "class");
+    // its characters, a string of its own
+    w.Word(L::VMObject_size, Ref(Universe::NewString(sym->GetStdString())),
+           "string");
+    w.End(size);
 }
 
 void FructusImage::AsmFile::Finish() {
@@ -706,6 +760,9 @@ void FructusImage::AsmFile::writeVMObject(VMObject* obj, const std::string& labe
         size_t const offset =
             L::VMObject_size + (isClass ? i - 1 : i) * L::word;
         vm_oop_t field = obj->GetField(i);
+        if (isClass && i == superClassField) {
+            field = image.SuperClass(static_cast<VMClass*>(obj));
+        }
         if (isClass && i == instanceFieldsField) {
             // fructus has no field names, just how many, see VMClass.h
             w.Word(offset,
@@ -714,7 +771,7 @@ void FructusImage::AsmFile::writeVMObject(VMObject* obj, const std::string& labe
                    "numberOfInstanceFields");
             continue;
         }
-        if (!isClassField && !isInternal && IsDispatchOnly(field)) {
+        if (!isClassField && !isInternal && IsInvokable(field)) {
             Fail("the program could get at " + Describe(field) + " in " +
                  comment);
         }
@@ -746,7 +803,8 @@ void FructusImage::AsmFile::writeInvokableHeader(ObjectWriter& w, VMInvokable* i
                                    const std::string& vtable,
                                    const std::string& comment) {
     writeHeader(w, vtable, comment + " " + describe(inv));
-    w.Word(L::VMInvokable_signature, Ref(ImageSignature(inv)), "signature");
+    w.Word(L::VMInvokable_signature, SelectorRef(ImageSignature(inv)),
+           "signature");
 }
 
 void FructusImage::AsmFile::writeMethod(VMMethod* method, const std::string& label) {
@@ -860,7 +918,9 @@ FructusImage::AsmFile::Lines FructusImage::AsmFile::writeBytecodes(
                              ? std::to_string((int64_t)SMALL_INT_VAL(word))
                              : Describe(word));
             }
-            line << "\n\t.short\t" << Ref(word);
+            line << "\n\t.short\t"
+                 << (bc == BC_PUSH_GLOBAL ? SelectorRef((VMSymbol*)word)
+                                          : Ref(word));
         }
         line << "\n";
         w.Raw(offset + n, fructusLength, line.str());
@@ -884,12 +944,12 @@ size_t FructusImage::AsmFile::writeSendSite(ObjectWriter& w, size_t offset,
     std::string name = Bytecode::GetBytecodeName(bc);
     name.erase(name.find_last_not_of(' ') + 1);
 
-    std::string target = Ref(selector);
+    std::string target = SelectorRef(selector);
     std::string receiverClass = "0";
     std::string comment = name + " #" + Printable(selector);
     if (bc == BC_SUPER_SEND) {
         VMClass* holder = method->GetHolder();
-        auto* super = static_cast<VMClass*>(holder->GetSuperClass());
+        VMClass* super = image.SuperClass(holder);
         VMInvokable* inv = super->LookupInvokable(selector);
         if (inv == nullptr) {
             // the invokables have no holder to find the superclass with at
@@ -960,7 +1020,7 @@ void FructusImage::AsmFile::writeEvaluationPrimitive(
 void FructusImage::AsmFile::writeLiteralReturn(VMLiteralReturn* inv,
                                  const std::string& label) {
     ObjectWriter w(out, label);
-    if (IsDispatchOnly(load_ptr(inv->literal))) {
+    if (IsInvokable(load_ptr(inv->literal))) {
         Fail(describe(inv) + " answers " + Describe(load_ptr(inv->literal)) +
              ", but the program can't have it");
     }
@@ -977,7 +1037,7 @@ void FructusImage::AsmFile::writeGlobalReturn(VMGlobalReturn* inv,
                                 const std::string& label) {
     ObjectWriter w(out, label);
     writeInvokableHeader(w, inv, Vtable("14VMGlobalReturn"), "GlobalReturn");
-    w.Word(L::VMGlobalReturn_globalName, Ref(load_ptr(inv->globalName)),
+    w.Word(L::VMGlobalReturn_globalName, SelectorRef(load_ptr(inv->globalName)),
            "globalName");
     w.Byte(L::VMGlobalReturn_numberOfArguments, inv->numberOfArguments,
            "numberOfArguments");
@@ -1119,7 +1179,7 @@ void FructusImage::ImageWriter::installPrimitives(VMClass* cls) {
     }
 }
 
-/** No bytecode pushes a symbol or a method. */
+/** No bytecode pushes a method. A #symbol is an object, see writeSymbols(). */
 void FructusImage::ImageWriter::checkPushes(VMClass* cls, VMMethod* method) {
     for (size_t i = 0; i < method->bcLength;
          i += Bytecode::GetBytecodeLength(method->GetBytecode(i))) {
@@ -1128,7 +1188,7 @@ void FructusImage::ImageWriter::checkPushes(VMClass* cls, VMMethod* method) {
             checkPushes(cls, static_cast<VMMethod*>(method->GetConstant(i)));
         } else if (bc == BC_PUSH_CONSTANT) {
             vm_oop_t constant = method->GetConstant(i);
-            if (IsDispatchOnly(constant)) {
+            if (IsInvokable(constant)) {
                 Fail(Printable(cls->GetName()) + ">>#" +
                      Printable(method->GetSignature()) + " pushes " +
                      Describe(constant) + ", but the program can't have it");
@@ -1138,12 +1198,8 @@ void FructusImage::ImageWriter::checkPushes(VMClass* cls, VMMethod* method) {
 }
 
 /**
- * The program can't have symbols or methods, and its primitives are known
- * when it's linked.
- */
-/**
  * The class side can get at the fields of the class, but the program can't
- * have the name, a symbol, or the arrays of field names and invokables, and
+ * have the name, a selector, or the arrays of field names and invokables, and
  * only the VM changes them. `method` is `inv` or one of its blocks.
  */
 void FructusImage::ImageWriter::checkClassFields(VMClass* metaclass,
@@ -1242,7 +1298,7 @@ void FructusImage::ImageWriter::writeClass(VMClass* cls) {
     file.WriteGlobal(cls->GetClass(), ClassLabel(cls->GetClass()));
 
     // the Universe::Global for the class
-    std::string const nameRef = file.Ref(cls->GetName());
+    std::string const nameRef = file.SelectorRef(cls->GetName());
     file.Out() << "\n\t.section\tsom_globals,\"a\",@progbits\n"
                << "\t.balign\t2\n"
                << "\t.short\t" << nameRef << ", " << label << "\n"
@@ -1274,7 +1330,8 @@ void FructusImage::ImageWriter::writeUniverse(
         << "\n\t.globl\tsom_main_selector\n"
         << "som_main_selector:\n"
         << "\t.short\t"
-        << file.Ref(SymbolFor(hasRunWithArguments ? "run:" : "run")) << "\n";
+        << file.SelectorRef(SymbolFor(hasRunWithArguments ? "run:" : "run"))
+        << "\n";
 
     // indexed by the number of arguments, with the receiver
     out << "\n\t.globl\tsom_block_classes\n"
@@ -1294,17 +1351,39 @@ void FructusImage::ImageWriter::writeUniverse(
     out << "\n\t.section\tsom_globals,\"a\",@progbits\n"
         << "\t.balign\t2\n";
     for (const char* name : {"nil", "true", "false", "system"}) {
-        out << "\t.short\t" << file.Ref(SymbolFor(name)) << ", som_" << name
-            << "\n";
+        out << "\t.short\t" << file.SelectorRef(SymbolFor(name)) << ", som_"
+            << name << "\n";
     }
     out << "\t.data\n";
 
     // the selectors the VM uses
-#define FRUCTUS_REF_SYMBOL(mangled, selector) file.Ref(SymbolFor(selector));
+#define FRUCTUS_REF_SYMBOL(mangled, selector) \
+    file.SelectorRef(SymbolFor(selector));
     FRUCTUS_VM_SYMBOLS(FRUCTUS_REF_SYMBOL)
 #undef FRUCTUS_REF_SYMBOL
 
+    writeSymbols(file);
     file.Finish();
+}
+
+/**
+ * The objects for the #symbols in the program, which the classes' files
+ * referred to. A symbol is unique, so the program can compare them with ==.
+ * It has nothing to do with the selector of the same name, and it isn't a
+ * string, but has one with its characters: Symbol is a subclass of Object
+ * with one field.
+ */
+void FructusImage::ImageWriter::writeSymbols(AsmFile& file) {
+    if (symbolObjects.empty()) {
+        return;
+    }
+    VMClass* symbol = load_ptr(symbolClass);
+    if (symbol->GetNumberOfInstanceFields() != 1) {
+        Fail("Symbol must have one field, the string of its characters");
+    }
+    for (auto const& [label, sym] : symbolObjects) {
+        file.WriteSymbolObject(sym, label);
+    }
 }
 
 void FructusImage::ImageWriter::Write(const std::vector<std::string>& arguments) {

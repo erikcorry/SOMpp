@@ -23,8 +23,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 "
 
-"Fructus is a closed world: the program can't make or get symbols or
- methods, and there is no reflection. See src/vm/FructusImage.h."
+"Fructus is a closed world: the program can't make symbols, or get
+ selectors or methods, and there is no reflection. See src/vm/FructusImage.h."
 
 Primitive = (
 )

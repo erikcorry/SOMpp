@@ -9,8 +9,9 @@
  * what the method it replaces does, and an unused routine is dropped by
  * --gc-sections.
  *
- * The program can't make or get symbols or methods, so there are no
- * primitives that take or answer them. Classes have no names, so there is
+ * The program can't make symbols or get selectors or methods, so there are
+ * no primitives that take or answer them. Its #symbols are just objects,
+ * see vm/FructusImage.h. Classes have no names, so there is
  * no Class>>name, and Class>>asString answers class@<address>.
  *
  * P(class, classSide, selector, kind, routine), where kind is the routine's

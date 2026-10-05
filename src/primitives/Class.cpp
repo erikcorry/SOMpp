@@ -63,7 +63,7 @@ vm_oop_t clsSuperclass(vm_oop_t rcvr) {
 }
 
 #ifndef FRUCTUS
-// the program can't have symbols or methods on fructus
+// the program can't have selectors or methods on fructus
 static vm_oop_t clsMethods(vm_oop_t rcvr) {
     auto* self = static_cast<VMClass*>(rcvr);
     return self->GetInstanceInvokables();

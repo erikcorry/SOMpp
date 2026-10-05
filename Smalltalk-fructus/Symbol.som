@@ -23,8 +23,22 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 "
 
-"Fructus is a closed world: the program can't make or get symbols or
- methods, and there is no reflection. See src/vm/FructusImage.h."
+"Fructus is a closed world: the program can't make symbols, or get
+ selectors or methods, and there is no reflection. See src/vm/FructusImage.h.
 
-Symbol = String (
+ A #symbol in the program is a unique object, which the image writer makes,
+ so symbols are for comparing with == and for keys of identity
+ dictionaries. It isn't a string, but has one with its characters: Symbol
+ is an Object on fructus, whatever the host makes it, and the image writer
+ sets the field."
+
+Symbol = Object (
+    | string |
+
+    "Converting"
+    asString = ( ^string )
+    asSymbol = ( ^self )
+
+    "Printing"
+    print    = ( '#' print. string print )
 )
