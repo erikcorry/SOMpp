@@ -55,6 +55,7 @@
 #include "../vmobjects/VMClass.h"
 #include "../vmobjects/VMDouble.h"
 #include "../vmobjects/VMFrame.h"
+#include "../vmobjects/VMInteger.h"
 #include "../vmobjects/VMInvokable.h"
 #include "../vmobjects/VMMethod.h"
 #include "../vmobjects/VMObject.h"
@@ -1085,7 +1086,10 @@ void Interpreter::doInc() {
     if (IS_SMALL_INT(val)) {
         som_int_t const result = SMALL_INT_VAL(val) + 1;
         val = NEW_INT(result);
-#ifndef FRUCTUS
+#ifdef FRUCTUS
+    } else if (IsBoxedInteger(val)) {
+        val = NEW_INT(WrappingAdd(IntegerValue(val), 1));
+#else
     } else if (CLASS_OF(val) == load_ptr(doubleClass)) {
         double const d = static_cast<VMDouble*>(val)->GetEmbeddedDouble();
         val = Universe::NewDouble(d + 1.0);
@@ -1107,7 +1111,10 @@ void Interpreter::doDec() {
     if (IS_SMALL_INT(val)) {
         som_int_t const result = SMALL_INT_VAL(val) - 1;
         val = NEW_INT(result);
-#ifndef FRUCTUS
+#ifdef FRUCTUS
+    } else if (IsBoxedInteger(val)) {
+        val = NEW_INT(WrappingAdd(IntegerValue(val), -1));
+#else
     } else if (CLASS_OF(val) == load_ptr(doubleClass)) {
         double const d = static_cast<VMDouble*>(val)->GetEmbeddedDouble();
         val = Universe::NewDouble(d - 1.0);
@@ -1137,7 +1144,10 @@ void Interpreter::doIncField(uint8_t fieldIndex) {
     if (IS_SMALL_INT(val)) {
         som_int_t const result = SMALL_INT_VAL(val) + 1;
         val = NEW_INT(result);
-#ifndef FRUCTUS
+#ifdef FRUCTUS
+    } else if (IsBoxedInteger(val)) {
+        val = NEW_INT(WrappingAdd(IntegerValue(val), 1));
+#else
     } else if (CLASS_OF(val) == load_ptr(doubleClass)) {
         double const d = static_cast<VMDouble*>(val)->GetEmbeddedDouble();
         val = Universe::NewDouble(d + 1.0);
@@ -1163,7 +1173,10 @@ void Interpreter::doIncFieldPush(uint8_t fieldIndex) {
     if (IS_SMALL_INT(val)) {
         som_int_t const result = SMALL_INT_VAL(val) + 1;
         val = NEW_INT(result);
-#ifndef FRUCTUS
+#ifdef FRUCTUS
+    } else if (IsBoxedInteger(val)) {
+        val = NEW_INT(WrappingAdd(IntegerValue(val), 1));
+#else
     } else if (CLASS_OF(val) == load_ptr(doubleClass)) {
         double const d = static_cast<VMDouble*>(val)->GetEmbeddedDouble();
         val = Universe::NewDouble(d + 1.0);
@@ -1187,6 +1200,11 @@ bool Interpreter::checkIsGreater() {
     if (IS_SMALL_INT(top) && IS_SMALL_INT(top2)) {
         return SMALL_INT_VAL(top) > SMALL_INT_VAL(top2);
     }
+#ifdef FRUCTUS
+    if (IsInteger(top) && IsInteger(top2)) {
+        return IntegerValue(top) > IntegerValue(top2);
+    }
+#endif
     if (IS_DOUBLE(top) && IS_DOUBLE(top2)) {
         return AS_DOUBLE(top) > AS_DOUBLE(top2);
     }

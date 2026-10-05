@@ -918,7 +918,7 @@ VMObject* Universe::NewInstanceWithoutFields() {
     return result;
 }
 
-VMInteger* Universe::NewInteger(som_int_t value) {
+VMInteger* Universe::NewInteger(som_box_int_t value) {
     recordStat(IntegerHistogram, value);
 
 #if CACHE_INTEGER
@@ -931,6 +931,12 @@ VMInteger* Universe::NewInteger(som_int_t value) {
     recordStat(Allocation, "VMInteger", sizeof(VMInteger));
     return new (GetHeap<HEAP_CLS>(), 0) VMInteger(value);
 }
+
+#ifdef FRUCTUS
+vm_oop_t BoxInteger(som_box_int_t value) {
+    return Universe::NewInteger(value);
+}
+#endif
 
 #ifndef FRUCTUS
 vm_oop_t Universe::NewInt(InfInt&& value) {

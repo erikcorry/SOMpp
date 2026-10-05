@@ -95,6 +95,14 @@ constexpr size_t VMClass_size = 16;
 
 constexpr size_t VMArray_size = 10;
 
+/**
+ * An integer that isn't a small one, with 64 bits that wrap around, see
+ * som_box_int_t.
+ */
+constexpr size_t VMInteger_value = 4;
+constexpr size_t VMInteger_valueSize = 8;
+constexpr size_t VMInteger_size = 12;
+
 constexpr size_t VMString_length = 4;
 constexpr size_t VMString_chars = 6;
 constexpr size_t VMString_size = 8;
@@ -157,7 +165,10 @@ constexpr size_t VMSafePrimitive_size = 8;
 constexpr size_t VMEvaluationPrimitive_numberOfArguments = 6;
 constexpr size_t VMEvaluationPrimitive_size = 8;
 
-/** Small integers are tagged, so they have 15 bits. */
+/**
+ * Small integers are tagged, so they have 15 bits. Other integers are a
+ * VMInteger.
+ */
 constexpr long smallIntMin = -(1L << 14);
 constexpr long smallIntMax = (1L << 14) - 1;
 

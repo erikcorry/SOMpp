@@ -34,16 +34,16 @@ class VMInteger : public AbstractVMObject {
 public:
     typedef GCInteger Stored;
 
-    explicit VMInteger(som_int_t val) : embeddedInteger(val) {}
+    explicit VMInteger(som_box_int_t val) : embeddedInteger(val) {}
     ~VMInteger() override = default;
 
-    [[nodiscard]] inline som_int_t GetEmbeddedInteger() const;
+    [[nodiscard]] inline som_box_int_t GetEmbeddedInteger() const;
     [[nodiscard]] VMInteger* CloneForMovingGC() const override;
     [[nodiscard]] VMClass* GetClass() const override;
     [[nodiscard]] inline size_t GetObjectSize() const override;
 
     [[nodiscard]] inline som_int_t GetHash() const override {
-        return embeddedInteger;
+        return (som_int_t)embeddedInteger;
     }
 
     void MarkObjectAsInvalid() override;
@@ -53,10 +53,10 @@ public:
 
     make_testable(public);
 
-    som_int_t embeddedInteger;
+    som_box_int_t embeddedInteger;
 };
 
-som_int_t VMInteger::GetEmbeddedInteger() const {
+som_box_int_t VMInteger::GetEmbeddedInteger() const {
     return embeddedInteger;
 }
 
@@ -64,3 +64,32 @@ size_t VMInteger::GetObjectSize() const {
     // no need to pad -> sizeof returns padded size anyway
     return sizeof(VMInteger);
 }
+
+#ifdef FRUCTUS
+/**
+ * Whether `obj` is a boxed integer, see som_box_int_t. The integer box is
+ * one, so this compares with its vtable.
+ */
+inline bool IsBoxedInteger(vm_oop_t obj) {
+    return !IS_TAGGED(obj) &&
+           *(void**)obj == *(void**)GlobalBox::IntegerBox();  // NOLINT
+}
+
+inline bool IsInteger(vm_oop_t obj) {
+    return IS_TAGGED(obj) || IsBoxedInteger(obj);
+}
+
+/** The value of an integer, small or boxed. */
+inline som_box_int_t IntegerValue(vm_oop_t obj) {
+    return IS_TAGGED(obj)
+               ? (som_box_int_t)SMALL_INT_VAL(obj)
+               : static_cast<VMInteger*>(obj)->GetEmbeddedInteger();
+}
+
+/** a + b, wrapping around. */
+inline som_box_int_t WrappingAdd(som_box_int_t a, som_box_int_t b) {
+    som_box_int_t result = 0;
+    (void)__builtin_add_overflow(a, b, &result);
+    return result;
+}
+#endif

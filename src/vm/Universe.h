@@ -97,7 +97,7 @@ public:
 #endif
     static VMObject* NewInstance(VMClass* /*classOfInstance*/);
     static VMObject* NewInstanceWithoutFields();
-    static VMInteger* NewInteger(som_int_t /*value*/);
+    static VMInteger* NewInteger(som_box_int_t /*value*/);
 
 #ifndef FRUCTUS
     static vm_oop_t NewInt(InfInt&& /*value*/);

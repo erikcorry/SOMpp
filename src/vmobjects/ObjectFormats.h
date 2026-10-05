@@ -40,6 +40,17 @@ typedef intptr_t som_int_t;
 typedef uintptr_t som_uint_t;
 
 #ifdef FRUCTUS
+/**
+ * The value of a boxed integer, a VMInteger. On fructus an integer that
+ * doesn't fit in a small integer is boxed, with 64 bits, which wrap around:
+ * there are no big integers, and no overflow.
+ */
+typedef int64_t som_box_int_t;
+#else
+typedef som_int_t som_box_int_t;
+#endif
+
+#ifdef FRUCTUS
 /** A hash as a small integer: its low 15 bits, sign extended. */
 inline som_int_t SmallIntHash(som_uint_t bits) {
     return (som_int_t)(bits << 1U) >> 1U;
@@ -87,11 +98,11 @@ VMTAGGED_INTEGER_WITHIN_RANGE_CHECK(T value) {
 }
 
 #ifdef FRUCTUS
-  // there are no big integers, so this is an error, see IntegerOverflow()
+  // there are no big integers: a 64-bit VMInteger, see som_box_int_t
   #define TAG_INTEGER(X)                                 \
       ((VMTAGGED_INTEGER_WITHIN_RANGE_CHECK(X))          \
            ? ((vm_oop_t)((((uintptr_t)(X)) << 1U) | 1U)) \
-           : IntegerOverflow())
+           : BoxInteger(X))
 #elif ADDITIONAL_ALLOCATION
   #define TAG_INTEGER(X)                                                   \
       ((VMTAGGED_INTEGER_WITHIN_RANGE_CHECK(X) && Universe::NewInteger(0)) \
@@ -196,8 +207,8 @@ typedef VMOop* vm_oop_t;
 typedef GCOop* gc_oop_t;
 
 #ifdef FRUCTUS
-/** There are no big integers, so a result that doesn't fit is an error. */
-__attribute__((noreturn)) vm_oop_t IntegerOverflow();
+/** A new VMInteger, for a value that isn't a small integer. */
+vm_oop_t BoxInteger(som_box_int_t value);
 #endif
 
 /**

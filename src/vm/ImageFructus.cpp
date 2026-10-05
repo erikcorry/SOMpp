@@ -11,6 +11,7 @@
 #include "../vmobjects/VMArray.h"
 #include "../vmobjects/VMClass.h"
 #include "../vmobjects/VMEvaluationPrimitive.h"
+#include "../vmobjects/VMInteger.h"
 #include "../vmobjects/VMMethod.h"
 #include "../vmobjects/VMObject.h"
 #include "../vmobjects/VMPrimitive.h"
@@ -156,6 +157,11 @@ void FructusImage::CheckLayout() {
     CHECK_SIZE(VMClass, L::VMClass_size);
 
     CHECK_SIZE(VMArray, L::VMArray_size);
+
+    CHECK_FIELD(VMInteger, gcField, gcField);
+    CHECK_FIELD(VMInteger, embeddedInteger, VMInteger_value);
+    static_assert(sizeof(som_box_int_t) == L::VMInteger_valueSize);
+    CHECK_SIZE(VMInteger, L::VMInteger_size);
 
     CHECK_FIELD(VMString, gcField, gcField);
     CHECK_FIELD(VMString, length, VMString_length);

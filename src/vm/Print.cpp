@@ -57,8 +57,4 @@ void FormatTagged(char* out, const char* prefix, uintptr_t value) {
     }
     *out = 0;
 }
-
-vm_oop_t IntegerOverflow() {
-    ErrorExit("Integer overflow");
-}
 #endif

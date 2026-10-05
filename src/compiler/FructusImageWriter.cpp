@@ -23,12 +23,15 @@
 #include "../vm/Globals.h"
 #include "../vm/Print.h"
 #include "../vm/Symbols.h"
+#include "../vm/IsValidObject.h"
 #include "../vm/Universe.h"
 #include "../vmobjects/ObjectFormats.h"
 #include "../vmobjects/Signature.h"
 #include "../vmobjects/VMArray.h"
+#include "../vmobjects/VMBigInteger.h"
 #include "../vmobjects/VMClass.h"
 #include "../vmobjects/VMEvaluationPrimitive.h"
+#include "../vmobjects/VMInteger.h"
 #include "../vmobjects/VMMethod.h"
 #include "../vmobjects/VMObject.h"
 #include "../vmobjects/VMPrimitive.h"
@@ -299,6 +302,7 @@ private:
                      const std::string& comment);
     void writeVMObject(VMObject* obj, const std::string& label);
     void writeString(VMString* str, const std::string& label);
+    void writeInteger(VMInteger* integer, const std::string& label);
     void writeInvokableHeader(ObjectWriter& w, VMInvokable* inv,
                               const std::string& vtable,
                               const std::string& comment);
@@ -323,6 +327,7 @@ private:
     ImageWriter& image;
     std::ofstream out;
     std::map<AbstractVMObject*, std::string> localLabels;
+    std::map<int64_t, VMInteger*> boxedIntegers;
     std::deque<AbstractVMObject*> pending;
     std::set<AbstractVMObject*> globals;
     VMClass* owner = nullptr;
@@ -455,7 +460,20 @@ std::string FructusImage::AsmFile::IntRef(int64_t value) {
 
 std::string FructusImage::AsmFile::Ref(vm_oop_t obj) {
     if (IS_TAGGED(obj)) {
-        return IntRef((int64_t)SMALL_INT_VAL(obj));
+        auto const value = (int64_t)SMALL_INT_VAL(obj);
+        if (value >= L::smallIntMin && value <= L::smallIntMax) {
+            return IntRef(value);
+        }
+        // boxed on fructus, see som_box_int_t, once in each file
+        VMInteger*& box = boxedIntegers[value];
+        if (box == nullptr) {
+            box = Universe::NewInteger(value);
+        }
+        obj = box;
+    } else if (IsVMBigInteger(obj)) {
+        Fail("the integer literal " +
+             static_cast<VMBigInteger*>(obj)->embeddedInteger.toString() +
+             " doesn't fit in the 64 bits of fructus");
     }
 
     auto* o = AS_OBJ(obj);
@@ -636,6 +654,8 @@ void FructusImage::AsmFile::write(AbstractVMObject* obj, const std::string& labe
     // the most derived classes first
     if (auto* str = dynamic_cast<VMString*>(obj)) {
         writeString(str, label);
+    } else if (auto* integer = dynamic_cast<VMInteger*>(obj)) {
+        writeInteger(integer, label);
     } else if (auto* method = dynamic_cast<VMMethod*>(obj)) {
         writeMethod(method, label);
     } else if (auto* prim = dynamic_cast<VMPrimitive*>(obj)) {
@@ -790,6 +810,21 @@ void FructusImage::AsmFile::writeString(VMString* str, const std::string& label)
     w.Raw(L::VMString_size, length,
           "\t.ascii\t" + Quote(str->GetRawChars(), length) + "\n");
     w.End(L::VMString_size + L::PaddedSize(length));
+}
+
+/** An integer that isn't a small one on fructus, with 64 bits. */
+void FructusImage::AsmFile::writeInteger(VMInteger* integer,
+                                         const std::string& label) {
+    ObjectWriter w(out, label);
+    auto const value = (int64_t)integer->GetEmbeddedInteger();
+    writeHeader(w, Vtable("9VMInteger"), "Integer " + std::to_string(value));
+    // little endian, a word at a time
+    for (size_t i = 0; i < L::VMInteger_valueSize; i += L::word) {
+        auto const bits = (uint16_t)((uint64_t)value >> (i * 8));
+        w.Word(L::VMInteger_value + i, (int64_t)bits,
+               i == 0 ? "value" : "");
+    }
+    w.End(L::VMInteger_size);
 }
 
 std::string FructusImage::AsmFile::describe(VMInvokable* inv) {

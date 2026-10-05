@@ -69,11 +69,12 @@ file(GLOB UNITTEST_SRC    ${UNITTEST_DIR}/*.cpp)
 
 if(FRUCTUS)
   # The 16-bit fructus target: no SOM compiler (the class library is prepared
-  # on the host), no floats, no big integers, only the mark-sweep GC.
+  # on the host), no floats, no big integers (an integer that isn't a small
+  # one has 64 bits, which wrap around), only the mark-sweep GC.
   set(COMPILER_SRC "")
   list(FILTER MEMORY_SRC INCLUDE REGEX "/(Heap|MarkSweepHeap|MarkSweepCollector)\\.cpp$")
   # Method, Primitive and Symbol have no primitives: the program can't have
-  # methods or symbols, see Smalltalk-fructus
+  # methods, and its symbols are plain objects, see Smalltalk-fructus
   list(FILTER PRIMITIVES_SRC EXCLUDE REGEX
        "/(Double|Integer|Vector|Method|Primitive|Symbol)\\.cpp$")
   # the primitives are in the image, see src/primitives/FructusPrimitives.h
@@ -88,9 +89,16 @@ if(FRUCTUS)
   # Vector's methods stay in Smalltalk; this also avoids checking bytecode
   # hashes with murmur3 on the target
   set(USE_VECTOR_PRIMITIVES FALSE CACHE BOOL "" FORCE)
-  set(FRUCTUS_HEAP_SIZE 16384 CACHE STRING "Size of the SOM heap in bytes")
+  # The simulator's 64K: the program goes from FRUCTUS_HEAP_END up to 0xffff,
+  # and malloc has what is below it, from 0x1500, for the SOM heap and the
+  # rest. Linking says when the program doesn't fit, and running out of
+  # memory says when the heap doesn't.
+  set(FRUCTUS_HEAP_END 0x4000 CACHE STRING
+    "Where the program starts, and malloc's memory ends")
+  set(FRUCTUS_HEAP_SIZE 8192 CACHE STRING "Size of the SOM heap in bytes")
   add_definitions(-DFRUCTUS
                   -DFRUCTUS_HEAP_SIZE=${FRUCTUS_HEAP_SIZE})
+  add_link_options(-Wl,--defsym=__heap_end=${FRUCTUS_HEAP_END})
   add_compile_options(-fno-exceptions -fno-rtti -ffunction-sections
                       -fdata-sections)
   # A three-byte instruction at an odd address costs a cycle more, so a
