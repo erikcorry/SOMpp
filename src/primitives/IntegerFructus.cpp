@@ -192,8 +192,14 @@ __attribute__((noinline)) static vm_oop_t wideAbs(vm_oop_t self) {
 // The fast paths. A sum or difference of tagged words that overflows
 // som_int_t is one whose small integer doesn't fit, and the tag bits cancel:
 // (2a + 1) - 1 + (2b + 1) is 2(a + b) + 1.
+//
+// At -Os gcc lays out the blocks without looking at their probabilities, so
+// the fast path took the branch and the slow path fell through to its tail
+// call. Optimized for speed, the fast path falls through to the ret, at no
+// cost in size.
+#define FAST_PATH __attribute__((optimize("O2")))
 
-vm_oop_t intPlus(vm_oop_t leftObj, vm_oop_t rightObj) {
+FAST_PATH vm_oop_t intPlus(vm_oop_t leftObj, vm_oop_t rightObj) {
     som_int_t result = 0;
     if (likely(bothSmall(leftObj, rightObj)) &&
         !__builtin_add_overflow(word(leftObj) - 1, word(rightObj), &result)) {
@@ -202,7 +208,7 @@ vm_oop_t intPlus(vm_oop_t leftObj, vm_oop_t rightObj) {
     return IntegerWideAdd(leftObj, rightObj);
 }
 
-vm_oop_t intMinus(vm_oop_t leftObj, vm_oop_t rightObj) {
+FAST_PATH vm_oop_t intMinus(vm_oop_t leftObj, vm_oop_t rightObj) {
     som_int_t result = 0;
     if (likely(bothSmall(leftObj, rightObj)) &&
         !__builtin_sub_overflow(word(leftObj), word(rightObj) - 1, &result)) {
@@ -212,7 +218,7 @@ vm_oop_t intMinus(vm_oop_t leftObj, vm_oop_t rightObj) {
 }
 
 /** a * 2b is even, so adding the tag can't overflow. */
-vm_oop_t intStar(vm_oop_t leftObj, vm_oop_t rightObj) {
+FAST_PATH vm_oop_t intStar(vm_oop_t leftObj, vm_oop_t rightObj) {
     som_int_t result = 0;
     if (likely(bothSmall(leftObj, rightObj)) &&
         !__builtin_mul_overflow(SMALL_INT_VAL(leftObj), word(rightObj) - 1,
