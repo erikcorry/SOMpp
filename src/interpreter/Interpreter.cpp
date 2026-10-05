@@ -1080,23 +1080,38 @@ void Interpreter::doReturnNonLocal() {
     popFrameAndPushResult(result);
 }
 
+#ifdef FRUCTUS
+/**
+ * val + delta, for a small integer on its tagged word, where an overflow of
+ * som_int_t is a result that isn't a small integer, and otherwise in
+ * IntegerWideAdd(), which checks that val is an integer.
+ */
+static inline vm_oop_t integerAdd(vm_oop_t val, som_int_t delta) {
+    som_int_t result = 0;
+    if (likely(IS_TAGGED(val)) &&
+        !__builtin_add_overflow((som_int_t)val, 2 * delta, &result)) {
+        return (vm_oop_t)result;
+    }
+    return IntegerWideAdd(val, NEW_INT(delta));
+}
+#endif
+
 void Interpreter::doInc() {
     vm_oop_t val = GetFrame()->Top();
 
+#ifdef FRUCTUS
+    val = integerAdd(val, 1);
+#else
     if (IS_SMALL_INT(val)) {
         som_int_t const result = SMALL_INT_VAL(val) + 1;
         val = NEW_INT(result);
-#ifdef FRUCTUS
-    } else if (IsBoxedInteger(val)) {
-        val = NEW_INT(WrappingAdd(IntegerValue(val), 1));
-#else
     } else if (CLASS_OF(val) == load_ptr(doubleClass)) {
         double const d = static_cast<VMDouble*>(val)->GetEmbeddedDouble();
         val = Universe::NewDouble(d + 1.0);
-#endif
     } else {
         ErrorExit("unsupported");
     }
+#endif
 
     if (IS_TAGGED(val)) {
         GetFrame()->SetTopNoBarrier(val);
@@ -1108,20 +1123,19 @@ void Interpreter::doInc() {
 void Interpreter::doDec() {
     vm_oop_t val = GetFrame()->Top();
 
+#ifdef FRUCTUS
+    val = integerAdd(val, -1);
+#else
     if (IS_SMALL_INT(val)) {
         som_int_t const result = SMALL_INT_VAL(val) - 1;
         val = NEW_INT(result);
-#ifdef FRUCTUS
-    } else if (IsBoxedInteger(val)) {
-        val = NEW_INT(WrappingAdd(IntegerValue(val), -1));
-#else
     } else if (CLASS_OF(val) == load_ptr(doubleClass)) {
         double const d = static_cast<VMDouble*>(val)->GetEmbeddedDouble();
         val = Universe::NewDouble(d - 1.0);
-#endif
     } else {
         ErrorExit("unsupported");
     }
+#endif
 
     if (IS_TAGGED(val)) {
         GetFrame()->SetTopNoBarrier(val);
@@ -1141,20 +1155,19 @@ void Interpreter::doIncField(uint8_t fieldIndex) {
 
     vm_oop_t val = selfObj->GetField(fieldIndex);
 
+#ifdef FRUCTUS
+    val = integerAdd(val, 1);
+#else
     if (IS_SMALL_INT(val)) {
         som_int_t const result = SMALL_INT_VAL(val) + 1;
         val = NEW_INT(result);
-#ifdef FRUCTUS
-    } else if (IsBoxedInteger(val)) {
-        val = NEW_INT(WrappingAdd(IntegerValue(val), 1));
-#else
     } else if (CLASS_OF(val) == load_ptr(doubleClass)) {
         double const d = static_cast<VMDouble*>(val)->GetEmbeddedDouble();
         val = Universe::NewDouble(d + 1.0);
-#endif
     } else {
         ErrorExit("unsupported");
     }
+#endif
 
     selfObj->SetField(fieldIndex, val);
 }
@@ -1170,20 +1183,19 @@ void Interpreter::doIncFieldPush(uint8_t fieldIndex) {
 
     vm_oop_t val = selfObj->GetField(fieldIndex);
 
+#ifdef FRUCTUS
+    val = integerAdd(val, 1);
+#else
     if (IS_SMALL_INT(val)) {
         som_int_t const result = SMALL_INT_VAL(val) + 1;
         val = NEW_INT(result);
-#ifdef FRUCTUS
-    } else if (IsBoxedInteger(val)) {
-        val = NEW_INT(WrappingAdd(IntegerValue(val), 1));
-#else
     } else if (CLASS_OF(val) == load_ptr(doubleClass)) {
         double const d = static_cast<VMDouble*>(val)->GetEmbeddedDouble();
         val = Universe::NewDouble(d + 1.0);
-#endif
     } else {
         ErrorExit("unsupported");
     }
+#endif
 
     selfObj->SetField(fieldIndex, val);
     if (IS_TAGGED(val)) {
@@ -1202,7 +1214,7 @@ bool Interpreter::checkIsGreater() {
     }
 #ifdef FRUCTUS
     if (IsInteger(top) && IsInteger(top2)) {
-        return IntegerValue(top) > IntegerValue(top2);
+        return IntegerWideGreaterThan(top, top2) == load_ptr(trueObject);
     }
 #endif
     if (IS_DOUBLE(top) && IS_DOUBLE(top2)) {

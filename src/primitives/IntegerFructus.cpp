@@ -2,8 +2,14 @@
  * Integer primitives for fructus, where there are no big integers and no
  * doubles. An integer is a small one when it fits, and otherwise a boxed
  * VMInteger with 64 bits, which wrap around, see som_box_int_t: there is no
- * overflow. Each primitive has a fast path for small integers, and does the
- * rest with 64 bits, signed where it matters.
+ * overflow.
+ *
+ * Each primitive has a fast path for small integers, mostly on their tagged
+ * words, 2v + 1, and otherwise tail calls a stub, which passes what to do to
+ * wideOp(), where everything that can involve a boxed integer is, and the
+ * checks of the arguments. The stub is there because the fructus ABI depends
+ * on the signature: a function of two arguments preserves r2, so it can't
+ * tail call one of three, which would make the fast path save r2 and lr.
  */
 #include <limits.h>
 #include <stdio.h>
@@ -43,217 +49,320 @@ static inline bool bothSmall(vm_oop_t leftObj, vm_oop_t rightObj) {
     return IS_TAGGED((uintptr_t)leftObj & (uintptr_t)rightObj);
 }
 
-static inline void checkDivisor(som_box_int_t right) {
-    if (right == 0) {
-        ErrorExit("division by zero");
-    }
+/** The tagged word of a small integer, 2v + 1, and back. */
+static inline som_int_t word(vm_oop_t obj) {
+    return (som_int_t)obj;
 }
 
-// small integers have a bit less than som_int_t, so their sums and
-// differences fit in one, and NEW_INT boxes those that don't fit in a small
-// integer
+static inline vm_oop_t fromWord(som_int_t word) {
+    return (vm_oop_t)word;
+}
+
+namespace {
+enum class Wide : uint8_t {
+    Add, Sub, Mul, Div, Rem, Mod, And, Xor, Shl, Shr,
+    Lt, Le, Gt, Ge, Eq, Ne, Min, Max, Abs
+};
+}  // namespace
+
+/**
+ * The operation on two integers, either of which may be boxed, or the
+ * argument something else, or a small integer the fast path can't do, like a
+ * division by zero. The receiver of an Integer primitive is an integer, but
+ * the interpreter's is checked too.
+ */
+__attribute__((noinline)) static vm_oop_t wideOp(vm_oop_t leftObj,
+                                                 vm_oop_t rightObj, Wide op) {
+    som_box_int_t const left = intArg(leftObj);
+    if (op == Wide::Abs) {
+        return left < 0 ? NEW_INT(WrappingAdd(~left, 1)) : leftObj;
+    }
+    if (op == Wide::Eq || op == Wide::Ne) {
+        bool const equal = IsInteger(rightObj) && left == IntegerValue(rightObj);
+        return asBool(equal == (op == Wide::Eq));
+    }
+    som_box_int_t const right = intArg(rightObj);
+    if (op >= Wide::Div && op <= Wide::Mod && right == 0) {
+        ErrorExit("division by zero");
+    }
+    if ((op == Wide::Shl || op == Wide::Shr) && right < 0) {
+        ErrorExit("negative shift");
+    }
+
+    som_box_int_t result = 0;
+    switch (op) {
+        // the overflow builtins wrap, and are signed
+        case Wide::Add:
+            (void)__builtin_add_overflow(left, right, &result);
+            break;
+        case Wide::Sub:
+            (void)__builtin_sub_overflow(left, right, &result);
+            break;
+        case Wide::Mul:
+            (void)__builtin_mul_overflow(left, right, &result);
+            break;
+        // the smallest value divided by -1 wraps around to itself, with
+        // remainder 0
+        case Wide::Div:
+            result = right == -1 ? WrappingAdd(~left, 1) : left / right;
+            break;
+        case Wide::Rem:
+            result = right == -1 ? 0 : left % right;
+            break;
+        case Wide::Mod:
+            // the modulo has the sign of the divisor
+            result = right == -1 ? 0 : left % right;
+            if ((result != 0) && ((result < 0) != (right < 0))) {
+                result += right;
+            }
+            break;
+        case Wide::And:
+            result = left & right;  // NOLINT(hicpp-signed-bitwise)
+            break;
+        case Wide::Xor:
+            result = left ^ right;  // NOLINT(hicpp-signed-bitwise)
+            break;
+        // shifting by 64 or more shifts out all the bits, and >>> shifts the
+        // 64 bits
+        case Wide::Shl:
+            result = right >= 64 ? 0
+                                 : (som_box_int_t)((uint64_t)left
+                                                   << (unsigned)right);
+            break;
+        case Wide::Shr:
+            result = right >= 64 ? 0
+                                 : (som_box_int_t)((uint64_t)left >>
+                                                   (unsigned)right);
+            break;
+        default: {
+            int const order = (int)(left > right) - (int)(left < right);
+            switch (op) {
+                case Wide::Lt: return asBool(order < 0);
+                case Wide::Le: return asBool(order <= 0);
+                case Wide::Gt: return asBool(order > 0);
+                case Wide::Ge: return asBool(order >= 0);
+                case Wide::Min: return order > 0 ? rightObj : leftObj;
+                default: return order < 0 ? rightObj : leftObj;  // Max
+            }
+        }
+    }
+    return NEW_INT(result);
+}
+
+// the stubs the fast paths tail call, see the top of the file
+#define WIDE_STUB(name, op)                                            \
+    __attribute__((noinline)) static vm_oop_t name(vm_oop_t leftObj,   \
+                                                   vm_oop_t rightObj) { \
+        return wideOp(leftObj, rightObj, op);                          \
+    }
+WIDE_STUB(wideSub, Wide::Sub)
+WIDE_STUB(wideMul, Wide::Mul)
+WIDE_STUB(wideDiv, Wide::Div)
+WIDE_STUB(wideRem, Wide::Rem)
+WIDE_STUB(wideMod, Wide::Mod)
+WIDE_STUB(wideAnd, Wide::And)
+WIDE_STUB(wideXor, Wide::Xor)
+WIDE_STUB(wideShl, Wide::Shl)
+WIDE_STUB(wideShr, Wide::Shr)
+WIDE_STUB(wideLt, Wide::Lt)
+WIDE_STUB(wideLe, Wide::Le)
+WIDE_STUB(wideGt, Wide::Gt)
+WIDE_STUB(wideGe, Wide::Ge)
+WIDE_STUB(wideEq, Wide::Eq)
+WIDE_STUB(wideNe, Wide::Ne)
+WIDE_STUB(wideMin, Wide::Min)
+WIDE_STUB(wideMax, Wide::Max)
+#undef WIDE_STUB
+
+// for the interpreter too, see VMInteger.h
+__attribute__((noinline)) vm_oop_t IntegerWideAdd(vm_oop_t leftObj,
+                                                  vm_oop_t rightObj) {
+    return wideOp(leftObj, rightObj, Wide::Add);
+}
+
+__attribute__((noinline)) vm_oop_t IntegerWideGreaterThan(vm_oop_t leftObj,
+                                                          vm_oop_t rightObj) {
+    return wideGt(leftObj, rightObj);
+}
+
+__attribute__((noinline)) static vm_oop_t wideAbs(vm_oop_t self) {
+    return wideOp(self, self, Wide::Abs);
+}
+
+// The fast paths. A sum or difference of tagged words that overflows
+// som_int_t is one whose small integer doesn't fit, and the tag bits cancel:
+// (2a + 1) - 1 + (2b + 1) is 2(a + b) + 1.
 
 vm_oop_t intPlus(vm_oop_t leftObj, vm_oop_t rightObj) {
-    if (bothSmall(leftObj, rightObj)) {
-        return NEW_INT(SMALL_INT_VAL(leftObj) + SMALL_INT_VAL(rightObj));
+    som_int_t result = 0;
+    if (likely(bothSmall(leftObj, rightObj)) &&
+        !__builtin_add_overflow(word(leftObj) - 1, word(rightObj), &result)) {
+        return fromWord(result);
     }
-    return NEW_INT(WrappingAdd(IntegerValue(leftObj), intArg(rightObj)));
+    return IntegerWideAdd(leftObj, rightObj);
 }
 
 vm_oop_t intMinus(vm_oop_t leftObj, vm_oop_t rightObj) {
-    if (bothSmall(leftObj, rightObj)) {
-        return NEW_INT(SMALL_INT_VAL(leftObj) - SMALL_INT_VAL(rightObj));
+    som_int_t result = 0;
+    if (likely(bothSmall(leftObj, rightObj)) &&
+        !__builtin_sub_overflow(word(leftObj), word(rightObj) - 1, &result)) {
+        return fromWord(result);
     }
-    som_box_int_t result = 0;
-    (void)__builtin_sub_overflow(IntegerValue(leftObj), intArg(rightObj),
-                                 &result);
-    return NEW_INT(result);
+    return wideSub(leftObj, rightObj);
 }
 
+/** a * 2b is even, so adding the tag can't overflow. */
 vm_oop_t intStar(vm_oop_t leftObj, vm_oop_t rightObj) {
-    if (bothSmall(leftObj, rightObj)) {
-        som_int_t result = 0;
-        if (!__builtin_mul_overflow(SMALL_INT_VAL(leftObj),
-                                    SMALL_INT_VAL(rightObj), &result)) {
-            return NEW_INT(result);
-        }
+    som_int_t result = 0;
+    if (likely(bothSmall(leftObj, rightObj)) &&
+        !__builtin_mul_overflow(SMALL_INT_VAL(leftObj), word(rightObj) - 1,
+                                &result)) {
+        return fromWord(result + 1);
     }
-    som_box_int_t result = 0;
-    (void)__builtin_mul_overflow(IntegerValue(leftObj), intArg(rightObj),
-                                 &result);
-    return NEW_INT(result);
+    return wideMul(leftObj, rightObj);
 }
 
-// the quotient of the smallest small integer and -1 fits in som_int_t, and
-// in 64 bits it wraps around to the smallest value again, with remainder 0
+// The smallest small integer divided by -1 doesn't fit in a small integer,
+// but does in som_int_t, and NEW_INT boxes it. Division by zero is an error
+// of wideOp().
 
 vm_oop_t intSlash(vm_oop_t leftObj, vm_oop_t rightObj) {
-    if (bothSmall(leftObj, rightObj)) {
-        som_int_t const right = SMALL_INT_VAL(rightObj);
-        checkDivisor(right);
-        return NEW_INT(SMALL_INT_VAL(leftObj) / right);
+    if (likely(bothSmall(leftObj, rightObj)) && SMALL_INT_VAL(rightObj) != 0) {
+        return NEW_INT(SMALL_INT_VAL(leftObj) / SMALL_INT_VAL(rightObj));
     }
-    som_box_int_t const left = IntegerValue(leftObj);
-    som_box_int_t const right = intArg(rightObj);
-    checkDivisor(right);
-    return NEW_INT(right == -1 ? WrappingAdd(~left, 1) : left / right);
+    return wideDiv(leftObj, rightObj);
 }
 
 vm_oop_t intRem(vm_oop_t leftObj, vm_oop_t rightObj) {
-    if (bothSmall(leftObj, rightObj)) {
-        som_int_t const right = SMALL_INT_VAL(rightObj);
-        checkDivisor(right);
-        return NEW_INT(SMALL_INT_VAL(leftObj) % right);
+    if (likely(bothSmall(leftObj, rightObj)) && SMALL_INT_VAL(rightObj) != 0) {
+        return NEW_INT(SMALL_INT_VAL(leftObj) % SMALL_INT_VAL(rightObj));
     }
-    som_box_int_t const left = IntegerValue(leftObj);
-    som_box_int_t const right = intArg(rightObj);
-    checkDivisor(right);
-    return NEW_INT(right == -1 ? 0 : left % right);
+    return wideRem(leftObj, rightObj);
 }
 
 /** The modulo, which has the sign of the divisor. */
 vm_oop_t intPercent(vm_oop_t leftObj, vm_oop_t rightObj) {
-    if (bothSmall(leftObj, rightObj)) {
+    if (likely(bothSmall(leftObj, rightObj)) && SMALL_INT_VAL(rightObj) != 0) {
         som_int_t const right = SMALL_INT_VAL(rightObj);
-        checkDivisor(right);
         som_int_t result = SMALL_INT_VAL(leftObj) % right;
         if ((result != 0) && ((result < 0) != (right < 0))) {
             result += right;
         }
         return NEW_INT(result);
     }
-    som_box_int_t const left = IntegerValue(leftObj);
-    som_box_int_t const right = intArg(rightObj);
-    checkDivisor(right);
-    som_box_int_t result = right == -1 ? 0 : left % right;
-    if ((result != 0) && ((result < 0) != (right < 0))) {
-        result += right;
-    }
-    return NEW_INT(result);
-}
-
-vm_oop_t intBitwiseXor(vm_oop_t leftObj, vm_oop_t rightObj) {
-    if (bothSmall(leftObj, rightObj)) {
-        // NOLINTNEXTLINE(hicpp-signed-bitwise)
-        return NEW_INT(SMALL_INT_VAL(leftObj) ^ SMALL_INT_VAL(rightObj));
-    }
-    // NOLINTNEXTLINE(hicpp-signed-bitwise)
-    return NEW_INT(IntegerValue(leftObj) ^ intArg(rightObj));
+    return wideMod(leftObj, rightObj);
 }
 
 vm_oop_t intAnd(vm_oop_t leftObj, vm_oop_t rightObj) {
-    if (bothSmall(leftObj, rightObj)) {
-        // NOLINTNEXTLINE(hicpp-signed-bitwise)
-        return NEW_INT(SMALL_INT_VAL(leftObj) & SMALL_INT_VAL(rightObj));
+    if (likely(bothSmall(leftObj, rightObj))) {
+        return fromWord(word(leftObj) & word(rightObj));  // NOLINT
     }
-    // NOLINTNEXTLINE(hicpp-signed-bitwise)
-    return NEW_INT(IntegerValue(leftObj) & intArg(rightObj));
+    return wideAnd(leftObj, rightObj);
 }
 
-constexpr som_box_int_t boxBits = sizeof(som_box_int_t) * 8;
-
-/** Shifting by 64 or more shifts out all the bits. */
-vm_oop_t intLeftShift(vm_oop_t leftObj, vm_oop_t rightObj) {
-    som_box_int_t const right = intArg(rightObj);
-    if (right < 0) {
-        ErrorExit("negative shift");
+vm_oop_t intBitwiseXor(vm_oop_t leftObj, vm_oop_t rightObj) {
+    if (likely(bothSmall(leftObj, rightObj))) {
+        return fromWord((word(leftObj) ^ word(rightObj)) | 1);  // NOLINT
     }
-    if (bothSmall(leftObj, rightObj) && right < SOM_INT_BITS) {
+    return wideXor(leftObj, rightObj);
+}
+
+/** Shifting a small integer by less than its width, if nothing is lost. */
+vm_oop_t intLeftShift(vm_oop_t leftObj, vm_oop_t rightObj) {
+    if (likely(bothSmall(leftObj, rightObj))) {
         som_int_t const left = SMALL_INT_VAL(leftObj);
-        // NOLINTNEXTLINE(hicpp-signed-bitwise)
-        som_int_t const result = (som_int_t)((som_uint_t)left << right);
-        if ((result >> right) == left) {  // NOLINT(hicpp-signed-bitwise)
-            return NEW_INT(result);
+        som_int_t const right = SMALL_INT_VAL(rightObj);
+        if (right >= 0 && right < SOM_INT_BITS) {
+            auto const result = (som_int_t)((som_uint_t)left << right);
+            if ((result >> right) == left) {  // NOLINT(hicpp-signed-bitwise)
+                return NEW_INT(result);
+            }
         }
     }
-    if (right >= boxBits) {
-        return NEW_INT(0);
-    }
-    return NEW_INT(
-        (som_box_int_t)((uint64_t)IntegerValue(leftObj) << (unsigned)right));
+    return wideShl(leftObj, rightObj);
 }
 
-/** The 64 bits of a boxed integer, shifted right. */
+/** A negative integer has its 64 bits shifted, see wideOp(). */
 vm_oop_t intUnsignedRightShift(vm_oop_t leftObj, vm_oop_t rightObj) {
-    som_box_int_t const right = intArg(rightObj);
-    if (right < 0) {
-        ErrorExit("negative shift");
+    if (likely(bothSmall(leftObj, rightObj))) {
+        som_int_t const left = SMALL_INT_VAL(leftObj);
+        som_int_t const right = SMALL_INT_VAL(rightObj);
+        if (left >= 0 && right >= 0) {
+            // the small integers have one bit less than som_int_t
+            return NEW_INT(left >> (right < SOM_INT_BITS - 1  // NOLINT
+                                        ? right
+                                        : SOM_INT_BITS - 1));
+        }
     }
-    if (IS_SMALL_INT(leftObj) && SMALL_INT_VAL(leftObj) >= 0) {
-        return right >= SOM_INT_BITS
-                   ? NEW_INT(0)
-                   // NOLINTNEXTLINE(hicpp-signed-bitwise)
-                   : NEW_INT(SMALL_INT_VAL(leftObj) >> right);
-    }
-    if (right >= boxBits) {
-        return NEW_INT(0);
-    }
-    return NEW_INT(
-        (som_box_int_t)((uint64_t)IntegerValue(leftObj) >> (unsigned)right));
+    return wideShr(leftObj, rightObj);
 }
 
-// NEW_INT only boxes what isn't a small integer, so equal integers are both
-// small, or both boxed, with the same value
+// Small integers compare as their tagged words, and NEW_INT only boxes what
+// isn't a small integer, so equal integers are both small, or both boxed.
 
 vm_oop_t intEqual(vm_oop_t leftObj, vm_oop_t rightObj) {
-    if (bothSmall(leftObj, rightObj)) {
+    if (likely(bothSmall(leftObj, rightObj))) {
         return asBool(leftObj == rightObj);
     }
-    return asBool(IsInteger(rightObj) &&
-                  IntegerValue(leftObj) == IntegerValue(rightObj));
+    return wideEq(leftObj, rightObj);
 }
 
 vm_oop_t intUnequal(vm_oop_t leftObj, vm_oop_t rightObj) {
-    if (bothSmall(leftObj, rightObj)) {
+    if (likely(bothSmall(leftObj, rightObj))) {
         return asBool(leftObj != rightObj);
     }
-    return asBool(!IsInteger(rightObj) ||
-                  IntegerValue(leftObj) != IntegerValue(rightObj));
-}
-
-/**
- * -1, 0 or 1 as the receiver is lower than, equal to or greater than the
- * argument. Small integers compare as their tagged words.
- */
-static inline int compare(vm_oop_t leftObj, vm_oop_t rightObj) {
-    if (bothSmall(leftObj, rightObj)) {
-        auto const left = (som_int_t)leftObj;
-        auto const right = (som_int_t)rightObj;
-        return (int)(left > right) - (int)(left < right);
-    }
-    som_box_int_t const left = IntegerValue(leftObj);
-    som_box_int_t const right = intArg(rightObj);
-    return (int)(left > right) - (int)(left < right);
+    return wideNe(leftObj, rightObj);
 }
 
 vm_oop_t intLowerthan(vm_oop_t leftObj, vm_oop_t rightObj) {
-    return asBool(compare(leftObj, rightObj) < 0);
+    if (likely(bothSmall(leftObj, rightObj))) {
+        return asBool(word(leftObj) < word(rightObj));
+    }
+    return wideLt(leftObj, rightObj);
 }
 
 vm_oop_t intLowerThanEqual(vm_oop_t leftObj, vm_oop_t rightObj) {
-    return asBool(compare(leftObj, rightObj) <= 0);
+    if (likely(bothSmall(leftObj, rightObj))) {
+        return asBool(word(leftObj) <= word(rightObj));
+    }
+    return wideLe(leftObj, rightObj);
 }
 
 vm_oop_t intGreaterThan(vm_oop_t leftObj, vm_oop_t rightObj) {
-    return asBool(compare(leftObj, rightObj) > 0);
+    if (likely(bothSmall(leftObj, rightObj))) {
+        return asBool(word(leftObj) > word(rightObj));
+    }
+    return wideGt(leftObj, rightObj);
 }
 
 vm_oop_t intGreaterThanEqual(vm_oop_t leftObj, vm_oop_t rightObj) {
-    return asBool(compare(leftObj, rightObj) >= 0);
+    if (likely(bothSmall(leftObj, rightObj))) {
+        return asBool(word(leftObj) >= word(rightObj));
+    }
+    return wideGe(leftObj, rightObj);
 }
 
 vm_oop_t intMin(vm_oop_t leftObj, vm_oop_t rightObj) {
-    return compare(leftObj, rightObj) > 0 ? rightObj : leftObj;
+    if (likely(bothSmall(leftObj, rightObj))) {
+        return word(rightObj) < word(leftObj) ? rightObj : leftObj;
+    }
+    return wideMin(leftObj, rightObj);
 }
 
 vm_oop_t intMax(vm_oop_t leftObj, vm_oop_t rightObj) {
-    return compare(leftObj, rightObj) < 0 ? rightObj : leftObj;
+    if (likely(bothSmall(leftObj, rightObj))) {
+        return word(rightObj) > word(leftObj) ? rightObj : leftObj;
+    }
+    return wideMax(leftObj, rightObj);
 }
 
-/** The smallest 64-bit integer is its own negation. */
+/** The negated smallest small integer is boxed, and the 64-bit one wraps. */
 vm_oop_t intAbs(vm_oop_t self) {
-    som_box_int_t const value = IntegerValue(self);
-    return value < 0 ? NEW_INT(WrappingAdd(~value, 1)) : self;
+    if (likely(IS_SMALL_INT(self))) {
+        som_int_t const value = SMALL_INT_VAL(self);
+        return value < 0 ? NEW_INT(-value) : self;
+    }
+    return wideAbs(self);
 }
 
 /**
