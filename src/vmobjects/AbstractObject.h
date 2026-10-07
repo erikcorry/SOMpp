@@ -104,6 +104,10 @@ public:
         assert(IS_PADDED_SIZE(additionalBytes));
 
         void* result = nullptr;
+        if (gcStressRetryMode &&
+            heap->StressFailsAllocation(numBytes + additionalBytes)) {
+            return nullptr;
+        }
 #if GC_TYPE == GENERATIONAL
         if (outsideNursery) {
             result = heap->AllocateMatureObject(numBytes + additionalBytes);

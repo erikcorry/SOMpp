@@ -43,6 +43,7 @@
 
 #if DEBUG
 bool gcStressMode = false;
+bool gcStressRetryMode = false;
 #else
 // it's defined as false
 #endif
@@ -72,6 +73,7 @@ template <class HEAP_T>
 void Heap<HEAP_T>::FullGC() {
     // the collector itself allocates, to copy objects
     MustSucceedScope const mustSucceed;
+    stressFailsNext = !retryWasRequested;
     gc->Collect();
 }
 
@@ -110,10 +112,12 @@ template void* Heap<MarkSweepHeap>::allocationFailed(size_t);
 class DebugMarkSweepHeap;
 template DebugMarkSweepHeap* Heap<DebugMarkSweepHeap>::theHeap;
 template Heap<DebugMarkSweepHeap>::~Heap();
+template void* Heap<DebugMarkSweepHeap>::allocationFailed(size_t);
 
 class PagedMarkSweepHeap;
 template PagedMarkSweepHeap* Heap<PagedMarkSweepHeap>::theHeap;
 template Heap<PagedMarkSweepHeap>::~Heap();
+template void* Heap<PagedMarkSweepHeap>::allocationFailed(size_t);
 
 class DebugCopyingHeap;
 template void* Heap<DebugCopyingHeap>::allocationFailed(size_t);

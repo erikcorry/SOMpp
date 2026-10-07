@@ -51,6 +51,18 @@ extern bool gcStressMode;
   #define gcStressMode false
 #endif
 
+/*
+ * If true, fail every allocation that may fail once, to run every bytecode
+ * and compilation again after a collection. An allocation that follows a
+ * retry succeeds, and asks for a plain collection, after which allocations
+ * fail again. That way a bytecode that allocates more than once completes.
+ */
+#if DEBUG
+extern bool gcStressRetryMode;
+#else
+  #define gcStressRetryMode false
+#endif
+
 template <class HEAP_T>
 class Heap {
     friend class GarbageCollector<HEAP_T>;
@@ -84,6 +96,24 @@ public:
         return failedAllocationSize;
     }
     void FullGC();
+
+    /**
+     * In gc-stress-retry mode, answers whether to fail an allocation of
+     * `size` bytes that would succeed, and asks for the retry if it does.
+     */
+    bool StressFailsAllocation(size_t size) {
+        if (allocationMustSucceed) {
+            return false;
+        }
+        if (stressFailsNext) {
+            stressFailsNext = false;
+            allocationFailed(size);
+            return true;
+        }
+        requestGC();
+        return false;
+    }
+
     inline void FreeObject(AbstractVMObject* o) { free(o); }
 
     /**
@@ -135,6 +165,10 @@ private:
     bool gcWasRequested{false};
     bool retryWasRequested{false};
     size_t failedAllocationSize{0};
+
+    // In gc-stress-retry mode, whether the next allocation that may fail
+    // fails. A collection for a retry leaves it false, so the retry succeeds.
+    bool stressFailsNext{true};
 
     // Until the interpreter can restart bytecodes, every allocation must
     // succeed.

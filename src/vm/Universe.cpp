@@ -186,6 +186,14 @@ vector<std::string> Universe::handleArguments(int32_t argc, char** argv) {
             fructusImageDir = argv[++i];
         } else if (!sawOtherArgs && strncmp(argv[i], "-cfg", 4) == 0) {
             printVmConfig();
+        } else if (!sawOtherArgs && strcmp(argv[i], "-gc-stress-retry") == 0) {
+#if DEBUG
+            gcStressRetryMode = true;
+#else
+            ErrorPrint(
+                "gc-stress-retry mode is only available in debug builds of "
+                "SOM++");
+#endif
         } else if (!sawOtherArgs && strncmp(argv[i], "-gc-stress", 10) == 0) {
 #if DEBUG
             gcStressMode = true;
@@ -300,6 +308,8 @@ void Universe::printUsageAndExit(char* executable) {
         << "\n";
     cout << "    -gc-stress trigger a garbage collection after every "
             "allocation\n";
+    cout << "    -gc-stress-retry fail every allocation once, then collect "
+            "and retry\n";
     cout << "    -HxMB set the heap size to x MB (default: 1 MB)\n";
     cout << "    -HxKB set the heap size to x KB (default: 1 MB)\n";
     cout << "    -h|--help show this help\n";
