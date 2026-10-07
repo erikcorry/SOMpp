@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../compiler/CompileAttempt.h"
 #include "../memory/Heap.h"
 #include "../misc/defs.h"
 #include "../vmobjects/ObjectFormats.h"
@@ -76,6 +77,7 @@ VMSymbol* NewSymbol(const size_t length, const char* str) {
     auto* result =
         new (GetHeap<HEAP_CLS>(), PADDED_SIZE(length)) VMSymbol(length, str);
     if (result == nullptr) {
+        AbandonCompilationIfTrying();
         return nullptr;
     }
     symbolTable[findSlot(symbolTable, symbolTableSize, str, length)] =

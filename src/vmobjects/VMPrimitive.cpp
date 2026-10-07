@@ -26,7 +26,7 @@
 
 #include "VMPrimitive.h"
 
-
+#include "../compiler/CompileAttempt.h"
 #include "../memory/Heap.h"
 #include "../misc/debug.h"
 #include "../misc/defs.h"
@@ -40,8 +40,8 @@
 #include "VMSymbol.h"
 
 VMInvokable* VMPrimitive::GetFramePrim(VMSymbol* sig, FramePrim prim) {
-    auto* p = new (GetHeap<HEAP_CLS>(), 0) VMPrimitive(sig, prim);
-    return p;
+    return AbandonCompilationIfNull(new (GetHeap<HEAP_CLS>(), 0)
+                                        VMPrimitive(sig, prim));
 }
 
 VMPrimitive* VMPrimitive::CloneForMovingGC() const {

@@ -41,6 +41,10 @@ private:
                                 vm_oop_t referencedObject);
     void* collectionLimit;
     vector<size_t> oldObjsWithRefToYoungObjs;
+    // Objects diverted to old space are initialized without the write
+    // barrier, so until the next minor collection old space may point into
+    // the nursery anywhere, and that collection scans all of it.
+    bool rememberedSetIsBankrupt{false};
     vector<AbstractVMObject*> allocatedObjects;
 };
 

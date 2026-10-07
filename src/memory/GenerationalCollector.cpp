@@ -37,8 +37,9 @@ static gc_oop_t mark_object(gc_oop_t oop) {
 }
 
 static gc_oop_t copy_if_necessary(gc_oop_t oop) {
-    // don't process tagged objects
-    if (IS_TAGGED(oop)) {
+    // don't process tagged objects, nor the fields of an object that is
+    // garbage before it was initialized, found when old space is bankrupt
+    if (IS_TAGGED(oop) || oop == nullptr) {
         return oop;
     }
 
@@ -80,17 +81,37 @@ static gc_oop_t copy_if_necessary(gc_oop_t oop) {
 void GenerationalCollector::MinorCollection() {
     DebugLog("GenGC MinorCollection\n");
 
+    // Promoting objects appends to allocatedObjects, and the promoted ones
+    // are walked by the copying itself.
+    size_t const numOldObjects = heap->allocatedObjects.size();
+    bool const bankrupt = heap->rememberedSetIsBankrupt;
+    if (bankrupt) {
+        // Objects diverted to old space aren't marked old yet, and the
+        // copying must not move them.
+        for (size_t i = 0; i < numOldObjects; i++) {
+            heap->allocatedObjects[i]->SetGCField(MASK_OBJECT_IS_OLD);
+        }
+    }
+
     // walk all globals of universe, and implicily the interpreter
     Universe::WalkGlobals(&copy_if_necessary);
 
-    // and also all objects that have been detected by the write barriers
-    for (size_t const& oldObj : heap->oldObjsWithRefToYoungObjs) {
-        // content of oldObjsWithRefToYoungObjs is not altered while iteration,
-        // because copy_if_necessary returns old objs only -> ignored by
-        // write_barrier
-        auto* obj = (AbstractVMObject*)oldObj;
-        obj->SetGCField(MASK_OBJECT_IS_OLD);
-        obj->WalkObjects(&copy_if_necessary);
+    if (bankrupt) {
+        // any old object may point into the nursery
+        for (size_t i = 0; i < numOldObjects; i++) {
+            heap->allocatedObjects[i]->WalkObjects(&copy_if_necessary);
+        }
+        heap->rememberedSetIsBankrupt = false;
+    } else {
+        // only the objects that have been detected by the write barriers
+        for (size_t const& oldObj : heap->oldObjsWithRefToYoungObjs) {
+            // content of oldObjsWithRefToYoungObjs is not altered while
+            // iteration, because copy_if_necessary returns old objs only ->
+            // ignored by write_barrier
+            auto* obj = (AbstractVMObject*)oldObj;
+            obj->SetGCField(MASK_OBJECT_IS_OLD);
+            obj->WalkObjects(&copy_if_necessary);
+        }
     }
     heap->oldObjsWithRefToYoungObjs.clear();
     heap->nextFreePosition = heap->nursery;
@@ -106,9 +127,10 @@ void GenerationalCollector::MajorCollection() {
     // objects that are not marked
     vector<AbstractVMObject*> survivors;
     for (auto* obj : heap->allocatedObjects) {
-        assert(IsValidObject(obj));
-
         if ((obj->GetGCField() & MASK_OBJECT_IS_MARKED) != 0) {
+            // A dead object may never have been initialized, if it was
+            // allocated old because the nursery was full.
+            assert(IsValidObject(obj));
             survivors.push_back(obj);
             obj->SetGCField(MASK_OBJECT_IS_OLD);
         } else {

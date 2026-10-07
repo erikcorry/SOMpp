@@ -28,7 +28,14 @@ GenerationalHeap::GenerationalHeap(size_t objectSpaceSize)
 
 void* GenerationalHeap::AllocateNurseryObject(size_t size) {
     if (size > nursery_end - (size_t)nextFreePosition) {
-        return allocationFailed(size);
+        if (!AllocationMustSucceed()) {
+            return allocationFailed(size);
+        }
+        // Divert to old space. The next minor collection, which the full
+        // nursery asks for, marks the object old and scans old space.
+        rememberedSetIsBankrupt = true;
+        requestGC();
+        return AllocateMatureObject(size);
     }
     void* newObject = nextFreePosition;
     nextFreePosition =

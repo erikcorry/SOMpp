@@ -40,6 +40,7 @@
 #include "../compiler/LexicalScope.h"
 #include "../compiler/SourcecodeCompiler.h"
 #endif
+#include "../compiler/CompileAttempt.h"
 #include "../interpreter/bytecodes.h"
 #ifndef FRUCTUS
 #include "../lib/InfInt.h"
@@ -592,19 +593,22 @@ VMClass* Universe::GetBlockClassWithArgs(uint8_t numberOfArguments) {
 
     Assert(numberOfArguments < 10);
 
-    ostringstream Str;
-    Str << "Block" << to_string(numberOfArguments);
-    VMSymbol* name = SymbolFor(Str.str());
-    VMClass* result = LoadClassBasic(name, nullptr);
+    // answers nullptr if an allocation failed
+    return CompileAttempt::Run([numberOfArguments]() -> VMClass* {
+        ostringstream Str;
+        Str << "Block" << to_string(numberOfArguments);
+        VMSymbol* name = SymbolFor(Str.str());
+        VMClass* result = LoadClassBasic(name, nullptr);
 
-    result->InstallPrimitive(new (GetHeap<HEAP_CLS>(), 0)
-                                 VMEvaluationPrimitive(numberOfArguments),
-                             0, false);
+        auto* evaluate = AbandonCompilationIfNull(new (
+            GetHeap<HEAP_CLS>(), 0) VMEvaluationPrimitive(numberOfArguments));
+        result->InstallPrimitive(evaluate, 0, false);
 
-    SetGlobal(name, result);
-    blockClassesByNoOfArgs[numberOfArguments] = store_root(result);
+        SetGlobal(name, result);
+        blockClassesByNoOfArgs[numberOfArguments] = store_root(result);
 
-    return result;
+        return result;
+    });
 }
 
 vm_oop_t Universe::GetGlobal(VMSymbol* name) {
@@ -734,6 +738,7 @@ VMVector* Universe::NewVector(size_t size, VMClass* cls) {
     auto* result =
         new (GetHeap<HEAP_CLS>(), 0) VMVector(first, last, storageArray);
     if (result == nullptr) {
+        AbandonCompilationIfTrying();
         return nullptr;
     }
     result->SetClass(cls);
@@ -757,6 +762,7 @@ VMArray* Universe::NewArray(size_t size) {
                         additionalBytes ALLOC_OUTSIDE_NURSERY(outsideNursery))
         VMArray(size, additionalBytes);
     if (result == nullptr) {
+        AbandonCompilationIfTrying();
         return nullptr;
     }
     // NOLINTNEXTLINE(misc-redundant-expression)
@@ -788,6 +794,7 @@ VMArray* Universe::NewExpandedArrayFromArray(size_t size, VMArray* array) {
                         additionalBytes ALLOC_OUTSIDE_NURSERY(outsideNursery))
         VMArray(size, additionalBytes, currentArraySize);
     if (result == nullptr) {
+        AbandonCompilationIfTrying();
         return nullptr;
     }
     // NOLINTNEXTLINE(misc-redundant-expression)
@@ -868,11 +875,17 @@ VMArray* Universe::NewArrayList(std::vector<vm_oop_t>& list) {
 
 VMBlock* Universe::NewBlock(VMInvokable* method, VMFrame* context,
                             uint8_t arguments) {
-    auto* result = new (GetHeap<HEAP_CLS>(), 0) VMBlock(method, context);
-    if (result == nullptr) {
+    // loading the block class may compile it
+    VMClass* blockClass = GetBlockClassWithArgs(arguments);
+    if (blockClass == nullptr) {
         return nullptr;
     }
-    result->SetClass(GetBlockClassWithArgs(arguments));
+    auto* result = new (GetHeap<HEAP_CLS>(), 0) VMBlock(method, context);
+    if (result == nullptr) {
+        AbandonCompilationIfTrying();
+        return nullptr;
+    }
+    result->SetClass(blockClass);
 
     recordStat(Allocation, "VMBlock", result->GetObjectSize());
     return result;
@@ -894,6 +907,7 @@ VMClass* Universe::NewClass(VMClass* classOfClass) {
         result = new (GetHeap<HEAP_CLS>(), 0) VMClass;
     }
     if (result == nullptr) {
+        AbandonCompilationIfTrying();
         return nullptr;
     }
 
@@ -906,7 +920,8 @@ VMClass* Universe::NewClass(VMClass* classOfClass) {
 #ifndef FRUCTUS
 VMDouble* Universe::NewDouble(double value) {
     recordStat(Allocation, "VMDouble", sizeof(VMDouble));
-    return new (GetHeap<HEAP_CLS>(), 0) VMDouble(value);
+    return AbandonCompilationIfNull(new (GetHeap<HEAP_CLS>(), 0)
+                                        VMDouble(value));
 }
 #endif
 
@@ -929,6 +944,7 @@ VMFrame* Universe::NewFrame(VMFrame* previousFrame, VMMethod* method) {
     result = new (GetHeap<HEAP_CLS>(), additionalBytes)
         VMFrame(additionalBytes, method, previousFrame);
     if (result == nullptr) {
+        AbandonCompilationIfTrying();
         return nullptr;
     }
 
@@ -943,6 +959,7 @@ VMObject* Universe::NewInstance(VMClass* classOfInstance) {
     auto* result = new (GetHeap<HEAP_CLS>(), additionalBytes)
         VMObject(numOfFields, additionalBytes + sizeof(VMObject));
     if (result == nullptr) {
+        AbandonCompilationIfTrying();
         return nullptr;
     }
     result->SetClass(classOfInstance);
@@ -953,8 +970,8 @@ VMObject* Universe::NewInstance(VMClass* classOfInstance) {
 }
 
 VMObject* Universe::NewInstanceWithoutFields() {
-    auto* result = new (GetHeap<HEAP_CLS>(), 0) VMObject(0, sizeof(VMObject));
-    return result;
+    return AbandonCompilationIfNull(new (GetHeap<HEAP_CLS>(), 0)
+                                        VMObject(0, sizeof(VMObject)));
 }
 
 VMInteger* Universe::NewInteger(som_box_int_t value) {
@@ -968,7 +985,8 @@ VMInteger* Universe::NewInteger(som_box_int_t value) {
 #endif
 
     recordStat(Allocation, "VMInteger", sizeof(VMInteger));
-    return new (GetHeap<HEAP_CLS>(), 0) VMInteger(value);
+    return AbandonCompilationIfNull(new (GetHeap<HEAP_CLS>(), 0)
+                                        VMInteger(value));
 }
 
 #ifdef FRUCTUS
@@ -982,26 +1000,31 @@ vm_oop_t Universe::NewInt(InfInt&& value) {
     if (value.isWithinSmallIntRange()) {
         return NEW_INT(value.toInt64());
     }
-    return new (GetHeap<HEAP_CLS>(), 0) VMBigInteger(std::move(value));
+    return AbandonCompilationIfNull(new (GetHeap<HEAP_CLS>(), 0)
+                                        VMBigInteger(std::move(value)));
 }
 
 VMBigInteger* Universe::NewBigIntegerFromStr(const char* value,
                                              bool negateValue) {
-    return new (GetHeap<HEAP_CLS>(), 0) VMBigInteger(value, negateValue);
+    return AbandonCompilationIfNull(new (GetHeap<HEAP_CLS>(), 0)
+                                        VMBigInteger(value, negateValue));
 }
 
 VMBigInteger* Universe::NewBigIntegerFromInt(int64_t value) {
-    return new (GetHeap<HEAP_CLS>(), 0) VMBigInteger(value);
+    return AbandonCompilationIfNull(new (GetHeap<HEAP_CLS>(), 0)
+                                        VMBigInteger(value));
 }
 #endif
 
 VMClass* Universe::NewMetaclassClass() {
     auto* result = new (GetHeap<HEAP_CLS>(), 0) VMClass;
     if (result == nullptr) {
+        AbandonCompilationIfTrying();
         return nullptr;
     }
     auto* mclass = new (GetHeap<HEAP_CLS>(), 0) VMClass;
     if (mclass == nullptr) {
+        AbandonCompilationIfTrying();
         return nullptr;
     }
     result->SetClass(mclass);
@@ -1116,6 +1139,7 @@ VMMethod* Universe::NewMethod(VMSymbol* signature, size_t numberOfBytecodes,
                  lexicalScope, inlinedLoopsArr);
     if (result == nullptr) {
         delete[] inlinedLoopsArr;
+        AbandonCompilationIfTrying();
         return nullptr;
     }
 
@@ -1138,6 +1162,7 @@ VMString* Universe::NewString(const size_t length, const char* str) {
     auto* result =
         new (GetHeap<HEAP_CLS>(), PADDED_SIZE(length)) VMString(length, str);
     if (result == nullptr) {
+        AbandonCompilationIfTrying();
         return nullptr;
     }
 
@@ -1148,10 +1173,12 @@ VMString* Universe::NewString(const size_t length, const char* str) {
 VMClass* Universe::NewSystemClass() {
     auto* systemClass = new (GetHeap<HEAP_CLS>(), 0) VMClass();
     if (systemClass == nullptr) {
+        AbandonCompilationIfTrying();
         return nullptr;
     }
     auto* mclass = new (GetHeap<HEAP_CLS>(), 0) VMClass();
     if (mclass == nullptr) {
+        AbandonCompilationIfTrying();
         return nullptr;
     }
 

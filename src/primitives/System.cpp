@@ -30,6 +30,7 @@
 
 #include <stdint.h>
 
+#include "../compiler/CompileAttempt.h"
 #include "../memory/Heap.h"
 #include "../misc/defs.h"
 #include "../vm/Globals.h"
@@ -74,11 +75,8 @@ static vm_oop_t sysHasGlobal_(vm_oop_t /*unused*/, vm_oop_t rightObj) {
 
 static vm_oop_t sysLoad_(vm_oop_t /*unused*/, vm_oop_t rightObj) {
     auto* arg = static_cast<VMSymbol*>(rightObj);
-    VMClass* result = Universe::LoadClass(arg);
-    if (result != nullptr) {
-        return result;
-    }
-    return load_ptr(nilObject);
+    // answers nullptr, for a retry, if an allocation failed
+    return CompileAttempt::Run([arg]() { return Universe::LoadClass(arg); });
 }
 #endif
 
