@@ -27,14 +27,12 @@ GenerationalHeap::GenerationalHeap(size_t objectSpaceSize)
 }
 
 void* GenerationalHeap::AllocateNurseryObject(size_t size) {
+    if (size > nursery_end - (size_t)nextFreePosition) {
+        return allocationFailed(size);
+    }
     void* newObject = nextFreePosition;
     nextFreePosition =
         static_cast<void*>(static_cast<char*>(nextFreePosition) + size);
-    if ((size_t)nextFreePosition > nursery_end) {
-        ErrorPrint("\nFailed to allocate " + to_string(size) +
-                   " Bytes in nursery.\n");
-        Quit(-1);
-    }
     // let's see if we have to trigger the GC
     if (nextFreePosition > collectionLimit || gcStressMode) {
         requestGC();

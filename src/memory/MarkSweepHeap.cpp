@@ -46,8 +46,7 @@ void* MarkSweepHeap::AllocateObject(size_t size) {
 
     findFittingEntry(cur, prev, allocSize);
     if (cur == nullptr) {
-        ErrorPrintf("\nFailed to allocate %zu bytes in heap.\n", size);
-        Quit(-1);
+        return allocationFailed(size);
     }
 
     // acquire the memory for the `newObject` by

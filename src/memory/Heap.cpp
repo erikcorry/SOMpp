@@ -70,7 +70,21 @@ Heap<HEAP_T>::~Heap() {
 
 template <class HEAP_T>
 void Heap<HEAP_T>::FullGC() {
+    // the collector itself allocates, to copy objects
+    MustSucceedScope const mustSucceed;
     gc->Collect();
+}
+
+template <class HEAP_T>
+void* Heap<HEAP_T>::allocationFailed(size_t size) {
+    if (allocationMustSucceed) {
+        ErrorPrintf("\nFailed to allocate %zu bytes.\n", size);
+        Quit(-1);
+    }
+    failedAllocationSize = size;
+    gcWasRequested = true;
+    retryWasRequested = true;
+    return nullptr;
 }
 
 // Instantitate Template for the heap classes
@@ -81,14 +95,17 @@ template void Heap<HEAP_CLS>::FullGC();
 class GenerationalHeap;
 template GenerationalHeap* Heap<GenerationalHeap>::theHeap;
 template Heap<GenerationalHeap>::~Heap();
+template void* Heap<GenerationalHeap>::allocationFailed(size_t);
 
 class CopyingHeap;
 template CopyingHeap* Heap<CopyingHeap>::theHeap;
 template Heap<CopyingHeap>::~Heap();
+template void* Heap<CopyingHeap>::allocationFailed(size_t);
 
 class MarkSweepHeap;
 template MarkSweepHeap* Heap<MarkSweepHeap>::theHeap;
 template Heap<MarkSweepHeap>::~Heap();
+template void* Heap<MarkSweepHeap>::allocationFailed(size_t);
 
 class DebugMarkSweepHeap;
 template DebugMarkSweepHeap* Heap<DebugMarkSweepHeap>::theHeap;
@@ -97,3 +114,6 @@ template Heap<DebugMarkSweepHeap>::~Heap();
 class PagedMarkSweepHeap;
 template PagedMarkSweepHeap* Heap<PagedMarkSweepHeap>::theHeap;
 template Heap<PagedMarkSweepHeap>::~Heap();
+
+class DebugCopyingHeap;
+template void* Heap<DebugCopyingHeap>::allocationFailed(size_t);

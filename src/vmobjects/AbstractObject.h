@@ -84,9 +84,14 @@ public:
      * (size_of_array*sizeof(VMObject*))
      *   - fields in VMMethod, a_b must be set to (number_of_bc +
      * number_of_csts*sizeof(VMObject*))
+     *
+     * It answers nullptr when the heap is full and allocations may fail.
+     * Being noexcept, the new-expression then skips the constructor and
+     * answers nullptr too.
      */
     void* operator new(size_t numBytes, HEAP_CLS* heap,
-                       size_t additionalBytes ALLOC_OUTSIDE_NURSERY_DECL) {
+                       size_t additionalBytes ALLOC_OUTSIDE_NURSERY_DECL)
+        noexcept {
         // if outsideNursery flag is set or object is too big for nursery, we
         // allocate a mature object
         assert(IS_PADDED_SIZE(additionalBytes));

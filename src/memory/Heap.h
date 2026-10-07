@@ -64,14 +64,67 @@ public:
     static void DestroyHeap();
 
     ~Heap();
+    /**
+     * Asks for a collection at the next safe point, after which the
+     * interpreter continues.
+     */
     inline void requestGC() { gcWasRequested = true; }
-    inline void resetGCTrigger() { gcWasRequested = false; }
+    inline void resetGCTrigger() {
+        gcWasRequested = false;
+        retryWasRequested = false;
+    }
     bool isCollectionTriggered() { return gcWasRequested; }
+    /**
+     * An allocation failed: the interpreter must collect, then run the
+     * bytecode that failed again.
+     */
+    bool isRetryRequested() { return retryWasRequested; }
+    /** The size of the last allocation that failed. */
+    [[nodiscard]] size_t GetFailedAllocationSize() const {
+        return failedAllocationSize;
+    }
     void FullGC();
     inline void FreeObject(AbstractVMObject* o) { free(o); }
 
+    /**
+     * Whether an allocation that doesn't fit is a fatal out-of-memory error.
+     * If it isn't, the allocation answers nullptr and asks for a retry
+     * instead, and the caller must give up and change nothing.
+     */
+    [[nodiscard]] bool AllocationMustSucceed() const {
+        return allocationMustSucceed;
+    }
+
+    /**
+     * Sets whether allocations must succeed while it's in scope. Collections
+     * always run in a scope where they must, and so does everything outside
+     * the interpreter.
+     */
+    class MustSucceedScope {
+    public:
+        explicit MustSucceedScope(bool mustSucceed = true)
+            : heap(Heap<HEAP_T>::theHeap),
+              outerValue(heap->allocationMustSucceed) {
+            heap->allocationMustSucceed = mustSucceed;
+        }
+        ~MustSucceedScope() { heap->allocationMustSucceed = outerValue; }
+        MustSucceedScope(const MustSucceedScope&) = delete;
+        MustSucceedScope& operator=(const MustSucceedScope&) = delete;
+
+    private:
+        Heap<HEAP_T>* const heap;
+        bool const outerValue;
+    };
+
 protected:
     GarbageCollector<HEAP_T>* const gc;
+
+    /**
+     * Called by a heap when an allocation of `size` bytes doesn't fit. Quits
+     * if allocations must succeed, and otherwise asks for a retry and answers
+     * nullptr for the allocation to return.
+     */
+    void* allocationFailed(size_t size);
 
 private:
     template <class HEAP_U>
@@ -80,6 +133,12 @@ private:
 
     // flag that shows if a Collection is triggered
     bool gcWasRequested{false};
+    bool retryWasRequested{false};
+    size_t failedAllocationSize{0};
+
+    // Until the interpreter can restart bytecodes, every allocation must
+    // succeed.
+    bool allocationMustSucceed{true};
 };
 
 template <class HEAP_T>

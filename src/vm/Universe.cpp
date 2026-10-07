@@ -728,8 +728,14 @@ VMVector* Universe::NewVector(size_t size, VMClass* cls) {
     vm_oop_t first = NEW_INT(1);
     vm_oop_t last = NEW_INT(1);
     auto* storageArray = NewArray(size);
+    if (first == nullptr || last == nullptr || storageArray == nullptr) {
+        return nullptr;
+    }
     auto* result =
         new (GetHeap<HEAP_CLS>(), 0) VMVector(first, last, storageArray);
+    if (result == nullptr) {
+        return nullptr;
+    }
     result->SetClass(cls);
     recordStat(Allocation, "VMVector", result->GetObjectSize());
     return result;
@@ -750,6 +756,9 @@ VMArray* Universe::NewArray(size_t size) {
     auto* result = new (GetHeap<HEAP_CLS>(),
                         additionalBytes ALLOC_OUTSIDE_NURSERY(outsideNursery))
         VMArray(size, additionalBytes);
+    if (result == nullptr) {
+        return nullptr;
+    }
     // NOLINTNEXTLINE(misc-redundant-expression)
     if ((GC_TYPE == GENERATIONAL) && outsideNursery) {
         result->SetGCField(MASK_OBJECT_IS_OLD);
@@ -778,6 +787,9 @@ VMArray* Universe::NewExpandedArrayFromArray(size_t size, VMArray* array) {
     auto* result = new (GetHeap<HEAP_CLS>(),
                         additionalBytes ALLOC_OUTSIDE_NURSERY(outsideNursery))
         VMArray(size, additionalBytes, currentArraySize);
+    if (result == nullptr) {
+        return nullptr;
+    }
     // NOLINTNEXTLINE(misc-redundant-expression)
     if ((GC_TYPE == GENERATIONAL) && outsideNursery) {
         result->SetGCField(MASK_OBJECT_IS_OLD);
@@ -797,9 +809,16 @@ VMArray* Universe::NewExpandedArrayFromArray(size_t size, VMArray* array) {
 #ifndef FRUCTUS
 VMArray* Universe::NewArrayFromStrings(const vector<std::string>& strings) {
     VMArray* result = NewArray(strings.size());
+    if (result == nullptr) {
+        return nullptr;
+    }
     size_t j = 0;
     for (const std::string& str : strings) {
-        result->SetIndexableField(j, NewString(str));
+        VMString* string = NewString(str);
+        if (string == nullptr) {
+            return nullptr;
+        }
+        result->SetIndexableField(j, string);
         j += 1;
     }
     return result;
@@ -808,9 +827,16 @@ VMArray* Universe::NewArrayFromStrings(const vector<std::string>& strings) {
 VMArray* Universe::NewArrayOfSymbolsFromStrings(
     const vector<std::string>& strings) {
     VMArray* result = NewArray(strings.size());
+    if (result == nullptr) {
+        return nullptr;
+    }
     size_t j = 0;
     for (const std::string& str : strings) {
-        result->SetIndexableField(j, SymbolFor(str));
+        VMSymbol* symbol = SymbolFor(str);
+        if (symbol == nullptr) {
+            return nullptr;
+        }
+        result->SetIndexableField(j, symbol);
         j += 1;
     }
     return result;
@@ -843,6 +869,9 @@ VMArray* Universe::NewArrayList(std::vector<vm_oop_t>& list) {
 VMBlock* Universe::NewBlock(VMInvokable* method, VMFrame* context,
                             uint8_t arguments) {
     auto* result = new (GetHeap<HEAP_CLS>(), 0) VMBlock(method, context);
+    if (result == nullptr) {
+        return nullptr;
+    }
     result->SetClass(GetBlockClassWithArgs(arguments));
 
     recordStat(Allocation, "VMBlock", result->GetObjectSize());
@@ -863,6 +892,9 @@ VMClass* Universe::NewClass(VMClass* classOfClass) {
             VMClass(numClassVariables, additionalBytes);
     } else {
         result = new (GetHeap<HEAP_CLS>(), 0) VMClass;
+    }
+    if (result == nullptr) {
+        return nullptr;
     }
 
     result->SetClass(classOfClass);
@@ -895,6 +927,9 @@ VMFrame* Universe::NewFrame(VMFrame* previousFrame, VMMethod* method) {
     size_t const additionalBytes = length * sizeof(VMObject*);
     result = new (GetHeap<HEAP_CLS>(), additionalBytes)
         VMFrame(additionalBytes, method, previousFrame);
+    if (result == nullptr) {
+        return nullptr;
+    }
 
     recordStat(Allocation, "VMFrame", result->GetObjectSize());
     return result;
@@ -906,6 +941,9 @@ VMObject* Universe::NewInstance(VMClass* classOfInstance) {
     size_t const additionalBytes = numOfFields * sizeof(VMObject*);
     auto* result = new (GetHeap<HEAP_CLS>(), additionalBytes)
         VMObject(numOfFields, additionalBytes + sizeof(VMObject));
+    if (result == nullptr) {
+        return nullptr;
+    }
     result->SetClass(classOfInstance);
 
     recordStat(Allocation, classOfInstance->GetName()->GetStdString(),
@@ -958,7 +996,13 @@ VMBigInteger* Universe::NewBigIntegerFromInt(int64_t value) {
 
 VMClass* Universe::NewMetaclassClass() {
     auto* result = new (GetHeap<HEAP_CLS>(), 0) VMClass;
+    if (result == nullptr) {
+        return nullptr;
+    }
     auto* mclass = new (GetHeap<HEAP_CLS>(), 0) VMClass;
+    if (mclass == nullptr) {
+        return nullptr;
+    }
     result->SetClass(mclass);
     mclass->SetClass(result);
 
@@ -1069,6 +1113,10 @@ VMMethod* Universe::NewMethod(VMSymbol* signature, size_t numberOfBytecodes,
     auto* result = new (GetHeap<HEAP_CLS>(), additionalBytes)
         VMMethod(signature, numberOfBytecodes, numLocals, maxStackDepth,
                  lexicalScope, inlinedLoopsArr);
+    if (result == nullptr) {
+        delete[] inlinedLoopsArr;
+        return nullptr;
+    }
 
     recordStat(Allocation, "VMMethod", result->GetObjectSize());
     return result;
@@ -1088,6 +1136,9 @@ VMString* Universe::NewString(const char* str) {
 VMString* Universe::NewString(const size_t length, const char* str) {
     auto* result =
         new (GetHeap<HEAP_CLS>(), PADDED_SIZE(length)) VMString(length, str);
+    if (result == nullptr) {
+        return nullptr;
+    }
 
     recordStat(Allocation, "VMString", result->GetObjectSize());
     return result;
@@ -1095,7 +1146,13 @@ VMString* Universe::NewString(const size_t length, const char* str) {
 
 VMClass* Universe::NewSystemClass() {
     auto* systemClass = new (GetHeap<HEAP_CLS>(), 0) VMClass();
+    if (systemClass == nullptr) {
+        return nullptr;
+    }
     auto* mclass = new (GetHeap<HEAP_CLS>(), 0) VMClass();
+    if (mclass == nullptr) {
+        return nullptr;
+    }
 
     systemClass->SetClass(mclass);
     mclass->SetClass(load_ptr(metaClassClass));

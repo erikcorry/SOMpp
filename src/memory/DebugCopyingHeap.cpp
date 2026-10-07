@@ -49,6 +49,10 @@ void DebugCopyingHeap::invalidateOldBuffer() {
 }
 
 void* DebugCopyingHeap::AllocateObject(size_t size) {
+    if (size > currentHeapSize - currentHeapUsage) {
+        return allocationFailed(size);
+    }
+
     void* newObject = malloc(size);
     if (newObject == nullptr) {
         ErrorPrint("\nFailed to allocate " + to_string(size) + " Bytes.\n");
@@ -58,11 +62,6 @@ void* DebugCopyingHeap::AllocateObject(size_t size) {
     currentHeap.push_back(static_cast<AbstractVMObject*>(newObject));
 
     currentHeapUsage += size;
-
-    if (currentHeapUsage > currentHeapSize) {
-        ErrorPrint("\nFailed to allocate " + to_string(size) + " Bytes.\n");
-        Quit(-1);
-    }
 
     // let's see if we have to trigger the GC
     if (currentHeapUsage > collectionLimit || gcStressMode) {

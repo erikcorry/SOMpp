@@ -75,6 +75,9 @@ VMSymbol* NewSymbol(const size_t length, const char* str) {
     }
     auto* result =
         new (GetHeap<HEAP_CLS>(), PADDED_SIZE(length)) VMSymbol(length, str);
+    if (result == nullptr) {
+        return nullptr;
+    }
     symbolTable[findSlot(symbolTable, symbolTableSize, str, length)] =
         store_root(result);
     symbolCount++;

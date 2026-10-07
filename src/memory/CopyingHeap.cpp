@@ -93,13 +93,12 @@ void CopyingHeap::invalidateOldBuffer() {
 }
 
 void* CopyingHeap::AllocateObject(size_t size) {
+    if (size > (size_t)currentBufferEnd - (size_t)nextFreePosition) {
+        return allocationFailed(size);
+    }
     void* newObject = nextFreePosition;
     nextFreePosition =
         static_cast<void*>(static_cast<char*>(nextFreePosition) + size);
-    if (nextFreePosition > currentBufferEnd) {
-        ErrorPrint("\nFailed to allocate " + to_string(size) + " Bytes.\n");
-        Quit(-1);
-    }
 
     // let's see if we have to trigger the GC
     if (nextFreePosition > collectionLimit || gcStressMode) {
