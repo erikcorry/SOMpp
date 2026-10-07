@@ -72,10 +72,7 @@ Object = nil (
         self error: 'This method is abstract and should be overridden'
     )
 
-    "Error recovering. A message that isn't understood and an unknown global
-     are errors of the VM."
-    escapedBlock: block = (
-        self error: 'Block has escaped and cannot be executed'
-    )
+    "Error recovering. A message that isn't understood, an unknown global and
+     a block that has escaped are errors of the VM."
 
 )

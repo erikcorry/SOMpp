@@ -151,10 +151,10 @@ private:
     void doSuperSend(uint8_t* site);
     void doReturnLocal();
     void doReturnNonLocal();
-    void doInc();
-    void doDec();
-    void doIncField(uint8_t fieldIndex);
-    void doIncFieldPush(uint8_t fieldIndex);
+    bool doInc();
+    bool doDec();
+    bool doIncField(uint8_t fieldIndex);
+    bool doIncFieldPush(uint8_t fieldIndex);
     bool checkIsGreater();
 };
 

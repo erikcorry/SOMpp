@@ -198,7 +198,6 @@ constexpr int maxBlockClassArguments = 4;
     P(new, "new")                         \
     P(run, "run")                         \
     P(run_3a, "run:")                     \
-    P(escapedBlock_3a, "escapedBlock:") \
     P(bootstrap, "bootstrap")
 
 #ifdef FRUCTUS

@@ -52,15 +52,13 @@ vm_oop_t strConcatenate_(vm_oop_t leftObj, vm_oop_t rightObj) {
     auto* self = static_cast<VMString*>(leftObj);
     size_t const selfLength = self->GetStringLength();
     size_t const argLength = arg->GetStringLength();
-    char* const buffer = (char*)malloc(selfLength + argLength);
-    if (buffer == nullptr) {
-        ErrorExit("out of memory");
-    }
-    memcpy(buffer, self->GetRawChars(), selfLength);
-    memcpy(buffer + selfLength, arg->GetRawChars(), argLength);
 
-    VMString* result = Universe::NewString(selfLength + argLength, buffer);
-    free(buffer);
+    VMString* result = Universe::NewString(selfLength + argLength, nullptr);
+    if (result == nullptr) {
+        return nullptr;
+    }
+    memcpy(result->GetRawChars(), self->GetRawChars(), selfLength);
+    memcpy(result->GetRawChars() + selfLength, arg->GetRawChars(), argLength);
     return result;
 }
 

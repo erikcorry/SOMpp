@@ -114,6 +114,7 @@ public:
 #ifndef FRUCTUS
     static VMString* NewString(const std::string& str);
 #endif
+    /** Without str, the caller fills in the characters. */
     static VMString* NewString(size_t length, const char* str);
     static VMString* NewString(const char* str);
     static VMClass* NewSystemClass();

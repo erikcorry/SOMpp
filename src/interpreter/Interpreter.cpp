@@ -391,7 +391,9 @@ LABEL_BC_RETURN_FIELD_2:
 
 LABEL_BC_INC:
     PROLOGUE();
-    doInc();
+    if (!doInc()) {
+        goto RETRY;
+    }
     if (USE_TAGGING) {
         NEXT_NOGC(1);
     } else {
@@ -403,17 +405,23 @@ LABEL_BC_INC:
 
 LABEL_BC_DEC:
     PROLOGUE();
-    doDec();
+    if (!doDec()) {
+        goto RETRY;
+    }
     NEXT_NOGC(1);
 
 LABEL_BC_INC_FIELD:
     PROLOGUE();
-    doIncField(pc[1]);
+    if (!doIncField(pc[1])) {
+        goto RETRY;
+    }
     NEXT_NOGC(2);
 
 LABEL_BC_INC_FIELD_PUSH:
     PROLOGUE();
-    doIncFieldPush(pc[1]);
+    if (!doIncFieldPush(pc[1])) {
+        goto RETRY;
+    }
     NEXT_NOGC(2);
 
 LABEL_BC_JUMP: {
@@ -682,6 +690,15 @@ LABEL_BC_JUMP2_BACKWARD: {
                       pc[2]);
     pc -= offset;
 }
+    DISPATCH_NOGC();
+
+    // An allocation of the bytecode at pc failed, and it changed nothing:
+    // collect, and run it again. The bytecodes that go to DISPATCH_GC do this
+    // there instead, since their pc has moved on.
+RETRY:
+    SAVE_PC();
+    startGC();
+    RELOAD_PC();
     DISPATCH_NOGC();
 }
 
@@ -1047,6 +1064,13 @@ void Interpreter::doReturnNonLocal() {
     VMFrame const* const context = GetFrame()->GetOuterContext();
 
     if (!context->HasPreviousFrame()) {
+#ifdef FRUCTUS
+        // a closed world can't recover, so it's an error, and escapedBlock:
+        // is never sent, like doesNotUnderstand:arguments:
+        ErrorPrint("ERROR: Block has escaped and cannot be executed\n");
+        GetFrame()->PrintStackTrace();
+        Quit(ERR_FAIL);
+#else
         auto* block =
             static_cast<VMBlock*>(GetFrame()->GetArgumentInCurrentContext(0));
         VMFrame* const prevFrame = GetFrame()->GetPreviousFrame();
@@ -1073,12 +1097,9 @@ void Interpreter::doReturnNonLocal() {
                 VMFrame::EmergencyFrameFrom(GetFrame(), additionalStackSlots));
         }
 
-#ifdef FRUCTUS
-        AS_OBJ(sender)->Send(&som_sym_escapedBlock_3a, arguments, 1);
-#else
         AS_OBJ(sender)->Send(SymbolFor(escapedBlock), arguments, 1);
-#endif
         return;
+#endif
     }
 
     while (GetFrame() != context) {
@@ -1090,69 +1111,72 @@ void Interpreter::doReturnNonLocal() {
 
 #ifdef FRUCTUS
 /**
- * val + delta, for a small integer on its tagged word, where an overflow of
- * som_int_t is a result that isn't a small integer, and otherwise in
- * IntegerWideAdd(), which checks that val is an integer.
+ * Sets val to val + delta, for a small integer on its tagged word, where an
+ * overflow of som_int_t is a result that isn't a small integer, and otherwise
+ * in IntegerWideAdd(), which checks that val is an integer. Answers false if
+ * the result couldn't be allocated, which the fast path never does.
  */
-static inline vm_oop_t integerAdd(vm_oop_t val, som_int_t delta) {
+static inline bool integerAdd(vm_oop_t& val, som_int_t delta) {
     som_int_t result = 0;
     if (likely(IS_TAGGED(val)) &&
         !__builtin_add_overflow((som_int_t)val, 2 * delta, &result)) {
-        return (vm_oop_t)result;
+        val = (vm_oop_t)result;
+        return true;
     }
-    return IntegerWideAdd(val, NEW_INT(delta));
+    val = IntegerWideAdd(val, NEW_INT(delta));
+    return val != nullptr;
 }
-#endif
-
-void Interpreter::doInc() {
-    vm_oop_t val = GetFrame()->Top();
-
-#ifdef FRUCTUS
-    val = integerAdd(val, 1);
 #else
+/**
+ * Sets val to val + delta, for a small integer or a double. Answers false if
+ * the result couldn't be allocated.
+ */
+static inline bool integerAdd(vm_oop_t& val, som_int_t delta) {
     if (IS_SMALL_INT(val)) {
-        som_int_t const result = SMALL_INT_VAL(val) + 1;
-        val = NEW_INT(result);
+        val = NEW_INT(SMALL_INT_VAL(val) + delta);
     } else if (CLASS_OF(val) == load_ptr(doubleClass)) {
         double const d = static_cast<VMDouble*>(val)->GetEmbeddedDouble();
-        val = Universe::NewDouble(d + 1.0);
+        val = Universe::NewDouble(d + (double)delta);
     } else {
         ErrorExit("unsupported");
     }
+    return val != nullptr;
+}
 #endif
+
+// The increments answer false, and change nothing, if the result couldn't be
+// allocated.
+bool Interpreter::doInc() {
+    vm_oop_t val = GetFrame()->Top();
+
+    if (!integerAdd(val, 1)) {
+        return false;
+    }
 
     if (IS_TAGGED(val)) {
         GetFrame()->SetTopNoBarrier(val);
     } else {
         GetFrame()->SetTop(val);
     }
+    return true;
 }
 
-void Interpreter::doDec() {
+bool Interpreter::doDec() {
     vm_oop_t val = GetFrame()->Top();
 
-#ifdef FRUCTUS
-    val = integerAdd(val, -1);
-#else
-    if (IS_SMALL_INT(val)) {
-        som_int_t const result = SMALL_INT_VAL(val) - 1;
-        val = NEW_INT(result);
-    } else if (CLASS_OF(val) == load_ptr(doubleClass)) {
-        double const d = static_cast<VMDouble*>(val)->GetEmbeddedDouble();
-        val = Universe::NewDouble(d - 1.0);
-    } else {
-        ErrorExit("unsupported");
+    if (!integerAdd(val, -1)) {
+        return false;
     }
-#endif
 
     if (IS_TAGGED(val)) {
         GetFrame()->SetTopNoBarrier(val);
     } else {
         GetFrame()->SetTop(val);
     }
+    return true;
 }
 
-void Interpreter::doIncField(uint8_t fieldIndex) {
+bool Interpreter::doIncField(uint8_t fieldIndex) {
     vm_oop_t self = GetSelf();
 
     if (unlikely(IS_TAGGED(self))) {
@@ -1163,24 +1187,15 @@ void Interpreter::doIncField(uint8_t fieldIndex) {
 
     vm_oop_t val = selfObj->GetField(fieldIndex);
 
-#ifdef FRUCTUS
-    val = integerAdd(val, 1);
-#else
-    if (IS_SMALL_INT(val)) {
-        som_int_t const result = SMALL_INT_VAL(val) + 1;
-        val = NEW_INT(result);
-    } else if (CLASS_OF(val) == load_ptr(doubleClass)) {
-        double const d = static_cast<VMDouble*>(val)->GetEmbeddedDouble();
-        val = Universe::NewDouble(d + 1.0);
-    } else {
-        ErrorExit("unsupported");
+    if (!integerAdd(val, 1)) {
+        return false;
     }
-#endif
 
     selfObj->SetField(fieldIndex, val);
+    return true;
 }
 
-void Interpreter::doIncFieldPush(uint8_t fieldIndex) {
+bool Interpreter::doIncFieldPush(uint8_t fieldIndex) {
     vm_oop_t self = GetSelf();
 
     if (unlikely(IS_TAGGED(self))) {
@@ -1191,19 +1206,9 @@ void Interpreter::doIncFieldPush(uint8_t fieldIndex) {
 
     vm_oop_t val = selfObj->GetField(fieldIndex);
 
-#ifdef FRUCTUS
-    val = integerAdd(val, 1);
-#else
-    if (IS_SMALL_INT(val)) {
-        som_int_t const result = SMALL_INT_VAL(val) + 1;
-        val = NEW_INT(result);
-    } else if (CLASS_OF(val) == load_ptr(doubleClass)) {
-        double const d = static_cast<VMDouble*>(val)->GetEmbeddedDouble();
-        val = Universe::NewDouble(d + 1.0);
-    } else {
-        ErrorExit("unsupported");
+    if (!integerAdd(val, 1)) {
+        return false;
     }
-#endif
 
     selfObj->SetField(fieldIndex, val);
     if (IS_TAGGED(val)) {
@@ -1211,6 +1216,7 @@ void Interpreter::doIncFieldPush(uint8_t fieldIndex) {
     } else {
         GetFrame()->Push(val);
     }
+    return true;
 }
 
 bool Interpreter::checkIsGreater() {

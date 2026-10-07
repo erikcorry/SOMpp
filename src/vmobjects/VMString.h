@@ -35,13 +35,16 @@ class VMString : public AbstractVMObject {
 public:
     typedef GCString Stored;
 
+    /** Without str, the caller fills in the characters. */
     VMString(const size_t length, const char* str)
         : length(length),
           // set the chars-pointer to point at the position of the first
           // character
           chars((char*)&chars + sizeof(char*)) {
-        for (size_t i = 0; i < length; i++) {
-            chars[i] = str[i];
+        if (str != nullptr) {
+            for (size_t i = 0; i < length; i++) {
+                chars[i] = str[i];
+            }
         }
     }
 
