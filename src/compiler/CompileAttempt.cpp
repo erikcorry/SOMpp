@@ -3,7 +3,7 @@
 bool CompileAttempt::trying = false;
 bool CompileAttempt::failedOnce = false;
 
-void AbandonCompilationIfTrying() {
+void AbandonIfCompiling() {
     if (CompileAttempt::trying) {
         throw CompilationAbandoned{};
     }

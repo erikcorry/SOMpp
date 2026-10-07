@@ -33,7 +33,7 @@ VMTrivialMethod* MakeLiteralReturn(VMSymbol* sig, vector<Variable>& arguments,
     auto* result =
         new (GetHeap<HEAP_CLS>(), 0) VMLiteralReturn(sig, arguments, literal);
     if (result == nullptr) {
-        AbandonCompilationIfTrying();
+        AbandonIfCompiling();
         return nullptr;
     }
     recordStat(Allocation, "VMLiteralReturn", result->GetObjectSize());
@@ -45,7 +45,7 @@ VMTrivialMethod* MakeGlobalReturn(VMSymbol* sig, vector<Variable>& arguments,
     auto* result =
         new (GetHeap<HEAP_CLS>(), 0) VMGlobalReturn(sig, arguments, globalName);
     if (result == nullptr) {
-        AbandonCompilationIfTrying();
+        AbandonIfCompiling();
         return nullptr;
     }
     recordStat(Allocation, "VMGlobalReturn", result->GetObjectSize());
@@ -57,7 +57,7 @@ VMTrivialMethod* MakeGetter(VMSymbol* sig, vector<Variable>& arguments,
     auto* result =
         new (GetHeap<HEAP_CLS>(), 0) VMGetter(sig, arguments, fieldIndex);
     if (result == nullptr) {
-        AbandonCompilationIfTrying();
+        AbandonIfCompiling();
         return nullptr;
     }
     recordStat(Allocation, "VMGetter", result->GetObjectSize());
@@ -69,7 +69,7 @@ VMTrivialMethod* MakeSetter(VMSymbol* sig, vector<Variable>& arguments,
     auto* result = new (GetHeap<HEAP_CLS>(), 0)
         VMSetter(sig, arguments, fieldIndex, argIndex);
     if (result == nullptr) {
-        AbandonCompilationIfTrying();
+        AbandonIfCompiling();
         return nullptr;
     }
     recordStat(Allocation, "VMSetter", result->GetObjectSize());

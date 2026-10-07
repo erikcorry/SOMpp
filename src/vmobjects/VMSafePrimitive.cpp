@@ -16,8 +16,8 @@
 #include "VMSymbol.h"
 
 VMInvokable* VMSafePrimitive::GetSafeUnary(VMSymbol* sig, UnaryPrim prim) {
-    return AbandonCompilationIfNull(new (GetHeap<HEAP_CLS>(), 0)
-                                        VMSafeUnaryPrimitive(sig, prim));
+    return AbandonIfCompilingAndNull(new (GetHeap<HEAP_CLS>(), 0)
+                                         VMSafeUnaryPrimitive(sig, prim));
 }
 
 // A routine answers nullptr when an allocation failed, and the interpreter
@@ -45,8 +45,8 @@ VMFrame* VMSafeUnaryPrimitive::Invoke1(VMFrame* frame) {
 }
 
 VMInvokable* VMSafePrimitive::GetSafeBinary(VMSymbol* sig, BinaryPrim prim) {
-    return AbandonCompilationIfNull(new (GetHeap<HEAP_CLS>(), 0)
-                                        VMSafeBinaryPrimitive(sig, prim));
+    return AbandonIfCompilingAndNull(new (GetHeap<HEAP_CLS>(), 0)
+                                         VMSafeBinaryPrimitive(sig, prim));
 }
 
 VMFrame* VMSafeBinaryPrimitive::Invoke(VMFrame* frame) {
@@ -66,8 +66,8 @@ VMFrame* VMSafeBinaryPrimitive::Invoke1(VMFrame* /*frame*/) {
 }
 
 VMInvokable* VMSafePrimitive::GetSafeTernary(VMSymbol* sig, TernaryPrim prim) {
-    return AbandonCompilationIfNull(new (GetHeap<HEAP_CLS>(), 0)
-                                        VMSafeTernaryPrimitive(sig, prim));
+    return AbandonIfCompilingAndNull(new (GetHeap<HEAP_CLS>(), 0)
+                                         VMSafeTernaryPrimitive(sig, prim));
 }
 
 VMFrame* VMSafeTernaryPrimitive::Invoke(VMFrame* frame) {

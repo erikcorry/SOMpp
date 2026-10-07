@@ -40,8 +40,8 @@
 #include "VMSymbol.h"
 
 VMInvokable* VMPrimitive::GetFramePrim(VMSymbol* sig, FramePrim prim) {
-    return AbandonCompilationIfNull(new (GetHeap<HEAP_CLS>(), 0)
-                                        VMPrimitive(sig, prim));
+    return AbandonIfCompilingAndNull(new (GetHeap<HEAP_CLS>(), 0)
+                                         VMPrimitive(sig, prim));
 }
 
 VMPrimitive* VMPrimitive::CloneForMovingGC() const {

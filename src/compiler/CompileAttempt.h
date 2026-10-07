@@ -9,17 +9,17 @@
  * compiles where allocations must succeed.
  *
  * Fructus has no compiler and no exceptions, so this is host only. Code that
- * fructus shares calls AbandonCompilationIfTrying() where an allocation
- * answered nullptr, and that is a no-op there.
+ * fructus shares calls AbandonIfCompiling() where an allocation answered
+ * nullptr, and that is a no-op there.
  */
 
 #ifdef FRUCTUS
-inline void AbandonCompilationIfTrying() {}
+inline void AbandonIfCompiling() {}
 #endif
 
 /** Answers `allocated`, after abandoning a compilation if it is nullptr. */
 template <class T>
-T* AbandonCompilationIfNull(T* allocated);
+T* AbandonIfCompilingAndNull(T* allocated);
 
 #ifndef FRUCTUS
 
@@ -30,8 +30,11 @@ T* AbandonCompilationIfNull(T* allocated);
 
 class VMClass;
 
-/** Throws, while a compilation may fail, to abandon it. */
-void AbandonCompilationIfTrying();
+/**
+ * Throws to abandon the compilation that is in its first try, if there is
+ * one. No other compilation gets here, since its allocations don't fail.
+ */
+void AbandonIfCompiling();
 
 struct CompilationAbandoned {};
 
@@ -45,7 +48,7 @@ public:
     static VMClass* Run(Compile compile);
 
 private:
-    friend void AbandonCompilationIfTrying();
+    friend void AbandonIfCompiling();
 
     static bool trying;
     // The last try failed, so the next one is the retry.
@@ -76,7 +79,7 @@ VMClass* CompileAttempt::Run(Compile compile) {
 
     if (GetHeap<HEAP_CLS>()->isRetryRequested()) {
         // without a throw, an allocation site is missing its call to
-        // AbandonCompilationIfTrying()
+        // AbandonIfCompiling()
         assert(result == nullptr);
         failedOnce = true;
         return nullptr;
@@ -87,9 +90,9 @@ VMClass* CompileAttempt::Run(Compile compile) {
 #endif
 
 template <class T>
-T* AbandonCompilationIfNull(T* allocated) {
+T* AbandonIfCompilingAndNull(T* allocated) {
     if (allocated == nullptr) {
-        AbandonCompilationIfTrying();
+        AbandonIfCompiling();
     }
     return allocated;
 }

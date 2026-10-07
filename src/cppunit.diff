@@ -1,0 +1,62 @@
+diff --git a/cppunit.h b/cppunit.h
+index 79811b0..7c4cc01 100644
+--- a/cppunit.h
++++ b/cppunit.h
+@@ -11,9 +11,14 @@
+ 
+ // CPlusPlusUnit - C++ Unit testing TDD framework (github.com/cppunit/cppunit)
+ class Cppunit { public:
+-    #define CHECK(a,b)  check<long long>(a, b, #a, #b, __FILE__, __LINE__, __FUNCTION__);
+-    #define CHECKT(a)   check<bool>(a, true, #a, "true", __FILE__, __LINE__, __FUNCTION__);
+-    #define CHECKS(a,b) check<cs>(a, b, #a, #b, __FILE__, __LINE__, __FUNCTION__);
++    #define CHECK(a,b)  check_<long long>(a, b, #a, #b, __FILE__, __LINE__, __FUNCTION__);
++    #define CHECKT(a)   check_<bool>(a, true, #a, "true", __FILE__, __LINE__, __FUNCTION__);
++    #define CHECKS(a,b) check_<cs>(a, b, #a, #b, __FILE__, __LINE__, __FUNCTION__);
++    #define CPPUNIT_ASSERT_EQUAL(a, b) check_(a, b, #a, #b, __FILE__, __LINE__, __FUNCTION__);
++    #define CPPUNIT_ASSERT_EQUAL_MESSAGE(message, a, b) CPPUNIT_ASSERT_EQUAL(a, b);
++    #define CPPUNIT_ASSERT(a) CPPUNIT_ASSERT_EQUAL(a, true);
++    #define CPPUNIT_ASSERT_MESSAGE(message, a) CPPUNIT_ASSERT_EQUAL(a, true);
++    #define CPPUNIT_FAIL(message) CPPUNIT_ASSERT_EQUAL(false, true);
+     typedef const std::string& cs;
+     int checks, fails; std::ostringstream serr; std::istringstream *in;
+     Cppunit() { checks = fails = 0;}
+@@ -25,13 +30,15 @@ class Cppunit { public:
+         serr << "File \"" << file << "\", line " << line << " in " << func << std::endl;
+         serr << "  Checking " << stra << " == " << strb << std::endl;
+     }
+-    template <typename T> void check(T a, T b, cs stra, cs strb, cs file, int line, cs func) {
++    template <typename T> void check_(T a, T b, cs stra, cs strb, cs file, int line, cs func) {
+         checks++; if (a == b) { std::cout << "."; return; }
+         fails++; std::cout << "F"; fail_hdr(stra, strb, file, line, func);
+         serr << "  Error: \"" << a << "\" ! = \"" << b << "\"" << std::endl << std::endl;
+     }
+     virtual void single_test() {}
+     virtual void test_list() { single_test(); }
++    virtual void setUp() {}
++    virtual void tearDown() {}
+     double dclock() { return double(clock()) / CLOCKS_PER_SEC; }
+     int status() {
+         std::cout << std::endl; if (fails) std::cout << serr.str();
+@@ -43,5 +50,21 @@ class Cppunit { public:
+     int run() { std::streambuf* ocin = std::cin.rdbuf(); test_list(); std::cin.rdbuf(ocin); return status(); }
+ };
+ 
+-#endif // CPPUNIT_H
++class TestCase : public Cppunit {};
++class TestFixture : public Cppunit {};
+ 
++#define CPPUNIT_TEST_SUITE(suite_name) public: suite_name() { setUp(); } virtual void test_list() {
++#define CPPUNIT_TEST(test_name) test_name();
++#define CPPUNIT_TEST_SUITE_END() }
++#define CPPUNIT_NS
++#define CPPUNIT_TEST_PARAMETERIZED( testMethod, ... )           \
++    for (auto& i : __VA_ARGS__)                                 \
++    {                                                           \
++        TestFixtureType* fixture = context.makeFixture();       \
++        CPPUNIT_TEST_SUITE_ADD_TEST(                            \
++        ( new CPPUNIT_NS::TestCaller<TestFixtureType>(          \
++                    context.getTestNameFor(#testMethod, i),     \
++                    std::bind(&TestFixtureType::testMethod, fixture, i),          \
++                    fixture)));                                 \
++    }
++#endif // CPPUNIT_H
