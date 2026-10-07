@@ -157,15 +157,20 @@ void VMMethod::SetCachedFrame(VMFrame* frame) {
 }
 #endif
 
+// Answers nullptr, and changes nothing, if the frame can't be allocated.
 VMFrame* VMMethod::Invoke(VMFrame* frame) {
     VMFrame* frm = GetInterpreter()->PushNewFrame(this);
-    frm->CopyArgumentsFrom(frame);
+    if (frm != nullptr) {
+        frm->CopyArgumentsFrom(frame);
+    }
     return frm;
 }
 
 VMFrame* VMMethod::Invoke1(VMFrame* frame) {
     VMFrame* frm = GetInterpreter()->PushNewFrame(this);
-    frm->SetArgument(0, frame->Top());
+    if (frm != nullptr) {
+        frm->SetArgument(0, frame->Top());
+    }
     return frm;
 }
 

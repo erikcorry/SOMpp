@@ -282,7 +282,7 @@ LABEL_BC_PUSH_GLOBAL:
             RELOAD_PC();
         }
     }
-    DISPATCH_GC();
+    DISPATCH_GC(1 + sizeof(void*));
 
 LABEL_BC_POP:
     PROLOGUE();
@@ -334,21 +334,21 @@ LABEL_BC_SEND:
     SAVE_NEXT_PC(SendSite::Length(BC_SEND));
     doSend(pc);
     RELOAD_PC();
-    DISPATCH_GC();
+    DISPATCH_GC(SendSite::Length(BC_SEND));
 
 LABEL_BC_SEND_1:
     PROLOGUE();
     SAVE_NEXT_PC(SendSite::Length(BC_SEND_1));
     doUnarySend(pc);
     RELOAD_PC();
-    DISPATCH_GC();
+    DISPATCH_GC(SendSite::Length(BC_SEND_1));
 
 LABEL_BC_SUPER_SEND:
     PROLOGUE();
     SAVE_NEXT_PC(SendSite::Length(BC_SUPER_SEND));
     doSuperSend(pc);
     RELOAD_PC();
-    DISPATCH_GC();
+    DISPATCH_GC(SendSite::Length(BC_SUPER_SEND));
 
 LABEL_BC_RETURN_LOCAL:
     PROLOGUE();
@@ -685,9 +685,14 @@ LABEL_BC_JUMP2_BACKWARD: {
     DISPATCH_NOGC();
 }
 
+// Answers nullptr, and leaves the current frame, if the frame can't be
+// allocated.
 VMFrame* Interpreter::PushNewFrame(VMMethod* method) {
-    SetFrame(Universe::NewFrame(GetFrame(), method));
-    return GetFrame();
+    VMFrame* frm = Universe::NewFrame(GetFrame(), method);
+    if (frm != nullptr) {
+        SetFrame(frm);
+    }
+    return frm;
 }
 
 // Doesn't save or restore the bytecode index: Start() saves it before
@@ -874,7 +879,10 @@ void Interpreter::doReturnFieldWithIndex(uint8_t fieldIndex) {
 void Interpreter::doPushBlock(VMInvokable* blockMethod) {
     uint8_t const numOfArgs = blockMethod->GetNumberOfArguments();
 
-    GetFrame()->Push(Universe::NewBlock(blockMethod, GetFrame(), numOfArgs));
+    VMBlock* block = Universe::NewBlock(blockMethod, GetFrame(), numOfArgs);
+    if (block != nullptr) {
+        GetFrame()->Push(block);
+    }
 }
 
 // Returns false if the global is unknown, and Start() has to send

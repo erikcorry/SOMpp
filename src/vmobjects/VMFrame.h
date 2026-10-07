@@ -43,6 +43,20 @@ class VMFrame : public AbstractVMObject {
 public:
     typedef GCFrame Stored;
 
+#ifdef FRUCTUS
+    // fructus makes none of the sends below
+    static constexpr size_t EXTRA_STACK_SLOTS = 0;
+#else
+    /**
+     * Stack slots beyond the method's maximum stack depth, for the sends the
+     * VM makes that the compiler doesn't count: the Vector primitives send
+     * #error: with their receiver and arguments still on the stack, and
+     * #doesNotUnderstand:arguments: needs 3 slots, where the send that failed
+     * had at least 1.
+     */
+    static constexpr size_t EXTRA_STACK_SLOTS = 2;
+#endif
+
     static VMFrame* EmergencyFrameFrom(VMFrame* from, size_t extraLength);
 
     explicit VMFrame(size_t additionalBytes, VMMethod* method,

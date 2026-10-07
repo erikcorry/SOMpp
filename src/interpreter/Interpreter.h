@@ -51,9 +51,16 @@
         goto* loopTargets[*pc]; \
     }
 
-#define DISPATCH_GC()                                       \
+// Collects if a collection was requested, with pc at the next bytecode. If
+// an allocation of the bytecode before failed, that bytecode changed nothing,
+// and it runs again after the collection: it is `bcCount` long, and a send
+// that failed pushed no frame, so it's the one before pc.
+#define DISPATCH_GC(bcCount)                                \
     {                                                       \
         if (GetHeap<HEAP_CLS>()->isCollectionTriggered()) { \
+            if (GetHeap<HEAP_CLS>()->isRetryRequested()) {  \
+                pc -= (bcCount);                            \
+            }                                               \
             SAVE_PC();                                      \
             startGC();                                      \
             RELOAD_PC();                                    \
@@ -70,10 +77,10 @@
         DISPATCH_NOGC();   \
     }
 
-#define NEXT_GC(bcCount) \
-    {                    \
-        pc += (bcCount); \
-        DISPATCH_GC();   \
+#define NEXT_GC(bcCount)      \
+    {                         \
+        pc += (bcCount);      \
+        DISPATCH_GC(bcCount); \
     }
 
 class Interpreter {

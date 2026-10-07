@@ -1,5 +1,6 @@
 #include "VMSafePrimitive.h"
 
+#include <assert.h>
 
 #include "../memory/Heap.h"
 #include "../misc/debug.h"
@@ -18,17 +19,27 @@ VMInvokable* VMSafePrimitive::GetSafeUnary(VMSymbol* sig, UnaryPrim prim) {
     return p;
 }
 
-VMFrame* VMSafeUnaryPrimitive::Invoke(VMFrame* frame) {
-    vm_oop_t receiverObj = frame->Pop();
+// A routine answers nullptr when an allocation failed, and the interpreter
+// will run the send again after a collection. So the arguments stay on the
+// stack until the routine has answered.
+static inline bool succeeded(vm_oop_t result) {
+    assert(result != nullptr || GetHeap<HEAP_CLS>()->isRetryRequested());
+    return result != nullptr;
+}
 
-    frame->Push(prim.pointer(receiverObj));
+VMFrame* VMSafeUnaryPrimitive::Invoke(VMFrame* frame) {
+    vm_oop_t result = prim.pointer(frame->Top());
+    if (succeeded(result)) {
+        frame->SetTop(result);
+    }
     return nullptr;
 }
 
 VMFrame* VMSafeUnaryPrimitive::Invoke1(VMFrame* frame) {
-    vm_oop_t receiverObj = frame->Pop();
-
-    frame->Push(prim.pointer(receiverObj));
+    vm_oop_t result = prim.pointer(frame->Top());
+    if (succeeded(result)) {
+        frame->SetTop(result);
+    }
     return nullptr;
 }
 
@@ -38,10 +49,14 @@ VMInvokable* VMSafePrimitive::GetSafeBinary(VMSymbol* sig, BinaryPrim prim) {
 }
 
 VMFrame* VMSafeBinaryPrimitive::Invoke(VMFrame* frame) {
-    vm_oop_t rightObj = frame->Pop();
-    vm_oop_t leftObj = frame->Pop();
+    vm_oop_t rightObj = frame->GetStackElement(0);
+    vm_oop_t leftObj = frame->GetStackElement(1);
 
-    frame->Push(prim.pointer(leftObj, rightObj));
+    vm_oop_t result = prim.pointer(leftObj, rightObj);
+    if (succeeded(result)) {
+        frame->PopVoid();
+        frame->SetTop(result);
+    }
     return nullptr;
 }
 
@@ -55,11 +70,16 @@ VMInvokable* VMSafePrimitive::GetSafeTernary(VMSymbol* sig, TernaryPrim prim) {
 }
 
 VMFrame* VMSafeTernaryPrimitive::Invoke(VMFrame* frame) {
-    vm_oop_t arg2 = frame->Pop();
-    vm_oop_t arg1 = frame->Pop();
-    vm_oop_t self = frame->Pop();
+    vm_oop_t arg2 = frame->GetStackElement(0);
+    vm_oop_t arg1 = frame->GetStackElement(1);
+    vm_oop_t self = frame->GetStackElement(2);
 
-    frame->Push(prim.pointer(self, arg1, arg2));
+    vm_oop_t result = prim.pointer(self, arg1, arg2);
+    if (succeeded(result)) {
+        frame->PopVoid();
+        frame->PopVoid();
+        frame->SetTop(result);
+    }
     return nullptr;
 }
 
