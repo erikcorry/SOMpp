@@ -41,6 +41,9 @@ const size_t VMArray::VMArrayNumberOfFields = 0;
 
 VMArray* VMArray::Copy() const {
     VMArray* copy = Universe::NewArray(GetNumberOfIndexableFields());
+    if (copy == nullptr) {
+        return nullptr;
+    }
 
     const size_t additionalSpace = totalObjectSize - sizeof(VMArray);
     void* destination = SHIFTED_PTR(copy, sizeof(VMArray));
@@ -53,6 +56,9 @@ VMArray* VMArray::Copy() const {
 VMArray* VMArray::CopyAndExtendWith(vm_oop_t item) const {
     const size_t fields = GetNumberOfIndexableFields();
     VMArray* result = Universe::NewArray(fields + 1);
+    if (result == nullptr) {
+        return nullptr;
+    }
     CopyIndexableFieldsTo(result);
     result->SetIndexableField(fields, item);
     return result;

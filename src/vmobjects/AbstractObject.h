@@ -34,7 +34,14 @@ public:
     [[nodiscard]] virtual som_int_t GetHash() const = 0;
     [[nodiscard]] virtual VMClass* GetClass() const = 0;
     [[nodiscard]] virtual AbstractVMObject* CloneForMovingGC() const = 0;
-    void Send(VMSymbol* selector, vm_oop_t* arguments, size_t argc);
+    /**
+     * Sends selector from the interpreter's frame, with the receiver and
+     * arguments pushed onto its stack. Answers false, and pops them again,
+     * if the invokable couldn't allocate what it needed: the caller must then
+     * undo what it did too, so the interpreter can run its bytecode again.
+     */
+    [[nodiscard]] bool Send(VMSymbol* selector, vm_oop_t* arguments,
+                            size_t argc);
 
     /** Size in bytes of the object. */
     [[nodiscard]] virtual size_t GetObjectSize() const = 0;

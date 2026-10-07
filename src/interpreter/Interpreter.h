@@ -107,7 +107,11 @@ public:
     uint8_t* GetBytecodes();
     void WalkGlobals(walk_heap_fn /*walk*/);
 
-    void SendUnknownGlobal(VMSymbol* globalName);
+    /**
+     * Sends #unknownGlobal: to self. Answers false, and changes nothing, if
+     * it failed.
+     */
+    bool SendUnknownGlobal(VMSymbol* globalName);
 
 private:
     vm_oop_t GetSelf();
@@ -150,7 +154,10 @@ private:
     void doUnarySend(uint8_t* site);
     void doSuperSend(uint8_t* site);
     void doReturnLocal();
-    void doReturnNonLocal();
+    bool doReturnNonLocal();
+#ifndef FRUCTUS
+    bool sendEscapedBlock(vm_oop_t result);
+#endif
     bool doInc();
     bool doDec();
     bool doIncField(uint8_t fieldIndex);

@@ -37,14 +37,15 @@ public:
         return returned;
     }
 
-    /* Setter Methods */
+    /* Setter Methods. They answer nullptr or false, and change nothing, if
+     * an allocation failed. */
 
     /* handles 1 - 0 indexing give the SOM index to this function */
     vm_oop_t SetStorage(som_int_t index, vm_oop_t value);
-    void SetStorageAWFY(som_int_t index, vm_oop_t value);
+    [[nodiscard]] bool SetStorageAWFY(som_int_t index, vm_oop_t value);
 
     /* Append an item to end of Vector */
-    void Append(vm_oop_t value);
+    [[nodiscard]] bool Append(vm_oop_t value);
 
     /* Remove Methods */
 
@@ -56,7 +57,7 @@ public:
 
     vm_oop_t remove(som_int_t index);
 
-    void RemoveAll();
+    [[nodiscard]] bool RemoveAll();
 
     /* General Utility Methods */
 
@@ -76,9 +77,10 @@ public:
     [[nodiscard]] vm_oop_t copyStorageArray();
 
     vm_oop_t IndexOutOfBounds(size_t maxSize, size_t indexAccessed);
-    vm_oop_t IndexOutOfBoundsAWFY();
 
 private:
+    vm_oop_t sendError(const char* message);
+
     static const size_t VMVectorNumberOfFields;
 
     gc_oop_t first;

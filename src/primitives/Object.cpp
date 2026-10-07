@@ -31,6 +31,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "../memory/Heap.h"
 #include "../vm/Globals.h"
 #include "../vm/Universe.h"  // NOLINT(misc-include-cleaner) it's required to make the types complete
 #include "../vmobjects/ObjectFormats.h"
@@ -70,6 +71,14 @@ vm_oop_t objHalt(vm_oop_t /*unused*/) {
 
 #ifndef FRUCTUS
 // fructus is a closed world, without perform or reflection
+
+// The perform primitives replace their arguments with those of the send they
+// make. If its invokable can't allocate what it needs, they put them back, so
+// that the interpreter can run their own send again.
+static bool invokeFailed() {
+    return GetHeap<HEAP_CLS>()->isRetryRequested();
+}
+
 static void objPerform(VMFrame* frame) {
     auto* selector = (VMSymbol*)frame->Pop();
     vm_oop_t self = frame->GetStackElement(0);
@@ -78,6 +87,9 @@ static void objPerform(VMFrame* frame) {
     VMInvokable* invokable = clazz->LookupInvokable(selector);
 
     invokable->Invoke(frame);
+    if (invokeFailed()) {
+        frame->Push(selector);
+    }
 }
 
 static void objPerformInSuperclass(VMFrame* frame) {
@@ -87,6 +99,10 @@ static void objPerformInSuperclass(VMFrame* frame) {
     VMInvokable* invokable = clazz->LookupInvokable(selector);
 
     invokable->Invoke(frame);
+    if (invokeFailed()) {
+        frame->Push(selector);
+        frame->Push(clazz);
+    }
 }
 
 static void objPerformWithArguments(VMFrame* frame) {
@@ -104,6 +120,13 @@ static void objPerformWithArguments(VMFrame* frame) {
     VMInvokable* invokable = clazz->LookupInvokable(selector);
 
     invokable->Invoke(frame);
+    if (invokeFailed()) {
+        for (size_t i = 0; i < num_args; i++) {
+            frame->PopVoid();
+        }
+        frame->Push(selector);
+        frame->Push(args);
+    }
 }
 
 static void objPerformWithArgumentsInSuperclass(VMFrame* frame) {
@@ -120,6 +143,14 @@ static void objPerformWithArgumentsInSuperclass(VMFrame* frame) {
     VMInvokable* invokable = clazz->LookupInvokable(selector);
 
     invokable->Invoke(frame);
+    if (invokeFailed()) {
+        for (size_t i = 0; i < num_args; i++) {
+            frame->PopVoid();
+        }
+        frame->Push(selector);
+        frame->Push(args);
+        frame->Push(clazz);
+    }
 }
 
 static vm_oop_t objInstVarAt(vm_oop_t self, vm_oop_t idx) {

@@ -69,37 +69,52 @@ vm_oop_t VMVector::SetStorage(som_int_t index, vm_oop_t value) {
 }
 
 /* AWFY Vector can expand on at:put: core-lib vector cannot*/
-void VMVector::SetStorageAWFY(som_int_t index, vm_oop_t value) {
+bool VMVector::SetStorageAWFY(som_int_t index, vm_oop_t value) {
     som_int_t const first = SMALL_INT_VAL(load_ptr(this->first));
-    som_int_t last = SMALL_INT_VAL(load_ptr(this->last));
+    som_int_t const last = SMALL_INT_VAL(load_ptr(this->last));
     VMArray* storage = load_ptr(this->storage);
 
     if (index > storage->GetNumberOfIndexableFields()) {
         // Expand the array
         VMArray* newStorage = Universe::NewExpandedArrayFromArray(
             storage->GetNumberOfIndexableFields() * 2, storage);
+        if (newStorage == nullptr) {
+            return false;
+        }
 
         newStorage->SetIndexableField(index - 1, value);
 
         this->storage = store_ptr(this->storage, newStorage);
 
     } else {
+        vm_oop_t newLast = NEW_INT(last + 1);
+        if (newLast == nullptr) {
+            return false;
+        }
         // Just set the new value
         storage->SetIndexableField(first + index - 2, value);
-        last += 1;
-        this->last = store_ptr(this->last, NEW_INT(last));
+        this->last = store_ptr(this->last, newLast);
     }
+    return true;
 }
 
-void VMVector::Append(vm_oop_t value) {
-    som_int_t last = SMALL_INT_VAL(load_ptr(this->last));
+bool VMVector::Append(vm_oop_t value) {
+    som_int_t const last = SMALL_INT_VAL(load_ptr(this->last));
     VMArray* storage = load_ptr(this->storage);
+
+    vm_oop_t newLast = NEW_INT(last + 1);
+    if (newLast == nullptr) {
+        return false;
+    }
 
     if (last >= storage->GetNumberOfIndexableFields()) {  // Expand the array
         // Expand by the correct amount *2 by default in the native som
         // implementation
         VMArray* newStorage = Universe::NewExpandedArrayFromArray(
             storage->GetNumberOfIndexableFields() * 2, storage);
+        if (newStorage == nullptr) {
+            return false;
+        }
 
         storage->CopyIndexableFieldsTo(newStorage);
         newStorage->SetIndexableField(last - 1, value);
@@ -110,8 +125,8 @@ void VMVector::Append(vm_oop_t value) {
         storage->SetIndexableField(last - 1, value);
     }
 
-    last += 1;
-    this->last = store_ptr(this->last, NEW_INT(last));
+    this->last = store_ptr(this->last, newLast);
+    return true;
 }
 
 vm_oop_t VMVector::RemoveLast() {
@@ -120,13 +135,7 @@ vm_oop_t VMVector::RemoveLast() {
 
     // Throw an error correctly (error: method in som)
     if (last == first) {
-        // VMSafe*Primitive::Invoke will push it right back to the same frame
-        VMFrame* frame = GetInterpreter()->GetFrame();
-        vm_oop_t errorMsg =
-            Universe::NewString("Vector: error when removing Last item.");
-        vm_oop_t args[1] = {errorMsg};
-        this->Send(SymbolFor("error:"), args, 1);
-        return frame->Pop();
+        return sendError("Vector: error when removing Last item.");
     }
 
     return remove(last - first);  // last element, 1-based indexing
@@ -138,19 +147,17 @@ vm_oop_t VMVector::RemoveFirst() {
 
     // Throw an error correctly (error: method in som)
     if (first >= SMALL_INT_VAL(load_ptr(this->last))) {
-        // VMSafe*Primitive::Invoke will push it right back to the same frame
-        VMFrame* frame = GetInterpreter()->GetFrame();
-        vm_oop_t errorMsg =
-            Universe::NewString("Vector: error when removing First item.");
-        vm_oop_t args[1] = {errorMsg};
-        this->Send(SymbolFor("error:"), args, 1);
-        return frame->Pop();
+        return sendError("Vector: error when removing First item.");
+    }
+
+    vm_oop_t newFirst = NEW_INT(first + 1);  // Increment the first index
+    if (newFirst == nullptr) {
+        return nullptr;
     }
 
     // This is 1 because GetIndexableField handles 1 to 0 indexing
     vm_oop_t itemToRemove = GetStorage(1);
-    first += 1;  // Increment the first index
-    this->first = store_ptr(this->first, NEW_INT(first));
+    this->first = store_ptr(this->first, newFirst);
     return itemToRemove;
 }
 
@@ -164,7 +171,9 @@ vm_oop_t VMVector::RemoveObj(vm_oop_t other) {
 
         // Check where integers are tagged or references can be checked
         if (current == other) {
-            (void)remove(i - first + 2);  // uses 1-based indexing
+            if (remove(i - first + 2) == nullptr) {  // uses 1-based indexing
+                return nullptr;
+            }
             return load_ptr(trueObject);
         }
     }
@@ -173,8 +182,13 @@ vm_oop_t VMVector::RemoveObj(vm_oop_t other) {
 
 vm_oop_t VMVector::remove(som_int_t index) {
     const som_int_t first = SMALL_INT_VAL(load_ptr(this->first));
-    som_int_t last = SMALL_INT_VAL(load_ptr(this->last));
+    const som_int_t last = SMALL_INT_VAL(load_ptr(this->last));
     VMArray* storage = load_ptr(this->storage);
+
+    vm_oop_t newLast = NEW_INT(last - 1);
+    if (newLast == nullptr) {
+        return nullptr;
+    }
 
     vm_oop_t itemToRemove = GetStorage(index);
 
@@ -184,19 +198,23 @@ vm_oop_t VMVector::remove(som_int_t index) {
                                    storage->GetIndexableField(first + i));
     }
 
-    last -= 1;
-    this->last = store_ptr(this->last, NEW_INT(last));
+    this->last = store_ptr(this->last, newLast);
 
     return itemToRemove;
 }
 
-void VMVector::RemoveAll() {
-    this->first = store_ptr(this->first, NEW_INT(1));
-    this->last = store_ptr(this->last, NEW_INT(1));
+bool VMVector::RemoveAll() {
+    vm_oop_t one = NEW_INT(1);
     VMArray const* const storage = load_ptr(this->storage);
     VMArray* newArray =
         Universe::NewArray(storage->GetNumberOfIndexableFields());
+    if (one == nullptr || newArray == nullptr) {
+        return false;
+    }
+    this->first = store_ptr(this->first, one);
+    this->last = store_ptr(this->last, one);
     this->storage = store_ptr(this->storage, newArray);
+    return true;
 }
 
 vm_oop_t VMVector::copyStorageArray() {
@@ -205,6 +223,9 @@ vm_oop_t VMVector::copyStorageArray() {
     VMArray const* const storage = load_ptr(this->storage);
 
     VMArray* result = Universe::NewArray(last - first);
+    if (result == nullptr) {
+        return nullptr;
+    }
     for (som_int_t i = first - 1; i < last - 1; ++i) {
         result->SetIndexableField(i - first + 1, storage->GetIndexableField(i));
     }
@@ -214,21 +235,28 @@ vm_oop_t VMVector::copyStorageArray() {
 
 /* Rename as a more specific error function */
 vm_oop_t VMVector::IndexOutOfBounds(size_t maxSize, size_t indexAccessed) {
-    // VMSafe*Primitive::Invoke will push it right back to the same frame
-    VMFrame* frame = GetInterpreter()->GetFrame();
     char message[64];
     snprintf(message, sizeof(message),
              "Vector[1..%zu]: Index %zu out of bounds", maxSize,
              indexAccessed);
-    vm_oop_t errorMsg = Universe::NewString(message);
-    vm_oop_t args[1] = {errorMsg};
-    this->Send(SymbolFor("error:"), args, 1);
-    return frame->Pop();
+    return sendError(message);
 }
 
-vm_oop_t VMVector::IndexOutOfBoundsAWFY() {
+// Sends #error: to the vector from a primitive, whose receiver and arguments
+// are still on the stack, see VMFrame::EXTRA_STACK_SLOTS. Answers the message,
+// which VMSafe*Primitive::Invoke puts back on the stack, as the argument of
+// #error: in place of the primitive's, or nullptr if it failed.
+vm_oop_t VMVector::sendError(const char* message) {
     VMFrame* frame = GetInterpreter()->GetFrame();
-    this->Send(SymbolFor("println"), nullptr, 1);
+    VMSymbol* selector = SymbolFor("error:");
+    vm_oop_t errorMsg = Universe::NewString(message);
+    if (selector == nullptr || errorMsg == nullptr) {
+        return nullptr;
+    }
+    vm_oop_t args[1] = {errorMsg};
+    if (!this->Send(selector, args, 1)) {
+        return nullptr;
+    }
     return frame->Pop();
 }
 #endif

@@ -45,13 +45,17 @@ static vm_oop_t vecAtPutAWFY(vm_oop_t obj, vm_oop_t at, vm_oop_t put) {
     som_int_t const index = SMALL_INT_VAL(at);   // Set the index looking for
     // Call method to set the value at index. That does not deal with 1to0
     // indexing conversion
-    self->SetStorageAWFY(index, put);
+    if (!self->SetStorageAWFY(index, put)) {
+        return nullptr;
+    }
     return self;
 }
 
 static vm_oop_t vecAppend(vm_oop_t obj, vm_oop_t arg) {
     auto* self = static_cast<VMVector*>(obj);
-    self->Append(arg);
+    if (!self->Append(arg)) {
+        return nullptr;
+    }
     return self;
 }
 
@@ -82,7 +86,9 @@ static vm_oop_t removeObject(vm_oop_t obj, vm_oop_t other) {
 
 static vm_oop_t removeAll(vm_oop_t obj) {
     auto* self = static_cast<VMVector*>(obj);
-    self->RemoveAll();
+    if (!self->RemoveAll()) {
+        return nullptr;
+    }
     return self;
 }
 

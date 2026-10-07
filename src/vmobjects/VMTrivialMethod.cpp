@@ -2,6 +2,9 @@
 
 #include <assert.h>
 #include <cstddef>
+#ifndef FRUCTUS
+#include <vector>
+#endif
 
 #ifndef FRUCTUS
 #include "../compiler/BytecodeGenerator.h"
@@ -98,32 +101,51 @@ void VMLiteralReturn::InlineInto(MethodGenerationContext& mgenc,
 #endif
 
 VMFrame* VMGlobalReturn::Invoke(VMFrame* frame) {
+    vm_oop_t value = Universe::GetGlobal(load_ptr(globalName));
+    if (value == nullptr) {
+        sendUnknownGlobal(frame);
+        return nullptr;
+    }
+
     for (int i = 0; i < numberOfArguments; i += 1) {
         frame->Pop();
     }
-
-    vm_oop_t value = Universe::GetGlobal(load_ptr(globalName));
-    if (value != nullptr) {
-        frame->Push(value);
-    } else {
-        GetInterpreter()->SendUnknownGlobal(load_ptr(globalName));
-    }
-
+    frame->Push(value);
     return nullptr;
 }
 
 VMFrame* VMGlobalReturn::Invoke1(VMFrame* frame) {
     assert(numberOfArguments == 1);
-    frame->Pop();
 
     vm_oop_t value = Universe::GetGlobal(load_ptr(globalName));
-    if (value != nullptr) {
-        frame->Push(value);
-    } else {
-        GetInterpreter()->SendUnknownGlobal(load_ptr(globalName));
+    if (value == nullptr) {
+        sendUnknownGlobal(frame);
+        return nullptr;
     }
 
+    frame->Pop();
+    frame->Push(value);
     return nullptr;
+}
+
+// Sends #unknownGlobal: in place of the send of the method, which its result
+// is the result of. Changes nothing if it fails.
+void VMGlobalReturn::sendUnknownGlobal(VMFrame* frame) {
+#ifdef FRUCTUS
+    // all globals are in the image, so this is an error
+    (void)frame;
+    GetInterpreter()->SendUnknownGlobal(load_ptr(globalName));
+#else
+    std::vector<vm_oop_t> arguments(numberOfArguments);
+    for (int i = numberOfArguments - 1; i >= 0; i -= 1) {
+        arguments[i] = frame->Pop();
+    }
+    if (!GetInterpreter()->SendUnknownGlobal(load_ptr(globalName))) {
+        for (vm_oop_t arg : arguments) {
+            frame->Push(arg);
+        }
+    }
+#endif
 }
 
 #ifndef FRUCTUS

@@ -663,10 +663,17 @@ static vm_oop_t intRange(vm_oop_t leftObj, vm_oop_t rightObj) {
 
     som_int_t const numInteger = right - left + 1;
     VMArray* arr = Universe::NewArray(numInteger);
+    if (arr == nullptr) {
+        return nullptr;
+    }
 
     size_t index = 0;
     for (som_int_t i = left; i <= right; i += 1, index += 1) {
-        arr->SetIndexableField(index, NEW_INT(i));
+        vm_oop_t element = NEW_INT(i);
+        if (element == nullptr) {
+            return nullptr;
+        }
+        arr->SetIndexableField(index, element);
     }
 
     return arr;

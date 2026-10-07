@@ -49,15 +49,15 @@ public:
 #else
     /**
      * Stack slots beyond the method's maximum stack depth, for the sends the
-     * VM makes that the compiler doesn't count: the Vector primitives send
-     * #error: with their receiver and arguments still on the stack, and
-     * #doesNotUnderstand:arguments: needs 3 slots, where the send that failed
-     * had at least 1.
+     * VM makes that the compiler doesn't count, so that a frame never has to
+     * grow: the Vector primitives send #error: with their receiver and
+     * arguments still on the stack, #doesNotUnderstand:arguments: needs 3
+     * slots, where the send that failed had at least 1, and #unknownGlobal:
+     * and #escapedBlock: need 2, where the global or the block had 1.
      */
     static constexpr size_t EXTRA_STACK_SLOTS = 2;
 #endif
 
-    static VMFrame* EmergencyFrameFrom(VMFrame* from, size_t extraLength);
 
     explicit VMFrame(size_t additionalBytes, VMMethod* method,
                      VMFrame* previousFrame)

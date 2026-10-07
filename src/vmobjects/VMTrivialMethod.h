@@ -175,6 +175,8 @@ public:
     }
 
 private:
+    void sendUnknownGlobal(VMFrame* frame);
+
     GCSymbol* globalName;
     uint8_t numberOfArguments;
 };

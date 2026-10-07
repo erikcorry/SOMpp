@@ -29,6 +29,9 @@
 #include <assert.h>
 #include <cstddef>
 #include <cstdint>
+#ifndef FRUCTUS
+#include <vector>
+#endif
 
 #include "../interpreter/SendSite.h"
 #include "../interpreter/bytecodes.h"  // NOLINT(misc-include-cleaner) it's required for InterpreterLoop.h
@@ -358,7 +361,13 @@ LABEL_BC_RETURN_LOCAL:
 
 LABEL_BC_RETURN_NON_LOCAL:
     PROLOGUE();
-    doReturnNonLocal();
+#ifdef FRUCTUS
+    doReturnNonLocal();  // an escaped block is an error, so it can't fail
+#else
+    if (!doReturnNonLocal()) {
+        goto RETRY;
+    }
+#endif
     RELOAD_PC();
     DISPATCH_NOGC();
 
@@ -793,13 +802,20 @@ void Interpreter::triggerDoesNotUnderstand(VMSymbol* signature, VMClass* cls) {
     Quit(ERR_FAIL);
 }
 #else
+// Sends #doesNotUnderstand:arguments: in place of the send of signature,
+// whose receiver and arguments are on the stack. If it fails, they are put
+// back, so the send can run again.
 void Interpreter::triggerDoesNotUnderstand(VMSymbol* signature) {
     uint8_t const numberOfArgs = Signature::GetNumberOfArguments(signature);
 
     vm_oop_t receiver = GetFrame()->GetStackElement(numberOfArgs - 1);
 
+    VMSymbol* selector = SymbolFor(doesNotUnderstand);
     VMArray* argumentsArray =
         Universe::NewArray(numberOfArgs - 1);  // without receiver
+    if (selector == nullptr || argumentsArray == nullptr) {
+        return;
+    }
 
     // the receiver should not go into the argumentsArray
     // so, numberOfArgs - 2
@@ -811,17 +827,14 @@ void Interpreter::triggerDoesNotUnderstand(VMSymbol* signature) {
 
     GetFrame()->Pop();  // pop the receiver
 
-    // check if current frame is big enough for this unplanned Send
-    // doesNotUnderstand: needs 3 slots, one for this, one for method name, one
-    // for args
-    som_int_t const additionalStackSlots =
-        3 - (som_int_t)GetFrame()->RemainingStackSize();
-    if (additionalStackSlots > 0) {
-        // copy current frame into a bigger one and replace the current frame
-        SetFrame(VMFrame::EmergencyFrameFrom(GetFrame(), additionalStackSlots));
+    // it needs 3 slots, and the failed send had at least 1, see
+    // VMFrame::EXTRA_STACK_SLOTS
+    if (!AS_OBJ(receiver)->Send(selector, arguments, 2)) {
+        GetFrame()->Push(receiver);
+        for (size_t i = 0; i < (size_t)numberOfArgs - 1; ++i) {
+            GetFrame()->Push(argumentsArray->GetIndexableField(i));
+        }
     }
-
-    AS_OBJ(receiver)->Send(SymbolFor(doesNotUnderstand), arguments, 2);
 }
 #endif
 
@@ -916,7 +929,7 @@ bool Interpreter::doPushGlobal(VMSymbol* globalName) {
 
 #ifdef FRUCTUS
 // all globals are in the image, so this is an error
-void Interpreter::SendUnknownGlobal(VMSymbol* globalName) {
+bool Interpreter::SendUnknownGlobal(VMSymbol* globalName) {
     char name[16];
     FormatTagged(name, "sel", (uintptr_t)globalName);
     ErrorPrintf("ERROR: Unknown global %s\n", name);
@@ -924,21 +937,17 @@ void Interpreter::SendUnknownGlobal(VMSymbol* globalName) {
     Quit(ERR_FAIL);
 }
 #else
-void Interpreter::SendUnknownGlobal(VMSymbol* globalName) {
+bool Interpreter::SendUnknownGlobal(VMSymbol* globalName) {
+    VMSymbol* selector = SymbolFor(unknownGlobal);
+    if (selector == nullptr) {
+        return false;
+    }
     vm_oop_t arguments[] = {globalName};
     vm_oop_t self = GetSelf();
 
-    // check if there is enough space on the stack for this unplanned Send
-    // unknowGlobal: needs 2 slots, one for "this" and one for the argument
-    som_int_t const additionalStackSlots =
-        2 - (som_int_t)GetFrame()->RemainingStackSize();
-    if (additionalStackSlots > 0) {
-        // copy current frame into a bigger one and replace the current
-        // frame
-        SetFrame(VMFrame::EmergencyFrameFrom(GetFrame(), additionalStackSlots));
-    }
-
-    AS_OBJ(self)->Send(SymbolFor(unknownGlobal), arguments, 1);
+    // it needs 2 slots, and the push of the global had 1, see
+    // VMFrame::EXTRA_STACK_SLOTS
+    return AS_OBJ(self)->Send(selector, arguments, 1);
 }
 #endif
 
@@ -1038,17 +1047,7 @@ void Interpreter::doSuperSend(uint8_t* site) {
         write_barrier(method, super);
         invokable->Invoke(GetFrame());
     } else {
-        uint8_t const numOfArgs = Signature::GetNumberOfArguments(signature);
-        vm_oop_t receiver = GetFrame()->GetStackElement(numOfArgs - 1);
-        VMArray* argumentsArray = Universe::NewArray(numOfArgs);
-
-        for (uint8_t i = numOfArgs - 1; i >= 0; --i) {
-            vm_oop_t o = GetFrame()->Pop();
-            argumentsArray->SetIndexableField(i, o);
-        }
-        vm_oop_t arguments[] = {signature, argumentsArray};
-
-        AS_OBJ(receiver)->Send(SymbolFor(doesNotUnderstand), arguments, 2);
+        triggerDoesNotUnderstand(signature);
     }
 }
 #endif
@@ -1058,7 +1057,9 @@ void Interpreter::doReturnLocal() {
     popFrameAndPushResult(result);
 }
 
-void Interpreter::doReturnNonLocal() {
+// Answers false, and changes nothing, if the block has escaped and the send
+// of #escapedBlock: failed.
+bool Interpreter::doReturnNonLocal() {
     vm_oop_t result = GetFrame()->Pop();
 
     VMFrame const* const context = GetFrame()->GetOuterContext();
@@ -1071,34 +1072,7 @@ void Interpreter::doReturnNonLocal() {
         GetFrame()->PrintStackTrace();
         Quit(ERR_FAIL);
 #else
-        auto* block =
-            static_cast<VMBlock*>(GetFrame()->GetArgumentInCurrentContext(0));
-        VMFrame* const prevFrame = GetFrame()->GetPreviousFrame();
-        VMFrame const* const outerContext = prevFrame->GetOuterContext();
-        vm_oop_t sender = outerContext->GetArgumentInCurrentContext(0);
-        vm_oop_t arguments[] = {block};
-
-        VMFrame const* const blockFrame = popFrame();
-
-        // Pop the block's arguments from the stack of the sender of #value
-        VMMethod const* const method = blockFrame->GetMethod();
-        uint8_t const numberOfArgs = method->GetNumberOfArguments();
-        for (uint8_t i = 0; i < numberOfArgs; ++i) {
-            GetFrame()->Pop();
-        }
-
-        // check if current frame is big enough for this unplanned send
-        // #escapedBlock: needs 2 slots, one for self, and one for the block
-        som_int_t const additionalStackSlots =
-            2 - (som_int_t)GetFrame()->RemainingStackSize();
-        if (additionalStackSlots > 0) {
-            // copy current frame into a bigger one, and replace it
-            SetFrame(
-                VMFrame::EmergencyFrameFrom(GetFrame(), additionalStackSlots));
-        }
-
-        AS_OBJ(sender)->Send(SymbolFor(escapedBlock), arguments, 1);
-        return;
+        return sendEscapedBlock(result);
 #endif
     }
 
@@ -1107,7 +1081,52 @@ void Interpreter::doReturnNonLocal() {
     }
 
     popFrameAndPushResult(result);
+    return true;
 }
+
+#ifndef FRUCTUS
+// Sends #escapedBlock: to the sender of the block's #value, in place of that
+// send: the block's frame returns, and its receiver and arguments are popped
+// from the sender's stack. If the send fails, it puts them back and pushes
+// result, so that the return can run again.
+bool Interpreter::sendEscapedBlock(vm_oop_t result) {
+    VMSymbol* selector = SymbolFor(escapedBlock);
+    if (selector == nullptr) {
+        GetFrame()->Push(result);
+        return false;
+    }
+
+    VMFrame* const blockFrame = GetFrame();
+    auto* block =
+        static_cast<VMBlock*>(blockFrame->GetArgumentInCurrentContext(0));
+    VMFrame* const prevFrame = blockFrame->GetPreviousFrame();
+    VMFrame const* const outerContext = prevFrame->GetOuterContext();
+    vm_oop_t sender = outerContext->GetArgumentInCurrentContext(0);
+    vm_oop_t arguments[] = {block};
+
+    // the block's frame returns only if the send succeeds, so it keeps its
+    // previous frame until then
+    SetFrame(prevFrame);
+    uint8_t const numberOfArgs = blockFrame->GetMethod()->GetNumberOfArguments();
+    std::vector<vm_oop_t> blockArguments(numberOfArgs);
+    for (som_int_t i = numberOfArgs - 1; i >= 0; --i) {
+        blockArguments[i] = prevFrame->Pop();
+    }
+
+    // it needs 2 slots, and the block had at least 1, see
+    // VMFrame::EXTRA_STACK_SLOTS
+    if (!AS_OBJ(sender)->Send(selector, arguments, 1)) {
+        for (vm_oop_t arg : blockArguments) {
+            prevFrame->Push(arg);
+        }
+        SetFrame(blockFrame);
+        blockFrame->Push(result);
+        return false;
+    }
+    blockFrame->ClearPreviousFrame();
+    return true;
+}
+#endif
 
 #ifdef FRUCTUS
 /**

@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <cstddef>
 
+#include "../memory/Heap.h"
 #include "../vmobjects/ObjectFormats.h"
 #include "../vmobjects/VMClass.h"  // NOLINT(misc-include-cleaner) it's required to make the types complete
 #include "../vmobjects/VMFrame.h"
@@ -34,6 +35,17 @@ static void pInvokeOnWith(VMFrame* frame) {
         frame->Push(arg);
     }
     mthd->Invoke(frame);
+
+    // put the arguments back if the invokable couldn't allocate what it
+    // needed, so that the interpreter can run this send again
+    if (GetHeap<HEAP_CLS>()->isRetryRequested()) {
+        for (size_t i = 0; i <= num_args; i++) {
+            frame->PopVoid();
+        }
+        frame->Push(mthd);
+        frame->Push(rcvr);
+        frame->Push(args);
+    }
 }
 
 _Primitive::_Primitive() {

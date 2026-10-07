@@ -44,46 +44,6 @@
 #include "VMObjectBase.h"  // NOLINT(misc-include-cleaner) needed for some GCs
 #include "VMSymbol.h"
 
-// when doesNotUnderstand or UnknownGlobal is sent, additional stack slots might
-// be necessary, as these cases are not taken into account when the stack
-// depth is calculated. In that case this method is called.
-VMFrame* VMFrame::EmergencyFrameFrom(VMFrame* from, size_t extraLength) {
-    VMMethod* method = from->GetMethod();
-    size_t const length =
-        method->GetNumberOfArguments() + method->GetNumberOfLocals() +
-        method->GetMaximumNumberOfStackElements() + extraLength;
-
-    size_t const additionalBytes = length * sizeof(VMObject*);
-    auto* result = new (GetHeap<HEAP_CLS>(), additionalBytes)
-        VMFrame(additionalBytes, method, from->GetPreviousFrame());
-
-    // set Frame members
-    result->SetContext(from->GetContext());
-    result->stack_ptr =
-        (gc_oop_t*)SHIFTED_PTR(result, (size_t)from->stack_ptr - (size_t)from);
-
-    result->bytecodeIndex = from->bytecodeIndex;
-
-    // all other fields are indexable via arguments
-    // --> until end of Frame
-    auto* from_end = (gc_oop_t*)SHIFTED_PTR(from, from->GetObjectSize());
-    auto* result_end = (gc_oop_t*)SHIFTED_PTR(result, result->GetObjectSize());
-
-    size_t i = 0;
-
-    // copy all fields from other frame
-    while (from->arguments() + i < from_end) {
-        result->arguments()[i] = from->arguments()[i];
-        i++;
-    }
-    // initialize others with nilObject
-    while (result->arguments() + i < result_end) {
-        result->arguments()[i] = nilObject;
-        i++;
-    }
-    return result;
-}
-
 VMFrame* VMFrame::CloneForMovingGC() const {
     size_t const addSpace = totalObjectSize - sizeof(VMFrame);
     auto* clone =
