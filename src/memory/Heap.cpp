@@ -39,6 +39,7 @@
 #include "MarkSweepHeap.h"       // NOLINT(misc-include-cleaner)
 #ifndef FRUCTUS
 #include "PagedMarkSweepHeap.h"  // NOLINT(misc-include-cleaner)
+#include "SlidingHeap.h"         // NOLINT(misc-include-cleaner)
 #endif
 
 #if DEBUG
@@ -157,3 +158,8 @@ template void* Heap<PagedMarkSweepHeap>::allocationFailed(size_t);
 
 class DebugCopyingHeap;
 template void* Heap<DebugCopyingHeap>::allocationFailed(size_t);
+
+class SlidingHeap;
+template SlidingHeap* Heap<SlidingHeap>::theHeap;
+template Heap<SlidingHeap>::~Heap();
+template void* Heap<SlidingHeap>::allocationFailed(size_t);

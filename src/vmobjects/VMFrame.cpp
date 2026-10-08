@@ -73,6 +73,17 @@ void VMFrame::WalkObjects(walk_heap_fn walk) {
     // VMFrame is not a proper SOM object any longer, we don't have a class for
     // it. clazz = (VMClass*) walk(clazz);
 
+#if GC_TYPE == SLIDING
+    // The sliding collector moves pointers into the frame like any other,
+    // since a live object's whole extent is marked. The other collectors
+    // would take them for objects; the copying ones relocate them in
+    // CloneForMovingGC().
+    assert((void*)locals < SHIFTED_PTR(this, totalObjectSize));
+    assert((void*)stack_ptr < SHIFTED_PTR(this, totalObjectSize));
+    locals = (gc_oop_t*)walk((gc_oop_t)locals);
+    stack_ptr = (gc_oop_t*)walk((gc_oop_t)stack_ptr);
+#endif
+
     if (previousFrame != nullptr) {
         previousFrame = static_cast<GCFrame*>(walk(previousFrame));
     }

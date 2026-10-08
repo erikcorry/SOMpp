@@ -138,6 +138,8 @@ static void printVmConfig() {
         cout << "\tgarbage collector: debug copying\n";
     } else if (GC_TYPE == PAGED_MARK_SWEEP) {
         cout << "\tgarbage collector: paged mark-sweep\n";
+    } else if (GC_TYPE == SLIDING) {
+        cout << "\tgarbage collector: sliding\n";
     } else {
         cout << "\tgarbage collector: unknown\n";
     }

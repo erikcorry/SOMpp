@@ -1,0 +1,25 @@
+#pragma once
+
+#include "GarbageCollector.h"
+
+class SlidingHeap;
+
+/**
+ * Marks the live objects, then slides them up to the top of the heap, see
+ * SlidingHeap.h and ideas/gc.md.
+ */
+class SlidingCollector : public GarbageCollector<SlidingHeap> {
+public:
+    explicit SlidingCollector(SlidingHeap* h) : GarbageCollector(h) {};
+
+    void Collect() override;
+
+private:
+    void markLiveObjects();
+    void rescanGrayPagelets();
+    void countLiveGranules();
+    void slide();
+#if DEBUG
+    void verify();
+#endif
+};

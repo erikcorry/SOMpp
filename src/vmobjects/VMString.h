@@ -79,9 +79,20 @@ public:
     [[nodiscard]] VMClass* GetClass() const override;
     [[nodiscard]] size_t GetObjectSize() const override;
 
+#if GC_TYPE == SLIDING
+    // The sliding collector moves the pointer to the characters like any
+    // other, see VMFrame::WalkObjects(). An empty string's points past its
+    // end, but isn't read.
+    inline void WalkObjects(walk_heap_fn walk) override {
+        if (length != 0) {
+            chars = (char*)walk((gc_oop_t)chars);
+        }
+    }
+#else
     inline void WalkObjects(walk_heap_fn /*unused*/) override {
         // nothing to do
     }
+#endif
 
     void MarkObjectAsInvalid() override {
         for (size_t i = 0; i < length; i++) {

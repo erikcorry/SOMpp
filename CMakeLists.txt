@@ -153,7 +153,7 @@ else()
 endif()
 
 set(GC_TYPE "GENERATIONAL" CACHE STRING
-  "Select the type of GC to be used: COPYING, MARK_SWEEP, PAGED_MARK_SWEEP, DEBUG_MARK_SWEEP, GENERATIONAL")
+  "Select the type of GC to be used: COPYING, MARK_SWEEP, PAGED_MARK_SWEEP, DEBUG_MARK_SWEEP, GENERATIONAL, SLIDING")
 
 option(USE_TAGGING    "Enable immediate integers using tagging" TRUE)
 option(CACHE_INTEGER  "Enable caching of boxed integers" FALSE)

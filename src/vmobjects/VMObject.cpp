@@ -85,7 +85,9 @@ void VMObject::WalkObjects(walk_heap_fn walk) {
 
     size_t const numFields = GetNumberOfFields();
     for (size_t i = 0; i < numFields; ++i) {
-        FIELDS[i] = walk(tmp_ptr(GetField(i)));
+        // not GetField(), which checks the object it points to: a sliding
+        // collection may have overwritten it already, see update_pointer()
+        FIELDS[i] = walk(FIELDS[i]);
     }
 }
 
