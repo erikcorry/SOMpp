@@ -37,6 +37,8 @@ public:
     explicit PagedMarkSweepHeap(size_t objectSpaceSize);
     ~PagedMarkSweepHeap();
     void* AllocateObject(size_t size);
+    // allocations never fail, since objects are malloc()ed
+    static bool MakeRoomFor(size_t /*size*/) { return true; }
 
 private:
     static size_t sizeClassIndex(size_t size);

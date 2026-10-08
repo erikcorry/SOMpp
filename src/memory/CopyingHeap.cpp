@@ -15,8 +15,6 @@ CopyingHeap::CopyingHeap(size_t objectSpaceSize)
       currentBuffer(malloc(objectSpaceSize)),
       oldBuffer(malloc(objectSpaceSize)),
       currentBufferEnd((void*)((size_t)currentBuffer + objectSpaceSize)),
-      collectionLimit((void*)((size_t)currentBuffer +
-                              ((size_t)((double)objectSpaceSize * 0.9)))),
       oldBufferEnd((void*)((size_t)oldBuffer + objectSpaceSize)),
       nextFreePosition(currentBuffer) {
     memset(currentBuffer, 0x0, objectSpaceSize);
@@ -49,18 +47,12 @@ void CopyingHeap::switchBuffers(bool increaseMemory) {
         }
 
         currentBufferEnd = (void*)((size_t)currentBuffer + newSize);
-        collectionLimit =
-            (void*)((size_t)currentBuffer + ((size_t)((double)newSize * 0.9)));
         nextFreePosition = currentBuffer;
         currentBufSize = newSize;
     } else {
         currentBuffer = oldBufferBeforeSwitch;
         currentBufferEnd = oldBufferEndBeforeSwitch;
         currentBufSize = oldBufSizeBeforeSwitch;
-
-        collectionLimit =
-            (void*)((size_t)oldBufferBeforeSwitch +
-                    (size_t)((double)oldBufSizeBeforeSwitch * 0.9));
         nextFreePosition = currentBuffer;
     }
 
@@ -100,12 +92,19 @@ void* CopyingHeap::AllocateObject(size_t size) {
     nextFreePosition =
         static_cast<void*>(static_cast<char*>(nextFreePosition) + size);
 
-    // let's see if we have to trigger the GC
-    if (nextFreePosition > collectionLimit || gcStressMode) {
+    if (gcStressMode) {
         requestGC();
     }
-
     return newObject;
+}
+
+bool CopyingHeap::MakeRoomFor(size_t size) {
+    // each collection that increases memory doubles the semispaces
+    while (size > (size_t)currentBufferEnd - (size_t)nextFreePosition) {
+        increaseMemory = true;
+        gc->Collect();
+    }
+    return true;
 }
 
 bool CopyingHeap::IsInCurrentBuffer(AbstractVMObject* obj) {

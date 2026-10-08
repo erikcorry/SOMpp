@@ -19,9 +19,12 @@ MarkSweepHeap::MarkSweepHeap(size_t objectSpaceSize)
       heapEnd(reinterpret_cast<AbstractVMObject*>(
           // NOLINTNEXTLINE (cppcoreguidelines-pro-type-reinterpret-cast)
           reinterpret_cast<char*>(heap) + objectSpaceSize)),
-      freeList(new (heap) VMFreeListEntry(objectSpaceSize, nullptr)),
-
-      collectionLimit(objectSpaceSize - objectSpaceSize / 10) {
+      freeList(new(heap) VMFreeListEntry(objectSpaceSize, nullptr))
+#ifdef FRUCTUS
+      ,
+      collectionLimit(objectSpaceSize - objectSpaceSize / 10)
+#endif
+{
     if (heap == nullptr) {
         ErrorPrintf("\nFailed to allocate a %zu Byte heap.\n", objectSpaceSize);
         Quit(-1);
@@ -67,12 +70,26 @@ void* MarkSweepHeap::AllocateObject(size_t size) {
         }
     }
 
+#ifdef FRUCTUS
+    // allocations must succeed on fructus, so it collects before the heap is
+    // full
     liveBytes += allocSize;
     if (liveBytes >= collectionLimit || gcStressMode) {
         requestGC();
     }
-
+#else
+    if (gcStressMode) {
+        requestGC();
+    }
+#endif
     return newObject;
+}
+
+bool MarkSweepHeap::MakeRoomFor(size_t size) {
+    VMFreeListEntry* prev = nullptr;
+    VMFreeListEntry* cur = freeList;
+    findFittingEntry(cur, prev, MarkSweepCollector::GetAllocationSize(size));
+    return cur != nullptr;
 }
 
 void MarkSweepHeap::findFittingEntry(VMFreeListEntry*& cur,

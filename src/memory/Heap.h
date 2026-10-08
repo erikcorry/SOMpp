@@ -149,6 +149,13 @@ public:
 protected:
     GarbageCollector<HEAP_T>* const gc;
 
+    /*
+     * A heap also defines `bool MakeRoomFor(size_t size)`, which FullGC()
+     * calls after a collection that a failed allocation asked for. It answers
+     * whether an allocation of `size` bytes fits now, after growing the heap
+     * if it can.
+     */
+
     /**
      * Called by a heap when an allocation of `size` bytes doesn't fit. Quits
      * if allocations must succeed, and otherwise asks for a retry and answers
@@ -170,8 +177,8 @@ private:
     // fails. A collection for a retry leaves it false, so the retry succeeds.
     bool stressFailsNext{true};
 
-    // Until the interpreter can restart bytecodes, every allocation must
-    // succeed.
+    // Allocations may fail only in the interpreter, which runs the bytecode
+    // again after collecting.
     bool allocationMustSucceed{true};
 };
 

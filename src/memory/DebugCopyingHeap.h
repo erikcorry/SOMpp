@@ -11,10 +11,9 @@ class DebugCopyingHeap : public Heap<DebugCopyingHeap> {
 public:
     explicit DebugCopyingHeap(size_t objectSpaceSize)
         : Heap<DebugCopyingHeap>(new DebugCopyingCollector(this)),
-          currentHeapSize(objectSpaceSize),
-          collectionLimit((size_t)((double)objectSpaceSize * 0.9)) {}
-
+          currentHeapSize(objectSpaceSize) {}
     void* AllocateObject(size_t size);
+    bool MakeRoomFor(size_t size);
 
     bool IsInCurrentBuffer(AbstractVMObject* obj);
     bool IsInOldBufferAndOldBufferIsValid(AbstractVMObject* obj);
@@ -26,10 +25,11 @@ private:
     vector<AbstractVMObject*> currentHeap;
     size_t currentHeapSize;
     size_t currentHeapUsage{0};
-    size_t collectionLimit;
 
     vector<AbstractVMObject*> oldHeap;
     size_t oldHeapSize{0};
 
     bool oldHeapIsValid{false};
+    // the next collection doubles the heap
+    bool increaseMemory{false};
 };

@@ -10,6 +10,7 @@ class CopyingHeap : public Heap<CopyingHeap> {
 public:
     explicit CopyingHeap(size_t objectSpaceSize);
     void* AllocateObject(size_t size);
+    bool MakeRoomFor(size_t size);
 
     bool IsInCurrentBuffer(AbstractVMObject* obj);
     bool IsInOldBufferAndOldBufferIsValid(AbstractVMObject* obj);
@@ -19,7 +20,6 @@ private:
     void invalidateOldBuffer();
 
     void* currentBuffer;
-    void* collectionLimit;
     void* currentBufferEnd;
 
     void* oldBuffer;
@@ -27,4 +27,6 @@ private:
 
     void* nextFreePosition;
     bool oldBufferIsValid{false};
+    // the next collection doubles the semispaces
+    bool increaseMemory{false};
 };

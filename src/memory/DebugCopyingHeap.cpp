@@ -21,7 +21,6 @@ void DebugCopyingHeap::switchBuffers(bool increaseMemory) {
 
     if (increaseMemory) {
         currentHeapSize += currentHeapSize;
-        collectionLimit = (size_t)((double)currentHeapSize * 0.9);
     }
 
     currentHeapUsage = 0;
@@ -63,12 +62,19 @@ void* DebugCopyingHeap::AllocateObject(size_t size) {
 
     currentHeapUsage += size;
 
-    // let's see if we have to trigger the GC
-    if (currentHeapUsage > collectionLimit || gcStressMode) {
+    if (gcStressMode) {
         requestGC();
     }
-
     return newObject;
+}
+
+bool DebugCopyingHeap::MakeRoomFor(size_t size) {
+    // each collection that increases memory doubles the heap
+    while (size > currentHeapSize - currentHeapUsage) {
+        increaseMemory = true;
+        gc->Collect();
+    }
+    return true;
 }
 
 bool DebugCopyingHeap::IsInCurrentBuffer(AbstractVMObject* obj) {

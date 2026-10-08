@@ -12,6 +12,8 @@ public:
     explicit DebugMarkSweepHeap(size_t objectSpaceSize);
     ~DebugMarkSweepHeap();
     void* AllocateObject(size_t size);
+    // allocations never fail, since objects are malloc()ed
+    static bool MakeRoomFor(size_t /*size*/) { return true; }
 
 private:
     vector<AbstractVMObject*>* allocatedObjects;

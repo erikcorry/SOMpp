@@ -56,9 +56,8 @@ void CopyingCollector::Collect() {
     // reset collection trigger
     heap->resetGCTrigger();
 
-    static bool increaseMemory;
-    heap->switchBuffers(increaseMemory);
-    increaseMemory = false;
+    heap->switchBuffers(heap->increaseMemory);
+    heap->increaseMemory = false;
 
     Universe::WalkGlobals(copy_if_necessary);
 
@@ -77,7 +76,7 @@ void CopyingCollector::Collect() {
     // bigger ones -> done in next collection
     if ((size_t)(heap->nextFreePosition) - (size_t)(heap->currentBuffer) >=
         (size_t)(heap->currentBufferEnd) - (size_t)(heap->nextFreePosition)) {
-        increaseMemory = true;
+        heap->increaseMemory = true;
     }
 
     Timer::GCTimer.Halt();

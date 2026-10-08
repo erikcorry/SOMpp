@@ -74,11 +74,6 @@ vm_oop_t Interpreter::Start() {
 #endif
 #define PROLOGUE() HEATMAP_INC()
 
-#if DEBUG
-    // Until allocations may fail everywhere, only the stress mode makes them
-    HEAP_CLS::MustSucceedScope const mayFail(!gcStressRetryMode);
-#endif
-
     // initialization
     method = GetMethod();
     uint8_t* pc = nullptr;

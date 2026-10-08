@@ -73,8 +73,17 @@ template <class HEAP_T>
 void Heap<HEAP_T>::FullGC() {
     // the collector itself allocates, to copy objects
     MustSucceedScope const mustSucceed;
-    stressFailsNext = !retryWasRequested;
+    bool const retry = retryWasRequested;
+    size_t const size = failedAllocationSize;
+    stressFailsNext = !retry;
     gc->Collect();
+
+    // The bytecode whose allocation failed runs again, so the allocation
+    // must fit now, or it would fail forever.
+    if (retry && !static_cast<HEAP_T*>(this)->MakeRoomFor(size)) {
+        ErrorPrintf("\nFailed to allocate %zu bytes.\n", size);
+        Quit(-1);
+    }
 }
 
 template <class HEAP_T>

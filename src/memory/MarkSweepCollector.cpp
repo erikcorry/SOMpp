@@ -75,5 +75,7 @@ void MarkSweepCollector::markReachableObjects() {
         obj->WalkObjects(mark_object);
     }
 
+#ifdef FRUCTUS
     heap->liveBytes = markedBytes;
+#endif
 }

@@ -18,17 +18,15 @@ GenerationalHeap::GenerationalHeap(size_t objectSpaceSize)
       nursery(malloc(objectSpaceSize)),
       nursery_end((size_t)nursery + objectSpaceSize),
       nurserySize(objectSpaceSize), maxNurseryObjSize(objectSpaceSize / 2),
-      nextFreePosition(nursery),
-
-      // our initial collection limit is 90% of objectSpaceSize
-      collectionLimit((void*)((size_t)nursery +
-                              ((size_t)((double)objectSpaceSize * 0.9)))) {
+      nextFreePosition(nursery) {
     memset(nursery, 0x0, objectSpaceSize);
 }
 
 void* GenerationalHeap::AllocateNurseryObject(size_t size) {
     if (size > nursery_end - (size_t)nextFreePosition) {
-        if (!AllocationMustSucceed()) {
+        // An object bigger than the nursery wouldn't fit after a collection
+        // either.
+        if (!AllocationMustSucceed() && size <= nurserySize) {
             return allocationFailed(size);
         }
         // Divert to old space. The next minor collection, which the full
@@ -40,8 +38,7 @@ void* GenerationalHeap::AllocateNurseryObject(size_t size) {
     void* newObject = nextFreePosition;
     nextFreePosition =
         static_cast<void*>(static_cast<char*>(nextFreePosition) + size);
-    // let's see if we have to trigger the GC
-    if (nextFreePosition > collectionLimit || gcStressMode) {
+    if (gcStressMode) {
         requestGC();
     }
     return newObject;

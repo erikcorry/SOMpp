@@ -30,6 +30,7 @@ public:
     explicit MarkSweepHeap(size_t objectSpaceSize);
     ~MarkSweepHeap();
     void* AllocateObject(size_t size);
+    bool MakeRoomFor(size_t size);
 
     static void findFittingEntry(VMFreeListEntry*& cur, VMFreeListEntry*& prev,
                                  size_t allocSize);
@@ -58,6 +59,8 @@ private:
     AbstractVMObject* heapEnd;
     VMFreeListEntry* freeList;
 
+#ifdef FRUCTUS
     uintptr_t liveBytes{0};
     const uintptr_t collectionLimit;
+#endif
 };

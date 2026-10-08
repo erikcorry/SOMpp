@@ -123,9 +123,12 @@ void Shell::Start() {
         // Invoke the run method
         initialize->Invoke(currentFrame);
 
-        // Start the Interpreter
-
-        GetInterpreter()->Start();
+        // Start the Interpreter, where an allocation that fails makes it run
+        // the bytecode again after collecting
+        {
+            HEAP_CLS::MustSucceedScope const mayFail(false);
+            GetInterpreter()->Start();
+        }
 
         // Save the result of the run method
         it = currentFrame->Pop();

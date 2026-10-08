@@ -24,6 +24,9 @@ public:
     explicit GenerationalHeap(size_t objectSpaceSize);
     void* AllocateNurseryObject(size_t size);
     void* AllocateMatureObject(size_t size);
+    // The collection emptied the nursery, and an object bigger than the
+    // nursery goes to old space.
+    static bool MakeRoomFor(size_t /*size*/) { return true; }
     [[nodiscard]] size_t GetMaxNurseryObjectSize() const;
     void writeBarrier(VMObjectBase* holder, vm_oop_t referencedObject);
     inline bool isObjectInNursery(vm_oop_t obj);
@@ -39,7 +42,6 @@ private:
     void* nextFreePosition;
     void writeBarrier_OldHolder(VMObjectBase* holder,
                                 vm_oop_t referencedObject);
-    void* collectionLimit;
     vector<size_t> oldObjsWithRefToYoungObjs;
     // Objects diverted to old space are initialized without the write
     // barrier, so until the next minor collection old space may point into

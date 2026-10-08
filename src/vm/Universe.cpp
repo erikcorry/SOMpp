@@ -382,6 +382,12 @@ vm_oop_t Universe::interpretMethod(VMObject* receiver, VMInvokable* initialize,
 
     initialize->Invoke(bootstrapFrame);
 
+#ifndef FRUCTUS
+    // An allocation that fails makes the interpreter run the bytecode again
+    // after collecting. Fructus doesn't do that yet. The scope isn't in
+    // Start(), where it slows the interpreter down.
+    HEAP_CLS::MustSucceedScope const mayFail(false);
+#endif
     return GetInterpreter()->Start();
 }
 
