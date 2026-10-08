@@ -147,11 +147,10 @@ void CloneObjectsTest::testCloneBlock() {
     VMSymbol* methodSymbol = NewSymbol("someMethod");
 
     vector<BackJump> inlinedLoops;
-    VMMethod* method =
-        Universe::NewMethod(methodSymbol, 0, 0, 0, 0,
-                            new LexicalScope(nullptr, {}, {}), inlinedLoops);
+    VMMethod* method = Universe::NewMethod(
+        methodSymbol, 0, 0, 0, new LexicalScope(nullptr, {}, {}), inlinedLoops);
     VMBlock const* const orig = Universe::NewBlock(
-        method, Interpreter::GetFrame(), method->GetNumberOfArguments());
+        method, GetInterpreter()->GetFrame(), method->GetNumberOfArguments());
     VMBlock const* const clone = orig->CloneForMovingGC();
 
     CPPUNIT_ASSERT((intptr_t)orig != (intptr_t)clone);
@@ -203,9 +202,8 @@ void CloneObjectsTest::testCloneFrame() {
     VMSymbol* methodSymbol = NewSymbol("frameMethod");
 
     vector<BackJump> inlinedLoops;
-    VMMethod* method =
-        Universe::NewMethod(methodSymbol, 0, 0, 0, 0,
-                            new LexicalScope(nullptr, {}, {}), inlinedLoops);
+    VMMethod* method = Universe::NewMethod(
+        methodSymbol, 0, 0, 0, new LexicalScope(nullptr, {}, {}), inlinedLoops);
 
     VMFrame* orig = Universe::NewFrame(nullptr, method);
     VMFrame* context = orig->CloneForMovingGC();
@@ -234,9 +232,8 @@ void CloneObjectsTest::testCloneMethod() {
     VMSymbol* methodSymbol = NewSymbol("myMethod");
 
     vector<BackJump> inlinedLoops;
-    VMMethod const* const orig =
-        Universe::NewMethod(methodSymbol, 0, 0, 0, 0,
-                            new LexicalScope(nullptr, {}, {}), inlinedLoops);
+    VMMethod const* const orig = Universe::NewMethod(
+        methodSymbol, 0, 0, 0, new LexicalScope(nullptr, {}, {}), inlinedLoops);
     VMMethod const* const clone = orig->CloneForMovingGC();
 
     CPPUNIT_ASSERT((intptr_t)orig != (intptr_t)clone);
@@ -250,9 +247,6 @@ void CloneObjectsTest::testCloneMethod() {
     CPPUNIT_ASSERT_EQUAL_MESSAGE("numberOfArguments differs!!",
                                  orig->numberOfArguments,
                                  clone->numberOfArguments);
-    CPPUNIT_ASSERT_EQUAL_MESSAGE("numberOfConstants differs!!",
-                                 orig->numberOfConstants,
-                                 clone->numberOfConstants);
     CPPUNIT_ASSERT_EQUAL_MESSAGE("hash differs!!", orig->GetHash(),
                                  clone->GetHash());
 

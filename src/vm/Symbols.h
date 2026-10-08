@@ -8,6 +8,8 @@
 
 #ifndef FRUCTUS
 
+#include <string.h>
+
 #include "../vmobjects/VMSymbol.h"
 
 VMSymbol* SymbolFor(const char* str, size_t length);
@@ -22,6 +24,9 @@ void WalkSymbols(walk_heap_fn walk);
 
 #ifdef UNITTESTS
 VMSymbol* NewSymbol(size_t length, const char* str);
+inline VMSymbol* NewSymbol(const char* str) {
+    return NewSymbol(strlen(str), str);
+}
 #endif
 
 extern GCSymbol* symbolSelf;

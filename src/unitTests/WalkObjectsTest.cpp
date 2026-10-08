@@ -30,16 +30,27 @@
 #include "../vmobjects/VMPrimitive.h"
 #include "../vmobjects/VMSymbol.h"
 
+// The sliding collector also walks the pointers into frames and strings, to
+// move them like any other.
+#if GC_TYPE == SLIDING
+static const size_t InteriorPointers_Frame = 2;
+static const size_t InteriorPointers_String = 1;
+#else
+static const size_t InteriorPointers_Frame = 0;
+static const size_t InteriorPointers_String = 0;
+#endif
+
 static const size_t NoOfFields_Object = 1;
-static const size_t NoOfFields_String = 0;
-static const size_t NoOfFields_Symbol = 0;
+static const size_t NoOfFields_String = InteriorPointers_String;
+static const size_t NoOfFields_Symbol = InteriorPointers_String;
 static const size_t NoOfFields_Double = 0;
 static const size_t NoOfFields_Integer = 0;
 static const size_t NoOfFields_Array = NoOfFields_Object;
 static const size_t NoOfFields_Invokable = 2;
 static const size_t NoOfFields_Method = NoOfFields_Invokable;
 static const size_t NoOfFields_Class = 4 + NoOfFields_Object;
-static const size_t NoOfFields_Frame = 3 + NoOfFields_Array;
+static const size_t NoOfFields_Frame =
+    3 + NoOfFields_Array + InteriorPointers_Frame;
 static const size_t NoOfFields_Block = 2 + NoOfFields_Object;
 static const size_t NoOfFields_Primitive = NoOfFields_Invokable;
 static const size_t NoOfFields_EvaluationPrimitive = NoOfFields_Invokable;
@@ -149,9 +160,8 @@ void WalkObjectsTest::testWalkFrame() {
     VMSymbol* methodSymbol = NewSymbol("frameMethod");
 
     vector<BackJump> inlinedLoops;
-    VMMethod* method =
-        Universe::NewMethod(methodSymbol, 0, 0, 0, 0,
-                            new LexicalScope(nullptr, {}, {}), inlinedLoops);
+    VMMethod* method = Universe::NewMethod(
+        methodSymbol, 0, 0, 0, new LexicalScope(nullptr, {}, {}), inlinedLoops);
 
     VMFrame* prev = Universe::NewFrame(nullptr, method);
     VMFrame* frame = Universe::NewFrame(prev, method);
@@ -204,7 +214,7 @@ void WalkObjectsTest::testWalkMethod() {
 
     vector<BackJump> inlinedLoops;
     VMMethod* method =
-        Universe::NewMethod(methodSymbol, 0, 0, 0, 0, scope, inlinedLoops);
+        Universe::NewMethod(methodSymbol, 0, 0, 0, scope, inlinedLoops);
 
     method->SetHolder(load_ptr(symbolClass));
     method->WalkObjects(collectMembers);
@@ -222,11 +232,10 @@ void WalkObjectsTest::testWalkBlock() {
     VMSymbol* methodSymbol = NewSymbol("someMethod");
 
     vector<BackJump> inlinedLoops;
-    VMMethod* method =
-        Universe::NewMethod(methodSymbol, 0, 0, 0, 0,
-                            new LexicalScope(nullptr, {}, {}), inlinedLoops);
+    VMMethod* method = Universe::NewMethod(
+        methodSymbol, 0, 0, 0, new LexicalScope(nullptr, {}, {}), inlinedLoops);
 
-    VMBlock* block = Universe::NewBlock(method, Interpreter::GetFrame(),
+    VMBlock* block = Universe::NewBlock(method, GetInterpreter()->GetFrame(),
                                         method->GetNumberOfArguments());
     block->WalkObjects(collectMembers);
     CPPUNIT_ASSERT_EQUAL(NoOfFields_Block, walkedObjects.size());

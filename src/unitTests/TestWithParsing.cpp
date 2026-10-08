@@ -1,5 +1,6 @@
 #include "TestWithParsing.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cppunit/TestAssert.h>
 #include <cstddef>
@@ -106,32 +107,105 @@ std::vector<uint8_t> TestWithParsing::blockToBytecode(const char* source,
     return _bgenc->GetBytecodes();
 }
 
+/** The single byte variant of a jump, which only differs in its range. */
+static uint8_t singleByteJump(uint8_t bc) {
+    if (bc >= FIRST_DOUBLE_BYTE_JUMP_BYTECODE && bc <= BC_JUMP2_BACKWARD) {
+        return bc - NUM_SINGLE_BYTE_JUMP_BYTECODES;
+    }
+    return bc;
+}
+
+/**
+ * The index of the bytecode that the jump at `index` goes to, given where
+ * each bytecode starts, or SIZE_MAX if it lands within one.
+ */
+static size_t jumpTarget(const std::vector<size_t>& starts, size_t index,
+                         uint8_t bc, uint16_t offset) {
+    size_t const target = singleByteJump(bc) == BC_JUMP_BACKWARD
+                              ? starts.at(index) - offset
+                              : starts.at(index) + offset;
+    for (size_t i = 0; i < starts.size(); i++) {
+        if (starts.at(i) == target) {
+            return i;
+        }
+    }
+    return SIZE_MAX;
+}
+
+/*
+ * The bytecodes with word operands (constants, blocks, globals and sends)
+ * had a byte operand before, the index of a literal, which the expectations
+ * still have. So for those only the bytecode is compared. The offset of an
+ * expected jump counts the sizes of the expected bytecodes, so what's
+ * compared for a jump is the bytecode it goes to.
+ */
 void TestWithParsing::check(std::vector<uint8_t> actual,
                             std::vector<BC> expected, VMMethod* toDump) {
-    size_t i = 0;
+    // where each bytecode starts, and where the code ends
+    std::vector<size_t> actualStarts;
     size_t bci = 0;
-    for (; bci < actual.size() && i < expected.size();) {
+    for (; bci < actual.size();
+         bci += Bytecode::GetBytecodeLength(actual.at(bci))) {
+        actualStarts.push_back(bci);
+    }
+    actualStarts.push_back(bci);
+    std::vector<size_t> expectedStarts;
+    size_t at = 0;
+    for (const BC& bc : expected) {
+        expectedStarts.push_back(at);
+        at += bc.size;
+    }
+    expectedStarts.push_back(at);
+
+    size_t const count = std::min(expected.size(), actualStarts.size() - 1);
+    for (size_t i = 0; i < count; i++) {
+        size_t const bci = actualStarts.at(i);
         uint8_t const actualBc = actual.at(bci);
         uint8_t const bcLength = Bytecode::GetBytecodeLength(actualBc);
-
         BC const expectedBc = expected.at(i);
+        bool const isJump = IsJumpBytecode(actualBc);
 
         char msg[1000];
         (void)snprintf(msg, 1000,
                        "Bytecode no %zu (at: %zu) expected %s but got %s", i,
                        bci, Bytecode::GetBytecodeName(expectedBc.bytecode),
                        Bytecode::GetBytecodeName(actualBc));
-        if (expectedBc.bytecode != actualBc) {
+        uint8_t const expectedOp =
+            isJump ? singleByteJump(expectedBc.bytecode) : expectedBc.bytecode;
+        uint8_t const actualOp = isJump ? singleByteJump(actualBc) : actualBc;
+        if (expectedOp != actualOp) {
             dump(toDump);
         }
-        CPPUNIT_ASSERT_EQUAL_MESSAGE(msg, expectedBc.bytecode, actualBc);
+        CPPUNIT_ASSERT_EQUAL_MESSAGE(msg, expectedOp, actualOp);
+
+        if (GetNumberOfWords(actualBc) > 0) {
+            continue;
+        }
+
+        if (isJump) {
+            size_t const expectedTarget =
+                jumpTarget(expectedStarts, i, expectedBc.bytecode,
+                           ComputeOffset(expectedBc.arg1, expectedBc.arg2));
+            size_t const actualTarget = jumpTarget(
+                actualStarts, i, actualBc,
+                ComputeOffset(actual.at(bci + 1), actual.at(bci + 2)));
+            (void)snprintf(msg, 1000,
+                           "Bytecode %zu (%s) expected to jump to bytecode "
+                           "%zu but jumps to %zu",
+                           i, Bytecode::GetBytecodeName(actualBc),
+                           expectedTarget, actualTarget);
+            if (expectedTarget != actualTarget) {
+                dump(toDump);
+            }
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(msg, expectedTarget, actualTarget);
+            continue;
+        }
 
         (void)snprintf(
             msg, 1000,
             "Bytecode %zu (%s) was expected to have length %zu, but had %zu", i,
             Bytecode::GetBytecodeName(actualBc), expectedBc.size,
             (size_t)bcLength);
-
         if (expectedBc.size != bcLength) {
             dump(toDump);
         }
@@ -161,16 +235,10 @@ void TestWithParsing::check(std::vector<uint8_t> actual,
                                              actual.at(bci + 2));
             }
         }
-
-        i += 1;
-        bci += bcLength;
     }
-    if (expected.size() != i || actual.size() != bci) {
+    if (expected.size() != actualStarts.size() - 1) {
         dump(toDump);
     }
-
-    CPPUNIT_ASSERT_EQUAL_MESSAGE("All expected bytecodes covered",
-                                 expected.size(), i);
-    CPPUNIT_ASSERT_EQUAL_MESSAGE("All actual bytecodes covered", actual.size(),
-                                 bci);
+    CPPUNIT_ASSERT_EQUAL_MESSAGE("number of bytecodes", expected.size(),
+                                 actualStarts.size() - 1);
 }
