@@ -776,8 +776,13 @@ void Interpreter::sendMiss(uint8_t* site, VMClass* receiverClass) {
     }
     if (isUnlinked) {
         SendSite::Link(site, invokable, receiverClass);
+#ifndef FRUCTUS
+        // On fructus the classes and invokables are all in the image, which
+        // the collector doesn't move or free, and the methods are above 32K,
+        // which the cards don't cover.
         write_barrier(method, invokable);
         write_barrier(method, receiverClass);
+#endif
     }
     recordStat(CallStats, receiverClass, invokable);
     if (site[0] == BC_SEND_1) {
@@ -1043,8 +1048,10 @@ void Interpreter::doSuperSend(uint8_t* site) {
 
     if (invokable != nullptr) {
         SendSite::Link(site, invokable, super);
+#ifndef FRUCTUS
         write_barrier(method, invokable);
         write_barrier(method, super);
+#endif
         invokable->Invoke(GetFrame());
     } else {
         triggerDoesNotUnderstand(signature);

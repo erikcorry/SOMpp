@@ -73,15 +73,20 @@ constexpr size_t OLD = 1U << 1U;
 constexpr size_t SEEN = 1U << 2U;
 #endif
 #ifdef FRUCTUS
-/** zp_hi, the half of the zero page above its base. */
+/**
+ * The cards cover the low 32K, where everything that is written is, see
+ * cmake/fructus-som.ld. They are at the zero page base.
+ */
 constexpr uintptr_t FRUCTUS_CARDS = 0x200;
+constexpr uintptr_t FRUCTUS_WRITABLE_END = 0x8000;
 
 /** Cleans all the cards, of the heap and the image. */
 inline void CleanFructusCards() {
   // gcc takes a constant address for an object of size 0
   #pragma GCC diagnostic push
   #pragma GCC diagnostic ignored "-Wstringop-overflow"
-    memset((uint8_t*)FRUCTUS_CARDS, CLEAN_CARD, 0x10000 / PAGELET);
+    memset((uint8_t*)FRUCTUS_CARDS, CLEAN_CARD,
+           FRUCTUS_WRITABLE_END / PAGELET);
   #pragma GCC diagnostic pop
 }
 #endif
@@ -130,9 +135,10 @@ public:
         if (IS_TAGGED(value)) {
             return;
         }
-        // The cards are zp_hi, which cover all 64K, so any holder has one.
-        // Their address is the zero page base, and its low byte is 0, so the
-        // base register is all the barrier needs.
+        // The cards cover the low 32K, where every holder is. Their address
+        // is the zero page base, and its low byte is 0, so the base register
+        // is all the barrier needs.
+        assert((uintptr_t)holder < SlidingLayout::FRUCTUS_WRITABLE_END);
         auto* const zpCards = (uint8_t*)SlidingLayout::FRUCTUS_CARDS;
   // gcc takes a constant address for an object of size 0
   #pragma GCC diagnostic push

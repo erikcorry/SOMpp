@@ -89,18 +89,19 @@ if(FRUCTUS)
   # Vector's methods stay in Smalltalk; this also avoids checking bytecode
   # hashes with murmur3 on the target
   set(USE_VECTOR_PRIMITIVES FALSE CACHE BOOL "" FORCE)
-  # The simulator's 64K: the program is as high as it fits, below 0xffff, and
-  # the SOM heap, with its tables, has what is below it, from the top of the
-  # stack, up to 32K at most, see SlidingHeap.cpp. There is no malloc.
-  # fructus-link.sh links twice to place the program. Linking says when the
-  # program doesn't fit, and running out of memory says when the heap doesn't.
+  # The simulator's 64K, see cmake/fructus-som.ld: the stack, the SOM heap
+  # and the program's writable part below 32K, and its read-only part above.
+  # There is no malloc. fructus-link.sh links twice to place the parts.
+  # Linking says when the program doesn't fit, and running out of memory says
+  # when the heap doesn't.
+  #
+  # The stack is 512 bytes: the frames are objects of the SOM heap, so the
+  # C++ stack is shallow and predictable, 312 bytes at most in the test
+  # programs and AWFY. Overflowing into the I/O page traps on its guard.
   add_definitions(-DFRUCTUS)
+  add_link_options(-T ${ROOT_DIR}/cmake/fructus-som.ld)
   set(CMAKE_CXX_LINK_EXECUTABLE
     "${ROOT_DIR}/cmake/fructus-link.sh ${CMAKE_NM} <CMAKE_CXX_COMPILER> <FLAGS> <CMAKE_CXX_LINK_FLAGS> <LINK_FLAGS> <OBJECTS> -o <TARGET> <LINK_LIBRARIES>")
-  # The stack is 0x500-0x6ff. The frames are objects of the SOM heap, so the
-  # C++ stack is shallow and predictable: 312 bytes at most in the test
-  # programs and AWFY. Overflowing into the I/O page traps on its guard.
-  add_link_options(-Wl,--defsym=__stack_top=0x700)
   add_compile_options(-fno-exceptions -fno-rtti -ffunction-sections
                       -fdata-sections)
   # A three-byte instruction at an odd address costs a cycle more, so a
@@ -290,6 +291,10 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND FIND_COMPATIBLE_CLANG_STDLIB_INCLU
 endif()
 
 add_executable(SOM++ "")
+if(FRUCTUS)
+  set_target_properties(SOM++ PROPERTIES LINK_DEPENDS
+    "${ROOT_DIR}/cmake/fructus-som.ld;${ROOT_DIR}/cmake/fructus-link.sh")
+endif()
 
 target_sources(SOM++ PRIVATE
   ${COMPILER_SRC}

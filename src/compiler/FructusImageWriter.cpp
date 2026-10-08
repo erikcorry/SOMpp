@@ -301,6 +301,7 @@ private:
     void writeHeader(ObjectWriter& w, const std::string& vtable,
                      const std::string& comment);
     void writeVMObject(VMObject* obj, const std::string& label);
+    [[nodiscard]] bool isRoot(AbstractVMObject* obj) const;
     void writeString(VMString* str, const std::string& label);
     void writeInteger(VMInteger* integer, const std::string& label);
     void writeInvokableHeader(ObjectWriter& w, VMInvokable* inv,
@@ -656,6 +657,14 @@ void FructusImage::AsmFile::writeDebugInfo() {
 }
 
 void FructusImage::AsmFile::write(AbstractVMObject* obj, const std::string& label) {
+    // The objects that the program can store objects of the heap into are
+    // roots, see FructusImage::WalkRoots(), and they are below 32K, with
+    // everything else that is written, see cmake/fructus-som.ld. The others
+    // are only read, apart from the inline caches of the methods.
+    bool const isWritable = isRoot(obj);
+    if (isWritable) {
+        out << "\t.pushsection\tsom_writable,\"aw\",@progbits\n";
+    }
     out << "\t.balign\t2\n" << label << ":\n";
 
     // the most derived classes first
@@ -684,6 +693,28 @@ void FructusImage::AsmFile::write(AbstractVMObject* obj, const std::string& labe
              Printable(obj->GetClass()->GetName()) +
              " for fructus, it has none");
     }
+
+    if (isWritable) {
+        out << "\t.popsection\n"
+            << "\t.pushsection\tsom_roots,\"a\",@progbits\n"
+            << "\t.balign\t2\n"
+            << "\t.short\t" << label << "\n"
+            << "\t.popsection\n";
+    }
+}
+
+/**
+ * A plain object, array or class, whose fields the program can store into,
+ * and not one of a class's arrays, which only the VM reads.
+ */
+bool FructusImage::AsmFile::isRoot(AbstractVMObject* obj) const {
+    auto* vmObj = dynamic_cast<VMObject*>(obj);
+    if (vmObj == nullptr || image.IsClassArray(vmObj)) {
+        return false;
+    }
+    return dynamic_cast<VMClass*>(obj) != nullptr ||
+           dynamic_cast<VMArray*>(obj) != nullptr ||
+           typeid(*obj) == typeid(VMObject);
 }
 
 void FructusImage::AsmFile::writeHeader(ObjectWriter& w, const std::string& vtable,
@@ -805,15 +836,6 @@ void FructusImage::AsmFile::writeVMObject(VMObject* obj, const std::string& labe
                isClassField ? classFields[i] : "field " + std::to_string(i));
     }
     w.End(size);
-
-    // The program can store objects of the heap into it, so the collector
-    // walks it, see FructusImage::WalkGlobals()
-    if (!isInternal) {
-        out << "\t.pushsection\tsom_roots,\"a\",@progbits\n"
-            << "\t.balign\t2\n"
-            << "\t.short\t" << label << "\n"
-            << "\t.popsection\n";
-    }
 }
 
 void FructusImage::AsmFile::writeString(VMString* str, const std::string& label) {
