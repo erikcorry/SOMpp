@@ -393,8 +393,8 @@ vm_oop_t Universe::interpretMethod(VMObject* receiver, VMInvokable* initialize,
 
 #ifdef FRUCTUS
 void Universe::initialize(int32_t /*argc*/, char** /*argv*/) {
-    heapSize = FRUCTUS_HEAP_SIZE;
-    Heap<HEAP_CLS>::InitializeHeap(heapSize);
+    // the heap is what the linker leaves below the program, see SlidingHeap
+    Heap<HEAP_CLS>::InitializeHeap(0);
 
     InitializeGlobals();
 

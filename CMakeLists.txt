@@ -90,14 +90,13 @@ if(FRUCTUS)
   # hashes with murmur3 on the target
   set(USE_VECTOR_PRIMITIVES FALSE CACHE BOOL "" FORCE)
   # The simulator's 64K: the program goes from FRUCTUS_HEAP_END up to 0xffff,
-  # and malloc has what is below it, from 0x1500, for the SOM heap and the
-  # rest. Linking says when the program doesn't fit, and running out of
-  # memory says when the heap doesn't.
+  # and the SOM heap, with its tables, has what is below it, from the top of
+  # the stack at 0x1500, see SlidingHeap.cpp. There is no malloc. Linking
+  # says when the program doesn't fit, and running out of memory says when
+  # the heap doesn't.
   set(FRUCTUS_HEAP_END 0x7000 CACHE STRING
-    "Where the program starts, and malloc's memory ends")
-  set(FRUCTUS_HEAP_SIZE 16384 CACHE STRING "Size of the SOM heap in bytes")
-  add_definitions(-DFRUCTUS
-                  -DFRUCTUS_HEAP_SIZE=${FRUCTUS_HEAP_SIZE})
+    "Where the program starts, and the SOM heap ends")
+  add_definitions(-DFRUCTUS)
   add_link_options(-Wl,--defsym=__heap_end=${FRUCTUS_HEAP_END})
   add_compile_options(-fno-exceptions -fno-rtti -ffunction-sections
                       -fdata-sections)

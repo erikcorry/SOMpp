@@ -8,6 +8,7 @@
   #include <unistd.h>
 #endif
 
+#include "../misc/PlacementNew.h"
 #include "../misc/defs.h"  // NOLINT(misc-include-cleaner)
 #include "../vm/Print.h"
 #include "Heap.h"
@@ -15,47 +16,69 @@
 
 using namespace SlidingLayout;
 
-static size_t roundUp(size_t n, size_t unit) {
+static constexpr size_t roundUp(size_t n, size_t unit) {
     return (n + unit - 1) / unit * unit;
 }
 
 #ifdef FRUCTUS
-static void* allocateTable(size_t size) {
-    void* const p = malloc(size);
-    if (p == nullptr) {
-        ErrorExit("unable to allocate the heap's tables");
-    }
-    return p;
+// The region the linker leaves between the stack and the program, see
+// ld/fructus-sim.ld in the fructus repository: the heap and its tables.
+extern "C" char __heap_start[];
+extern "C" char __heap_end[];
+
+/** The bytes of the side tables of a heap of `size` bytes. */
+static constexpr size_t tablesSize(size_t size) {
+    size_t const pagelets = size / PAGELET;
+    size_t const markWords = size / GRANULE / MARK_BITS;
+    return pagelets + markWords * sizeof(MarkWord) +
+           (markWords / MARK_WORDS_PER_COUNT + 1) * sizeof(size_t) +
+           roundUp(pagelets, 8) / 8;
 }
 
-// The heap can't grow. Its base is 256 aligned, so that firstObjectIn() can
+/** Takes `size` bytes of `*free` for a table. */
+static void* takeTable(char** free, size_t size) {
+    void* const table = *free;
+    *free += roundUp(size, sizeof(size_t));
+    return table;
+}
+
+// The heap can't grow. It takes what the linker left below the program, with
+// its tables first. Its base is 256 aligned, so that firstObjectIn() can
 // rebuild an address from its low byte, and its cards are zp_hi's, which
 // cover all 64K, so the barrier indexes them by the address alone.
-SlidingHeap::SlidingHeap(size_t objectSpaceSize)
-    : Heap<SlidingHeap>(new SlidingCollector(this)) {
-    size_t const size = roundUp(objectSpaceSize, 256);
-    reservedSize = size;
-    auto* const memory = static_cast<char*>(malloc(size + 255));
-    if (memory == nullptr) {
-        ErrorExit("unable to allocate heap memory");
+static char collectorStorage[sizeof(SlidingCollector)]
+    __attribute__((aligned(alignof(SlidingCollector))));
+
+SlidingHeap::SlidingHeap(size_t /*objectSpaceSize*/)
+    : Heap<SlidingHeap>(new (collectorStorage) SlidingCollector(this)) {
+    top = (char*)((uintptr_t)__heap_end & ~(uintptr_t)255);
+    auto const region = (size_t)(top - __heap_start);
+    size_t size = region & ~(size_t)255;
+    // the tables round up to words, a few bytes each
+    while (tablesSize(size) + 4 * sizeof(size_t) + size > region) {
+        size -= 256;
     }
-    base = (char*)roundUp((uintptr_t)memory, 256);
-    top = base + size;
+    reservedSize = size;
+    base = top - size;
     bottom = base;
     allocation = top;
     oldBottom = top;
 
     size_t const pagelets = size / PAGELET;
     size_t const markWords = size / GRANULE / MARK_BITS;
-    objectStarts = static_cast<uint8_t*>(allocateTable(pagelets));
+    char* free = __heap_start;
+    objectStarts = static_cast<uint8_t*>(takeTable(&free, pagelets));
     memset(objectStarts, NO_OBJECT_START, pagelets);
-    markBits =
-        static_cast<MarkWord*>(allocateTable(markWords * sizeof(MarkWord)));
+    markBits = static_cast<MarkWord*>(
+        takeTable(&free, markWords * sizeof(MarkWord)));
     memset(markBits, 0, markWords * sizeof(MarkWord));
     size_t const counts = markWords / MARK_WORDS_PER_COUNT + 1;
-    liveCounts = static_cast<size_t*>(allocateTable(counts * sizeof(size_t)));
-    grayBits = static_cast<uint8_t*>(allocateTable(roundUp(pagelets, 8) / 8));
+    liveCounts =
+        static_cast<size_t*>(takeTable(&free, counts * sizeof(size_t)));
+    grayBits =
+        static_cast<uint8_t*>(takeTable(&free, roundUp(pagelets, 8) / 8));
     memset(grayBits, 0, roundUp(pagelets, 8) / 8);
+    assert(free <= base);
     // the image's cards too, which start out as zeros, that is dirty
     CleanFructusCards();
     cards = (uint8_t*)FRUCTUS_CARDS + (uintptr_t)base / PAGELET;

@@ -28,6 +28,7 @@
 
 #include <string.h>
 
+#include "../misc/PlacementNew.h"
 #include "../misc/defs.h"
 #include "../vm/Print.h"
 #ifndef FRUCTUS
@@ -57,7 +58,14 @@ void Heap<HEAP_T>::InitializeHeap(size_t objectSpaceSize) {
             "all data will be lost!\n");
         delete theHeap;
     }
+#ifdef FRUCTUS
+    // there is no malloc: the heap lives as long as the program
+    static char storage[sizeof(HEAP_CLS)]
+        __attribute__((aligned(alignof(HEAP_CLS))));
+    theHeap = new (storage) HEAP_CLS(objectSpaceSize);
+#else
     theHeap = new HEAP_CLS(objectSpaceSize);
+#endif
 }
 
 template <class HEAP_T>
