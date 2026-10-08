@@ -5,7 +5,9 @@
 #include <cstdint>
 #include <string.h>
 
-#include "../misc/Timer.h"
+#ifndef FRUCTUS
+  #include "../misc/Timer.h"
+#endif
 #include "../misc/debug.h"
 #include "../misc/defs.h"  // NOLINT(misc-include-cleaner)
 #include "../vm/IsValidObject.h"
@@ -160,7 +162,9 @@ static void walkDirtyCards(walk_heap_fn walk, bool drain) {
         if (p == nullptr) {
             continue;
         }
-        p = max(p, theHeap->oldBottom);
+        if (p < theHeap->oldBottom) {
+            p = theHeap->oldBottom;
+        }
         while (p < pageletEnd && p < theHeap->top) {
             auto* obj = (AbstractVMObject*)p;
             obj->WalkObjects(walk);
@@ -333,20 +337,29 @@ void SlidingCollector::slide() {
 }
 
 void SlidingCollector::Collect() {
+#ifndef FRUCTUS
     Timer::GCTimer.Resume();
+#endif
     theHeap = heap;
     theHeap->resetGCTrigger();
 
-    // A major collection when old space takes half the heap, so that a
-    // minor one has as much room as the live objects, like a semispace. In
-    // stress mode, every fourth collection is major, to test both.
+    // In stress mode, every fourth collection is major, to test both.
     static size_t collections = 0;
     collections++;
     auto const committed = (size_t)(theHeap->top - theHeap->bottom);
-    bool const major =
-        theHeap->majorAtNextCollection || theHeap->growAtNextCollection ||
-        (size_t)(theHeap->top - theHeap->oldBottom) > committed / 2 ||
-        (gcStressMode && collections % 4 == 0);
+    auto const old = (size_t)(theHeap->top - theHeap->oldBottom);
+#ifdef FRUCTUS
+    // The heap can't grow, so a major collection runs when old space has
+    // taken more than half the room the last one left.
+    size_t const room = committed - theHeap->liveAfterMajor;
+    bool const oldIsFull = old - theHeap->liveAfterMajor > room / 2;
+#else
+    // the heap grows after a major collection that leaves it half full
+    bool const oldIsFull = old > committed / 4 * 3;
+#endif
+    bool const major = theHeap->majorAtNextCollection ||
+                       theHeap->growAtNextCollection || oldIsFull ||
+                       (gcStressMode && collections % 4 == 0);
     theHeap->majorAtNextCollection = false;
     theHeap->lastCollectionWasMajor = major;
     DebugLog(major ? "Sliding major collection\n"
@@ -386,16 +399,21 @@ void SlidingCollector::Collect() {
     verify();
 #endif
 
-    // grow if the live objects take more than half
     if (major) {
         auto const live = (size_t)(theHeap->top - theHeap->allocation);
+        theHeap->liveAfterMajor = live;
+#ifndef FRUCTUS
+        // grow if the live objects take more than half
         if (theHeap->growAtNextCollection || live > committed / 2) {
             theHeap->grow();
         }
+#endif
         theHeap->growAtNextCollection = false;
     }
 
+#ifndef FRUCTUS
     Timer::GCTimer.Halt();
+#endif
 }
 
 #if DEBUG

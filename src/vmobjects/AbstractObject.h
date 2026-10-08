@@ -18,8 +18,8 @@
 #include "../memory/MarkSweepHeap.h"
 #ifndef FRUCTUS
 #include "../memory/PagedMarkSweepHeap.h"
-#include "../memory/SlidingHeap.h"
 #endif
+#include "../memory/SlidingHeap.h"
 #include "../misc/defs.h"
 #include "../vm/Print.h"
 #include "ObjectFormats.h"

@@ -65,6 +65,10 @@ constexpr size_t MARK_STACK_ENTRIES = 128;
  * inlined barrier needs no register for the value it stores.
  */
 constexpr uint8_t DIRTY_CARD = 0;
+#ifdef FRUCTUS
+/** zp_hi, the half of the zero page above its base. */
+constexpr uintptr_t FRUCTUS_CARDS = 0x200;
+#endif
 constexpr uint8_t CLEAN_CARD = 1;
 
 static_assert(PAGELET <= 256 && PAGELET % GRANULE == 0, "pagelet size");
@@ -103,15 +107,21 @@ public:
         if (IS_TAGGED(value)) {
             return;
         }
-#ifndef FRUCTUS
+#ifdef FRUCTUS
+        // The cards are zp_hi, which cover all 64K, so any holder has one.
+        // Their address is the zero page base, and its low byte is 0, so the
+        // base register is all the barrier needs.
+        auto* const zpCards = (uint8_t*)SlidingLayout::FRUCTUS_CARDS;
+        zpCards[(uintptr_t)holder / SlidingLayout::PAGELET] =
+            (uint8_t)(uintptr_t)zpCards;
+#else
         // The host's cards cover only the heap, and objects outside it are
-        // made on the stack, to read their vtables. On fructus the cards
-        // cover all 64K, so any holder has one.
+        // made on the stack, to read their vtables.
         if (!Contains(holder)) {
             return;
         }
-#endif
         cards[pageletIndex(holder)] = SlidingLayout::DIRTY_CARD;
+#endif
     }
 
     // The layout, for the collector, whose functions walk the heap.
@@ -154,4 +164,6 @@ public:
     bool growAtNextCollection{false};
     bool majorAtNextCollection{false};
     bool lastCollectionWasMajor{false};
+    // the size of the old objects after the last major collection
+    size_t liveAfterMajor{0};
 };
