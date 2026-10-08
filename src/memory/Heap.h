@@ -80,10 +80,14 @@ public:
      * Asks for a collection at the next safe point, after which the
      * interpreter continues.
      */
-    inline void requestGC() { gcWasRequested = true; }
+    inline void requestGC() {
+        gcWasRequested = true;
+        collectionWasRequested = true;
+    }
     inline void resetGCTrigger() {
         gcWasRequested = false;
         retryWasRequested = false;
+        collectionWasRequested = false;
     }
     bool isCollectionTriggered() { return gcWasRequested; }
     /**
@@ -98,11 +102,37 @@ public:
     void FullGC();
 
     /**
+     * Called by the interpreter between bytecodes when
+     * isCollectionTriggered(). Collects if a collection or a retry was asked
+     * for. After a collection for a retry, it asks to be called again, to see
+     * that a bytecode completed. If another retry comes first, the retry
+     * failed too: then the heap grows if it can, and allocations must succeed
+     * until a bytecode completes. So a full heap that can't grow quits with
+     * an out-of-memory error, instead of retrying forever.
+     */
+    void SafePoint();
+
+    /**
+     * Counts a failed try of a compilation as progress, since a compilation
+     * has its own policy for its retries.
+     */
+    void NoteProgress() { retryAwaitingProgress = false; }
+
+    /**
+     * Whether a compilation that ran out of memory may fail again, with the
+     * heap growing before each retry but the first, instead of retrying where
+     * allocations must succeed. A heap that sets it defines
+     * GrowAtNextCollection().
+     */
+    static constexpr bool COMPILATION_RETRIES_GROW_HEAP = false;
+    void GrowAtNextCollection() {}
+
+    /**
      * In gc-stress-retry mode, answers whether to fail an allocation of
      * `size` bytes that would succeed, and asks for the retry if it does.
      */
     bool StressFailsAllocation(size_t size) {
-        if (allocationMustSucceed) {
+        if (AllocationMustSucceed()) {
             return false;
         }
         if (stressFailsNext) {
@@ -122,7 +152,7 @@ public:
      * instead, and the caller must give up and change nothing.
      */
     [[nodiscard]] bool AllocationMustSucceed() const {
-        return allocationMustSucceed;
+        return allocationMustSucceed || mustSucceedUntilProgress;
     }
 
     /**
@@ -168,10 +198,19 @@ private:
     friend HEAP_U* GetHeap();
     static HEAP_T* theHeap;
 
-    // flag that shows if a Collection is triggered
+    // The interpreter calls SafePoint() at the next safe point. It does for a
+    // collection, for a retry, and to see that a retry completed.
     bool gcWasRequested{false};
     bool retryWasRequested{false};
+    bool collectionWasRequested{false};
     size_t failedAllocationSize{0};
+
+    // There was a collection for a retry, and no bytecode has completed
+    // since.
+    bool retryAwaitingProgress{false};
+    // A retry failed again, so allocations must succeed until a bytecode
+    // completes.
+    bool mustSucceedUntilProgress{false};
 
     // In gc-stress-retry mode, whether the next allocation that may fail
     // fails. A collection for a retry leaves it false, so the retry succeeds.

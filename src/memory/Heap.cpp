@@ -87,8 +87,34 @@ void Heap<HEAP_T>::FullGC() {
 }
 
 template <class HEAP_T>
+void Heap<HEAP_T>::SafePoint() {
+    if (!retryWasRequested) {
+        // a bytecode completed since the last retry
+        retryAwaitingProgress = false;
+        mustSucceedUntilProgress = false;
+        if (collectionWasRequested) {
+            FullGC();
+        } else {
+            gcWasRequested = false;
+        }
+        return;
+    }
+
+    if (retryAwaitingProgress) {
+        // The retry failed too. A copying heap grows in this collection. A
+        // full fixed-size heap quits where the retry fails again, and the
+        // generational heap puts the object in old space.
+        static_cast<HEAP_T*>(this)->GrowAtNextCollection();
+        mustSucceedUntilProgress = true;
+    }
+    FullGC();
+    retryAwaitingProgress = true;
+    gcWasRequested = true;
+}
+
+template <class HEAP_T>
 void* Heap<HEAP_T>::allocationFailed(size_t size) {
-    if (allocationMustSucceed) {
+    if (AllocationMustSucceed()) {
         ErrorPrintf("\nFailed to allocate %zu bytes.\n", size);
         Quit(-1);
     }
@@ -102,6 +128,7 @@ void* Heap<HEAP_T>::allocationFailed(size_t size) {
 template void Heap<HEAP_CLS>::InitializeHeap(size_t);
 template void Heap<HEAP_CLS>::DestroyHeap();
 template void Heap<HEAP_CLS>::FullGC();
+template void Heap<HEAP_CLS>::SafePoint();
 
 class GenerationalHeap;
 template GenerationalHeap* Heap<GenerationalHeap>::theHeap;

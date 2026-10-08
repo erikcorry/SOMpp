@@ -1267,7 +1267,7 @@ void Interpreter::WalkGlobals(walk_heap_fn walk) {
 }
 
 void Interpreter::startGC() {
-    GetHeap<HEAP_CLS>()->FullGC();
+    GetHeap<HEAP_CLS>()->SafePoint();
     method = GetFrame()->GetMethod();
 }
 

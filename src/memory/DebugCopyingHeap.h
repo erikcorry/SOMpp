@@ -15,6 +15,11 @@ public:
     void* AllocateObject(size_t size);
     bool MakeRoomFor(size_t size);
 
+    // it has no space to put what doesn't fit in it, but grows at a
+    // collection
+    static constexpr bool COMPILATION_RETRIES_GROW_HEAP = true;
+    void GrowAtNextCollection() { increaseMemory = true; }
+
     bool IsInCurrentBuffer(AbstractVMObject* obj);
     bool IsInOldBufferAndOldBufferIsValid(AbstractVMObject* obj);
 
