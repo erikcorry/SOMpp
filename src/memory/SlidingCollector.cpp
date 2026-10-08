@@ -219,6 +219,11 @@ void SlidingCollector::rescanGrayPagelets() {
     }
 }
 
+#ifndef FRUCTUS
+/** After a collection, the host's heap grows until it has this much room. */
+static constexpr size_t MIN_YOUNG_SPACE = (size_t)1024 * 1024;
+#endif
+
 static constexpr size_t GRANULES_PER_COUNT = MARK_BITS * MARK_WORDS_PER_COUNT;
 
 void SlidingCollector::countLiveGranules() {
@@ -410,8 +415,12 @@ void SlidingCollector::Collect() {
 #endif
         theHeap->growAtNextCollection = false;
     }
-
 #ifndef FRUCTUS
+    // and if there's little room for young objects
+    while ((size_t)(theHeap->allocation - theHeap->bottom) < MIN_YOUNG_SPACE &&
+           theHeap->grow()) {
+    }
+
     Timer::GCTimer.Halt();
 #endif
 }
