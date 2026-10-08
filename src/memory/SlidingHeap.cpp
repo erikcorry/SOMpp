@@ -50,6 +50,7 @@ SlidingHeap::SlidingHeap(size_t objectSpaceSize)
     top = base + reservedSize;
     bottom = top;
     allocation = top;
+    oldBottom = top;
 
     size_t const pagelets = reservedSize / PAGELET;
     size_t const markWords = reservedSize / GRANULE / MARK_BITS;
@@ -60,6 +61,8 @@ SlidingHeap::SlidingHeap(size_t objectSpaceSize)
     liveCounts = static_cast<size_t*>(
         allocateTable((markWords / MARK_WORDS_PER_COUNT + 1) * sizeof(size_t)));
     grayBits = static_cast<uint8_t*>(allocateTable(roundUp(pagelets, 8) / 8));
+    cards = static_cast<uint8_t*>(allocateTable(pagelets));
+    memset(cards, CLEAN_CARD, pagelets);
 
     bottom = top - size;
     if (mprotect(bottom, size, PROT_READ | PROT_WRITE) != 0) {
@@ -75,6 +78,7 @@ SlidingHeap::~SlidingHeap() {
     munmap(markBits, markWords * sizeof(MarkWord));
     munmap(liveCounts, (markWords / MARK_WORDS_PER_COUNT + 1) * sizeof(size_t));
     munmap(grayBits, roundUp(pagelets, 8) / 8);
+    munmap(cards, pagelets);
 }
 
 void* SlidingHeap::AllocateObject(size_t size) {
@@ -92,6 +96,15 @@ void* SlidingHeap::AllocateObject(size_t size) {
 }
 
 bool SlidingHeap::MakeRoomFor(size_t size) {
+    size = AllocationSize(size);
+    if (size <= (size_t)(allocation - bottom)) {
+        return true;
+    }
+    // a minor collection frees only the young objects
+    if (!lastCollectionWasMajor) {
+        majorAtNextCollection = true;
+        gc->Collect();
+    }
     while (size > (size_t)(allocation - bottom)) {
         if (!grow()) {
             return false;

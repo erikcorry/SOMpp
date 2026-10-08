@@ -123,7 +123,8 @@ typedef DebugCopyingHeap HEAP_CLS;
 #elif GC_TYPE == SLIDING
 class SlidingHeap;
 typedef SlidingHeap HEAP_CLS;
-  #define write_barrier(obj, value_ptr)
+  #define write_barrier(obj, value_ptr) \
+      ((GetHeap<SlidingHeap>())->writeBarrier(obj, value_ptr))
   #define ALLOC_MATURE
   #define ALLOC_OUTSIDE_NURSERY(X)
   #define ALLOC_OUTSIDE_NURSERY_DECL

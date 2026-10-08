@@ -18,16 +18,28 @@
  *    to takes at most that many popcounts.
  *  - The gray bits: a bit per pagelet, for the marked objects that didn't fit
  *    on the mark stack, whose pagelets are scanned again.
+ *  - The cards, the remembered set: a byte per pagelet, which the write
+ *    barrier makes DIRTY_CARD when it stores a pointer into an object that
+ *    starts in the pagelet.
+ *
+ * It's generational, with instant promotion. The objects that survived the
+ * last collection are old, from oldBottom to the top, and those allocated
+ * since are young, below it. A minor collection collects only the young
+ * objects, with the old objects in dirty cards as roots, and slides the
+ * survivors up to oldBottom, so afterwards there are no young objects and no
+ * dirty cards. A major collection collects the whole heap the same way.
  *
  * On the host it reserves the address space for its largest size with mmap,
  * and makes the part below its top that it uses accessible with mprotect, so
  * it grows downwards, without moving anything.
  */
 
+#include <assert.h>
 #include <cstddef>
 #include <cstdint>
 
 #include "../misc/defs.h"
+#include "../vmobjects/ObjectFormats.h"
 #include "Heap.h"
 
 namespace SlidingLayout {
@@ -47,6 +59,13 @@ constexpr uint8_t NO_OBJECT_START = 1;
 typedef uintptr_t MarkWord;
 constexpr size_t MARK_BITS = sizeof(MarkWord) * 8;
 constexpr size_t MARK_STACK_ENTRIES = 128;
+/**
+ * Dirty is 0 because on fructus the barrier is `cards[holder >> 7] = cards`:
+ * the cards are 256 aligned, so the low byte of their address is 0, and the
+ * inlined barrier needs no register for the value it stores.
+ */
+constexpr uint8_t DIRTY_CARD = 0;
+constexpr uint8_t CLEAN_CARD = 1;
 
 static_assert(PAGELET <= 256 && PAGELET % GRANULE == 0, "pagelet size");
 static_assert(GRANULE % sizeof(void*) == 0, "granule size");
@@ -73,6 +92,26 @@ public:
 
     [[nodiscard]] bool Contains(const void* p) const {
         return p >= (const void*)base && p < (const void*)top;
+    }
+
+    /**
+     * Remembers that `holder` may point into young space now. It filters
+     * only the small integers, so it doesn't need to know where young space
+     * is.
+     */
+    void writeBarrier(const void* holder, const void* value) {
+        if (IS_TAGGED(value)) {
+            return;
+        }
+#ifndef FRUCTUS
+        // The host's cards cover only the heap, and objects outside it are
+        // made on the stack, to read their vtables. On fructus the cards
+        // cover all 64K, so any holder has one.
+        if (!Contains(holder)) {
+            return;
+        }
+#endif
+        cards[pageletIndex(holder)] = SlidingLayout::DIRTY_CARD;
     }
 
     // The layout, for the collector, whose functions walk the heap.
@@ -102,12 +141,17 @@ public:
     char* bottom;
     // the lowest object; the free space is below it
     char* allocation;
+    // the lowest old object, or top if there are none
+    char* oldBottom;
 
     uint8_t* objectStarts;
     SlidingLayout::MarkWord* markBits;
     size_t* liveCounts;
     uint8_t* grayBits;
+    uint8_t* cards;
 
     size_t reservedSize;
     bool growAtNextCollection{false};
+    bool majorAtNextCollection{false};
+    bool lastCollectionWasMajor{false};
 };

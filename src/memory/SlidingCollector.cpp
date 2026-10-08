@@ -9,6 +9,7 @@
 #include "../misc/debug.h"
 #include "../misc/defs.h"  // NOLINT(misc-include-cleaner)
 #include "../vm/IsValidObject.h"
+#include "../vm/Print.h"
 #include "../vm/Universe.h"
 #include "../vmobjects/AbstractObject.h"
 #include "../vmobjects/ObjectFormats.h"
@@ -24,6 +25,15 @@ static AbstractVMObject* markStack[MARK_STACK_ENTRIES];
 static size_t markStackSize;
 static size_t markStackLimit;
 static bool markStackOverflowed;
+// The objects being collected, [low, high): young space for a minor
+// collection, and the whole heap for a major one. The survivors slide up to
+// high.
+static char* low;
+static char* high;
+
+static bool isCollected(const void* p) {
+    return p >= (const void*)low && p < (const void*)high;
+}
 
 static size_t popcount(MarkWord word) {
     if constexpr (sizeof(MarkWord) == sizeof(unsigned)) {
@@ -102,7 +112,7 @@ static gc_oop_t mark_object(gc_oop_t oop) {
     }
     auto* obj = (AbstractVMObject*)oop;
     assert(obj != nullptr);
-    if (!theHeap->Contains(obj)) {
+    if (!isCollected(obj)) {
         return oop;
     }
 
@@ -133,7 +143,36 @@ static void drainMarkStack() {
     }
 }
 
-void SlidingCollector::markLiveObjects() {
+/**
+ * Walks the old objects that start in dirty cards: those that may point into
+ * young space. In the pagelet that young space ends in, the objects below
+ * oldBottom are young, and are left out.
+ */
+static void walkDirtyCards(walk_heap_fn walk, bool drain) {
+    size_t const end = theHeap->pageletIndex(theHeap->top);
+    for (size_t pagelet = theHeap->pageletIndex(theHeap->oldBottom);
+         pagelet < end; pagelet++) {
+        if (theHeap->cards[pagelet] != DIRTY_CARD) {
+            continue;
+        }
+        char* const pageletEnd = theHeap->pageletStart(pagelet + 1);
+        char* p = theHeap->firstObjectIn(pagelet);
+        if (p == nullptr) {
+            continue;
+        }
+        p = max(p, theHeap->oldBottom);
+        while (p < pageletEnd && p < theHeap->top) {
+            auto* obj = (AbstractVMObject*)p;
+            obj->WalkObjects(walk);
+            if (drain) {
+                drainMarkStack();
+            }
+            p += objectSize(obj);
+        }
+    }
+}
+
+void SlidingCollector::markLiveObjects(bool major) {
     markStackSize = 0;
     // so that stress mode tests the overflows
     markStackLimit = gcStressMode ? 4 : MARK_STACK_ENTRIES;
@@ -141,6 +180,9 @@ void SlidingCollector::markLiveObjects() {
 
     Universe::WalkGlobals(mark_object);
     drainMarkStack();
+    if (!major) {
+        walkDirtyCards(mark_object, /*drain=*/true);
+    }
     while (markStackOverflowed) {
         markStackOverflowed = false;
         rescanGrayPagelets();
@@ -148,8 +190,8 @@ void SlidingCollector::markLiveObjects() {
 }
 
 void SlidingCollector::rescanGrayPagelets() {
-    size_t const first = theHeap->pageletIndex(theHeap->allocation);
-    size_t const end = theHeap->pageletIndex(theHeap->top);
+    size_t const first = theHeap->pageletIndex(low);
+    size_t const end = theHeap->pageletIndex(high - 1) + 1;
     for (size_t pagelet = first; pagelet < end; pagelet++) {
         uint8_t const bit = (uint8_t)(1U << (pagelet % 8));
         if ((theHeap->grayBits[pagelet / 8] & bit) == 0) {
@@ -162,7 +204,7 @@ void SlidingCollector::rescanGrayPagelets() {
         char* const pageletEnd = theHeap->pageletStart(pagelet + 1);
         char* p = theHeap->firstObjectIn(pagelet);
         assert(p != nullptr);
-        while (p < pageletEnd && p < theHeap->top) {
+        while (p < pageletEnd && p < high) {
             auto* obj = (AbstractVMObject*)p;
             if (isMarked(theHeap->markBits, theHeap->granuleIndex(p))) {
                 obj->WalkObjects(mark_object);
@@ -173,12 +215,15 @@ void SlidingCollector::rescanGrayPagelets() {
     }
 }
 
+static constexpr size_t GRANULES_PER_COUNT = MARK_BITS * MARK_WORDS_PER_COUNT;
+
 void SlidingCollector::countLiveGranules() {
-    size_t const firstWord =
-        theHeap->granuleIndex(theHeap->allocation) / MARK_BITS;
-    size_t const endWord = theHeap->granuleIndex(theHeap->top) / MARK_BITS;
-    size_t const firstCount = firstWord / MARK_WORDS_PER_COUNT;
-    size_t const endCount = endWord / MARK_WORDS_PER_COUNT;
+    size_t const firstCount = theHeap->granuleIndex(low) / GRANULES_PER_COUNT;
+    // A count that covers high also covers old objects in a minor
+    // collection, but they have no mark bits.
+    size_t const endCount =
+        (theHeap->granuleIndex(high) + GRANULES_PER_COUNT - 1) /
+        GRANULES_PER_COUNT;
 
     theHeap->liveCounts[endCount] = 0;
     for (size_t c = endCount; c > firstCount; c--) {
@@ -207,7 +252,7 @@ static size_t liveGranulesFrom(size_t granule) {
 static char* newAddress(const char* p) {
     size_t const granule = theHeap->granuleIndex(p);
     assert(isMarked(theHeap->markBits, granule));
-    return theHeap->top - GRANULE * liveGranulesFrom(granule) +
+    return high - GRANULE * liveGranulesFrom(granule) +
            (p - theHeap->base) % GRANULE;
 }
 
@@ -221,26 +266,30 @@ static gc_oop_t update_pointer(gc_oop_t oop) {
         return oop;
     }
     assert(oop != nullptr);
-    if (!theHeap->Contains(oop)) {
+    if (!isCollected(oop)) {
         return oop;
     }
     return (gc_oop_t)newAddress((const char*)oop);
 }
 
 void SlidingCollector::slide() {
-    char* const oldAllocation = theHeap->allocation;
-    size_t const firstGranule = theHeap->granuleIndex(oldAllocation);
-    size_t const firstPagelet = theHeap->pageletIndex(oldAllocation);
+    size_t const firstGranule = theHeap->granuleIndex(low);
+    size_t const firstPagelet = theHeap->pageletIndex(low);
 
-    // the runs record where their objects start
+    // The runs record where their objects start. In the pagelet that high is
+    // in, oldBottom is the first object above it.
+    size_t const highPagelet = theHeap->pageletIndex(high);
     memset(&theHeap->objectStarts[firstPagelet], NO_OBJECT_START,
-           theHeap->pageletIndex(theHeap->top) - firstPagelet);
+           highPagelet - firstPagelet);
+    if (high < theHeap->top) {
+        theHeap->setObjectStart(high);
+    }
 
     // Each run of set mark bits is a block of live objects, the lowest of
     // which starts at the bottom of the run. The runs move up as blocks, from
     // the top down, so a run only overwrites what has moved already.
-    char* destination = theHeap->top;
-    size_t end = theHeap->granuleIndex(theHeap->top);
+    char* destination = high;
+    size_t end = theHeap->granuleIndex(high);
     for (;;) {
         size_t const highest =
             highestBelow(theHeap->markBits, end, firstGranule,
@@ -279,41 +328,72 @@ void SlidingCollector::slide() {
     theHeap->allocation = destination;
 
     if (DEBUG) {
-        memset(oldAllocation, 0xFF, (size_t)(destination - oldAllocation));
+        memset(low, 0xFF, (size_t)(destination - low));
     }
 }
 
 void SlidingCollector::Collect() {
-    DebugLog("Sliding Collect\n");
-
     Timer::GCTimer.Resume();
     theHeap = heap;
     theHeap->resetGCTrigger();
-    char* const oldAllocation = theHeap->allocation;
 
-    markLiveObjects();
+    // A major collection when old space takes half the heap, so that a
+    // minor one has as much room as the live objects, like a semispace. In
+    // stress mode, every fourth collection is major, to test both.
+    static size_t collections = 0;
+    collections++;
+    auto const committed = (size_t)(theHeap->top - theHeap->bottom);
+    bool const major =
+        theHeap->majorAtNextCollection || theHeap->growAtNextCollection ||
+        (size_t)(theHeap->top - theHeap->oldBottom) > committed / 2 ||
+        (gcStressMode && collections % 4 == 0);
+    theHeap->majorAtNextCollection = false;
+    theHeap->lastCollectionWasMajor = major;
+    DebugLog(major ? "Sliding major collection\n"
+                   : "Sliding minor collection\n");
+
+#if DEBUG
+    verifyRememberedSet();
+#endif
+    low = theHeap->allocation;
+    high = major ? theHeap->top : theHeap->oldBottom;
+
+    markLiveObjects(major);
     countLiveGranules();
+    // Old objects don't move, and the mark bits say where the objects they
+    // point to go, so they can be updated before the slide.
+    if (!major) {
+        walkDirtyCards(update_pointer, /*drain=*/false);
+    }
     slide();
     // the mark bits say where the objects were, to update the roots with
     Universe::WalkGlobals(update_pointer);
 
     // the mark bits are clear between collections
-    size_t const firstWord = theHeap->granuleIndex(oldAllocation) / MARK_BITS;
-    size_t const endWord = theHeap->granuleIndex(theHeap->top) / MARK_BITS;
+    size_t const firstWord = theHeap->granuleIndex(low) / MARK_BITS;
+    size_t const endWord =
+        (theHeap->granuleIndex(high) + MARK_BITS - 1) / MARK_BITS;
     memset(&theHeap->markBits[firstWord], 0,
            (endWord - firstWord) * sizeof(MarkWord));
+
+    // everything is old now
+    theHeap->oldBottom = theHeap->allocation;
+    size_t const firstCard = theHeap->pageletIndex(low);
+    memset(&theHeap->cards[firstCard], CLEAN_CARD,
+           theHeap->pageletIndex(theHeap->top) - firstCard);
 
 #if DEBUG
     verify();
 #endif
 
-    // like a semispace, grow if the live objects take more than half
-    auto const live = (size_t)(theHeap->top - theHeap->allocation);
-    if (theHeap->growAtNextCollection ||
-        live > (size_t)(theHeap->top - theHeap->bottom) / 2) {
-        theHeap->grow();
+    // grow if the live objects take more than half
+    if (major) {
+        auto const live = (size_t)(theHeap->top - theHeap->allocation);
+        if (theHeap->growAtNextCollection || live > committed / 2) {
+            theHeap->grow();
+        }
+        theHeap->growAtNextCollection = false;
     }
-    theHeap->growAtNextCollection = false;
 
     Timer::GCTimer.Halt();
 }
@@ -331,6 +411,35 @@ static gc_oop_t check_pointer(gc_oop_t oop) {
         }
     }
     return oop;
+}
+
+/**
+ * Checks that every old object that points into young space is in a dirty
+ * card, so a missing write barrier fails where the pointer is, not when the
+ * object it points to has been collected.
+ */
+static char* checkedHolder;
+
+static gc_oop_t check_remembered(gc_oop_t oop) {
+    if (!IS_TAGGED(oop) && oop >= (gc_oop_t)theHeap->allocation &&
+        oop < (gc_oop_t)theHeap->oldBottom) {
+        if (theHeap->cards[theHeap->pageletIndex(checkedHolder)] !=
+            DIRTY_CARD) {
+            ErrorPrintf("old object %p points to young %p, card is clean\n",
+                        (void*)checkedHolder, (void*)oop);
+            assert(false);
+        }
+    }
+    return oop;
+}
+
+void SlidingCollector::verifyRememberedSet() {
+    for (char* p = theHeap->oldBottom; p < theHeap->top;) {
+        auto* obj = (AbstractVMObject*)p;
+        checkedHolder = p;
+        obj->WalkObjects(check_remembered);
+        p += objectSize(obj);
+    }
 }
 
 void SlidingCollector::verify() {
