@@ -384,12 +384,10 @@ vm_oop_t Universe::interpretMethod(VMObject* receiver, VMInvokable* initialize,
 
     initialize->Invoke(bootstrapFrame);
 
-#ifndef FRUCTUS
     // An allocation that fails makes the interpreter run the bytecode again
-    // after collecting. Fructus doesn't do that yet. The scope isn't in
-    // Start(), where it slows the interpreter down.
+    // after collecting. The scope isn't in Start(), where it slows the
+    // interpreter down.
     HEAP_CLS::MustSucceedScope const mayFail(false);
-#endif
     return GetInterpreter()->Start();
 }
 
@@ -1090,7 +1088,8 @@ void Universe::WalkGlobals(walk_heap_fn walk) {
 #endif
 
 #ifdef FRUCTUS
-    FructusImage::WalkGlobals(walk);
+    // the image's objects are walked by the collector, see
+    // FructusImage::WalkRoots()
 #else
     // walk all entries in globals map
     map<GCSymbol*, gc_oop_t> globs = globals;

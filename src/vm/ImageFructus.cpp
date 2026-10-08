@@ -7,6 +7,7 @@
 
 #include "../interpreter/SendSite.h"
 #include "../memory/Heap.h"
+#include "../memory/SlidingHeap.h"
 #include "../vmobjects/ObjectFormats.h"
 #include "../vmobjects/VMArray.h"
 #include "../vmobjects/VMClass.h"
@@ -60,6 +61,9 @@ extern VMClass som_class_System;
 // the globals of all classes, which the linker gathers
 extern ImageGlobal __start_som_globals[];
 extern ImageGlobal __stop_som_globals[];
+// the objects the program can store objects of the heap into
+extern AbstractVMObject* const __start_som_roots[];
+extern AbstractVMObject* const __stop_som_roots[];
 }
 
 void FructusImage::Load() {
@@ -118,11 +122,17 @@ vm_oop_t FructusImage::GetGlobal(VMSymbol* name) {
     return nullptr;
 }
 
-void FructusImage::WalkGlobals(walk_heap_fn walk) {
-    // the GC doesn't move objects, so the globals stay as they are
-    for (const ImageGlobal* g = __start_som_globals; g < __stop_som_globals;
-         g++) {
-        walk(g->value);
+void FructusImage::WalkRoots(walk_heap_fn walk, bool onlyRemembered) {
+    // The globals are the image's classes and objects, which don't move, so
+    // only these, that can point into the heap, need walking.
+    const auto* const cards = (const uint8_t*)SlidingLayout::FRUCTUS_CARDS;
+    for (AbstractVMObject* const* root = __start_som_roots;
+         root < __stop_som_roots; root++) {
+        if (onlyRemembered && cards[(uintptr_t)*root / SlidingLayout::PAGELET] !=
+                                  SlidingLayout::DIRTY_CARD) {
+            continue;
+        }
+        (*root)->WalkObjects(walk);
     }
 }
 

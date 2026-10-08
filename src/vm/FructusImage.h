@@ -56,8 +56,12 @@
  * program can get at has them in a field, see Smalltalk-fructus. So there is
  * no perform, a message that isn't understood or an unknown global is an
  * error of the VM, which never sends doesNotUnderstand:arguments: (the
- * image writer warns about a class that has it), and since nothing moves,
- * objects hash by their address.
+ * image writer warns about a class that has it). Objects hash by their
+ * address, which is only right for the image's: the collector moves the
+ * heap's, see ideas/hashcode.md.
+ *
+ * The image's objects that the program can store into are listed in the
+ * som_roots section, which the collector walks, see WalkRoots().
  */
 
 #include <cstddef>
@@ -228,7 +232,13 @@ public:
 
     /** The value of a global, or nullptr. */
     static vm_oop_t GetGlobal(VMSymbol* name);
-    static void WalkGlobals(walk_heap_fn walk);
+    /**
+     * Walks the objects of the image that can point into the heap, for the
+     * collector. With `onlyRemembered`, only those whose card the write
+     * barrier dirtied, which are the only ones that can point to young
+     * objects.
+     */
+    static void WalkRoots(walk_heap_fn walk, bool onlyRemembered);
 
     static void CheckLayout();
 #else

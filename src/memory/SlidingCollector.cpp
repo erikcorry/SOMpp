@@ -13,6 +13,9 @@
 #include "../vm/IsValidObject.h"
 #include "../vm/Print.h"
 #include "../vm/Universe.h"
+#ifdef FRUCTUS
+  #include "../vm/FructusImage.h"
+#endif
 #include "../vmobjects/AbstractObject.h"
 #include "../vmobjects/ObjectFormats.h"
 #include "Heap.h"
@@ -191,6 +194,9 @@ void SlidingCollector::markLiveObjects(bool major) {
     markStackOverflowed = false;
 
     Universe::WalkGlobals(mark_object);
+#ifdef FRUCTUS
+    FructusImage::WalkRoots(mark_object, /*onlyRemembered=*/!major);
+#endif
     drainMarkStack();
     if (!major) {
         walkDirtyCards(mark_object, /*drain=*/true, /*forget=*/false);
@@ -402,6 +408,9 @@ void SlidingCollector::Collect() {
     slide();
     // the mark bits say where the objects were, to update the roots with
     Universe::WalkGlobals(update_pointer);
+#ifdef FRUCTUS
+    FructusImage::WalkRoots(update_pointer, /*onlyRemembered=*/!major);
+#endif
 
     // the mark bits are clear between collections
     size_t const firstWord = theHeap->granuleIndex(low) / MARK_BITS;
@@ -412,9 +421,14 @@ void SlidingCollector::Collect() {
 
     // everything is old now
     theHeap->oldBottom = theHeap->allocation;
+#ifdef FRUCTUS
+    // the image's cards too
+    CleanFructusCards();
+#else
     size_t const firstCard = theHeap->pageletIndex(low);
     memset(&theHeap->cards[firstCard], CLEAN_CARD,
            theHeap->pageletIndex(theHeap->top) - firstCard);
+#endif
 
 #if DEBUG
     verify();

@@ -37,6 +37,7 @@
 #include <assert.h>
 #include <cstddef>
 #include <cstdint>
+#include <string.h>
 
 #include "../misc/defs.h"
 #include "../vmobjects/ObjectFormats.h"
@@ -65,6 +66,7 @@ constexpr size_t MARK_STACK_ENTRIES = 128;
  * inlined barrier needs no register for the value it stores.
  */
 constexpr uint8_t DIRTY_CARD = 0;
+constexpr uint8_t CLEAN_CARD = 1;
 #ifndef FRUCTUS
 // VMObjectBase.h's MASK_OBJECT_IS_OLD and MASK_SEEN_BY_WRITE_BARRIER
 constexpr size_t OLD = 1U << 1U;
@@ -73,8 +75,16 @@ constexpr size_t SEEN = 1U << 2U;
 #ifdef FRUCTUS
 /** zp_hi, the half of the zero page above its base. */
 constexpr uintptr_t FRUCTUS_CARDS = 0x200;
+
+/** Cleans all the cards, of the heap and the image. */
+inline void CleanFructusCards() {
+  // gcc takes a constant address for an object of size 0
+  #pragma GCC diagnostic push
+  #pragma GCC diagnostic ignored "-Wstringop-overflow"
+    memset((uint8_t*)FRUCTUS_CARDS, CLEAN_CARD, 0x10000 / PAGELET);
+  #pragma GCC diagnostic pop
+}
 #endif
-constexpr uint8_t CLEAN_CARD = 1;
 
 static_assert(PAGELET <= 256 && PAGELET % GRANULE == 0, "pagelet size");
 static_assert(GRANULE % sizeof(void*) == 0, "granule size");
@@ -124,8 +134,13 @@ public:
         // Their address is the zero page base, and its low byte is 0, so the
         // base register is all the barrier needs.
         auto* const zpCards = (uint8_t*)SlidingLayout::FRUCTUS_CARDS;
+  // gcc takes a constant address for an object of size 0
+  #pragma GCC diagnostic push
+  #pragma GCC diagnostic ignored "-Wstringop-overflow"
+  #pragma GCC diagnostic ignored "-Warray-bounds"
         zpCards[(uintptr_t)holder / SlidingLayout::PAGELET] =
             (uint8_t)(uintptr_t)zpCards;
+  #pragma GCC diagnostic pop
 #else
         (void)value;
         // the GC field follows the vtable, as GenerationalHeap's barrier has

@@ -39,8 +39,8 @@
 #include "MarkSweepHeap.h"       // NOLINT(misc-include-cleaner)
 #ifndef FRUCTUS
 #include "PagedMarkSweepHeap.h"  // NOLINT(misc-include-cleaner)
-#include "SlidingHeap.h"         // NOLINT(misc-include-cleaner)
 #endif
+#include "SlidingHeap.h"         // NOLINT(misc-include-cleaner)
 
 #if DEBUG
 bool gcStressMode = false;

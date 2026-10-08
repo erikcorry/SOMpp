@@ -806,6 +806,15 @@ void FructusImage::AsmFile::writeVMObject(VMObject* obj, const std::string& labe
                isClassField ? classFields[i] : "field " + std::to_string(i));
     }
     w.End(size);
+
+    // The program can store objects of the heap into it, so the collector
+    // walks it, see FructusImage::WalkGlobals()
+    if (!isInternal) {
+        out << "\t.pushsection\tsom_roots,\"a\",@progbits\n"
+            << "\t.balign\t2\n"
+            << "\t.short\t" << label << "\n"
+            << "\t.popsection\n";
+    }
 }
 
 void FructusImage::AsmFile::writeString(VMString* str, const std::string& label) {

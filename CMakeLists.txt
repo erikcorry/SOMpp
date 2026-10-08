@@ -70,9 +70,9 @@ file(GLOB UNITTEST_SRC    ${UNITTEST_DIR}/*.cpp)
 if(FRUCTUS)
   # The 16-bit fructus target: no SOM compiler (the class library is prepared
   # on the host), no floats, no big integers (an integer that isn't a small
-  # one has 64 bits, which wrap around), only the mark-sweep GC.
+  # one has 64 bits, which wrap around), only the sliding GC.
   set(COMPILER_SRC "")
-  list(FILTER MEMORY_SRC INCLUDE REGEX "/(Heap|MarkSweepHeap|MarkSweepCollector)\\.cpp$")
+  list(FILTER MEMORY_SRC INCLUDE REGEX "/(Heap|SlidingHeap|SlidingCollector)\\.cpp$")
   # Method, Primitive and Symbol have no primitives: the program can't have
   # methods, and its symbols are plain objects, see Smalltalk-fructus
   list(FILTER PRIMITIVES_SRC EXCLUDE REGEX
@@ -84,7 +84,7 @@ if(FRUCTUS)
   list(FILTER VM_SRC EXCLUDE REGEX "/(Statistics|Shell|Symbols)\\.cpp$")
   list(FILTER MISC_SRC EXCLUDE REGEX "/(Timer|Murmur3Hash)\\.cpp$")
 
-  set(GC_TYPE "MARK_SWEEP" CACHE STRING "" FORCE)
+  set(GC_TYPE "SLIDING" CACHE STRING "" FORCE)
   set(USE_TAGGING TRUE CACHE BOOL "" FORCE)
   # Vector's methods stay in Smalltalk; this also avoids checking bytecode
   # hashes with murmur3 on the target

@@ -3,8 +3,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <string.h>
-#include <sys/mman.h>
-#include <unistd.h>
+#ifndef FRUCTUS
+  #include <sys/mman.h>
+  #include <unistd.h>
+#endif
 
 #include "../misc/defs.h"  // NOLINT(misc-include-cleaner)
 #include "../vm/Print.h"
@@ -13,12 +15,61 @@
 
 using namespace SlidingLayout;
 
-// the smallest reservation, so the heap can grow
-static constexpr size_t MIN_RESERVED_SIZE = (size_t)512 * 1024 * 1024;
-
 static size_t roundUp(size_t n, size_t unit) {
     return (n + unit - 1) / unit * unit;
 }
+
+#ifdef FRUCTUS
+static void* allocateTable(size_t size) {
+    void* const p = malloc(size);
+    if (p == nullptr) {
+        ErrorExit("unable to allocate the heap's tables");
+    }
+    return p;
+}
+
+// The heap can't grow. Its base is 256 aligned, so that firstObjectIn() can
+// rebuild an address from its low byte, and its cards are zp_hi's, which
+// cover all 64K, so the barrier indexes them by the address alone.
+SlidingHeap::SlidingHeap(size_t objectSpaceSize)
+    : Heap<SlidingHeap>(new SlidingCollector(this)) {
+    size_t const size = roundUp(objectSpaceSize, 256);
+    reservedSize = size;
+    auto* const memory = static_cast<char*>(malloc(size + 255));
+    if (memory == nullptr) {
+        ErrorExit("unable to allocate heap memory");
+    }
+    base = (char*)roundUp((uintptr_t)memory, 256);
+    top = base + size;
+    bottom = base;
+    allocation = top;
+    oldBottom = top;
+
+    size_t const pagelets = size / PAGELET;
+    size_t const markWords = size / GRANULE / MARK_BITS;
+    objectStarts = static_cast<uint8_t*>(allocateTable(pagelets));
+    memset(objectStarts, NO_OBJECT_START, pagelets);
+    markBits =
+        static_cast<MarkWord*>(allocateTable(markWords * sizeof(MarkWord)));
+    memset(markBits, 0, markWords * sizeof(MarkWord));
+    size_t const counts = markWords / MARK_WORDS_PER_COUNT + 1;
+    liveCounts = static_cast<size_t*>(allocateTable(counts * sizeof(size_t)));
+    grayBits = static_cast<uint8_t*>(allocateTable(roundUp(pagelets, 8) / 8));
+    memset(grayBits, 0, roundUp(pagelets, 8) / 8);
+    // the image's cards too, which start out as zeros, that is dirty
+    CleanFructusCards();
+    cards = (uint8_t*)FRUCTUS_CARDS + (uintptr_t)base / PAGELET;
+}
+
+// it lives as long as the program
+SlidingHeap::~SlidingHeap() = default;
+
+bool SlidingHeap::grow() {
+    return false;
+}
+#else
+// the smallest reservation, so the heap can grow
+static constexpr size_t MIN_RESERVED_SIZE = (size_t)512 * 1024 * 1024;
 
 static void* reserve(size_t size) {
     void* const p = mmap(nullptr, size, PROT_NONE,
@@ -81,6 +132,22 @@ SlidingHeap::~SlidingHeap() {
     munmap(cards, pagelets);
 }
 
+bool SlidingHeap::grow() {
+    auto const size = (size_t)(top - bottom);
+    size_t const newSize = min(2 * size, reservedSize);
+    if (newSize == size) {
+        return false;
+    }
+    char* const newBottom = top - newSize;
+    if (mprotect(newBottom, (size_t)(bottom - newBottom),
+                 PROT_READ | PROT_WRITE) != 0) {
+        return false;
+    }
+    bottom = newBottom;
+    return true;
+}
+#endif
+
 void* SlidingHeap::AllocateObject(size_t size) {
     size = AllocationSize(size);
     if (size > (size_t)(allocation - bottom)) {
@@ -110,21 +177,6 @@ bool SlidingHeap::MakeRoomFor(size_t size) {
             return false;
         }
     }
-    return true;
-}
-
-bool SlidingHeap::grow() {
-    auto const size = (size_t)(top - bottom);
-    size_t const newSize = min(2 * size, reservedSize);
-    if (newSize == size) {
-        return false;
-    }
-    char* const newBottom = top - newSize;
-    if (mprotect(newBottom, (size_t)(bottom - newBottom),
-                 PROT_READ | PROT_WRITE) != 0) {
-        return false;
-    }
-    bottom = newBottom;
     return true;
 }
 
