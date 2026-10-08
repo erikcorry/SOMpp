@@ -1,6 +1,9 @@
 #include "IsValidObject.h"
 
 #include <assert.h>
+#ifndef FRUCTUS
+#include <new>
+#endif
 
 #ifndef FRUCTUS
 #include "../compiler/Variable.h"
@@ -200,89 +203,56 @@ bool IsSafeUnaryPrim(vm_oop_t obj) {
 }
 
 #ifndef FRUCTUS
+// Answers the vtable of T, read from an object made on the stack and destroyed
+// again. The collector never sees it, so it needn't be a valid SOM object.
+template <class T, class... Args>
+static void* vtable_of(Args... args) {
+    alignas(T) char storage[sizeof(T)];
+    T* const probe = ::new (storage) T(args...);
+    void* const vtable = get_vtable(probe);
+    probe->~T();
+    return vtable;
+}
+
 void obtain_vtables_of_known_classes(VMSymbol* someValidSymbol) {
-    // These objects are allocated on the heap. So, they will get GC'ed soon
-    // enough.
-    auto* arr = new (GetHeap<HEAP_CLS>(), 0) VMArray(0, 0);
-    vt_array = get_vtable(arr);
-
-    auto* vec =
-        new (GetHeap<HEAP_CLS>(), 0) VMVector(nullptr, nullptr, nullptr);
-    vt_vector = get_vtable(vec);
-
-    auto* blck = new (GetHeap<HEAP_CLS>(), 0) VMBlock(nullptr, nullptr);
-    vt_block = get_vtable(blck);
-
+    // The objects are made outside the heap. The constructors' write barriers
+    // do nothing, since the objects aren't old and IsValidObject() accepts
+    // anything until vt_symbol is set.
+    vt_array = vtable_of<VMArray>(0, 0);
+    vt_vector = vtable_of<VMVector>(nullptr, nullptr, nullptr);
+    vt_block = vtable_of<VMBlock>(nullptr, nullptr);
     vt_class = get_vtable(load_ptr(symbolClass));
-
-#ifndef FRUCTUS
-    auto* dbl = new (GetHeap<HEAP_CLS>(), 0) VMDouble(0.0);
-    vt_double = get_vtable(dbl);
-#endif
-
-    auto* ev = new (GetHeap<HEAP_CLS>(), 0) VMEvaluationPrimitive(1);
-    vt_eval_primitive = get_vtable(ev);
-
-    auto* i = new (GetHeap<HEAP_CLS>(), 0) VMInteger(0);
-    vt_integer = get_vtable(i);
-
-#ifndef FRUCTUS
-    auto* bi =
-        new (GetHeap<HEAP_CLS>(), 0) VMBigInteger("4611686018427387904", false);
-    vt_big_integer = get_vtable(bi);
-#endif
-
-#ifdef FRUCTUS
-    auto* mth = new (GetHeap<HEAP_CLS>(), 0) VMMethod(nullptr, 0, 0, 0);
-#else
-    auto* mth = new (GetHeap<HEAP_CLS>(), 0)
-        VMMethod(nullptr, 0, 0, 0, nullptr, nullptr);
-#endif
-    vt_method = get_vtable(mth);
+    vt_double = vtable_of<VMDouble>(0.0);
+    vt_eval_primitive = vtable_of<VMEvaluationPrimitive>(1);
+    vt_integer = vtable_of<VMInteger>(0);
+    vt_big_integer = vtable_of<VMBigInteger>("4611686018427387904", false);
     vt_object = get_vtable(load_ptr(nilObject));
 
-    auto* frm = new (GetHeap<HEAP_CLS>(), 0) VMFrame(0, mth, nullptr);
-    vt_frame = get_vtable(frm);
+    // the frame needs its method while it's made
+    alignas(VMMethod) char methodStorage[sizeof(VMMethod)];
+    auto* const mth =
+        ::new (methodStorage) VMMethod(nullptr, 0, 0, 0, nullptr, nullptr);
+    vt_method = get_vtable(mth);
+    vt_frame = vtable_of<VMFrame>(0, mth, nullptr);
+    mth->~VMMethod();
 
-    auto* prm =
-        new (GetHeap<HEAP_CLS>(), 0) VMPrimitive(someValidSymbol, FramePrim());
-    vt_primitive = get_vtable(prm);
+    vt_primitive = vtable_of<VMPrimitive>(someValidSymbol, FramePrim());
+    vt_safe_un_primitive =
+        vtable_of<VMSafeUnaryPrimitive>(someValidSymbol, UnaryPrim());
+    vt_safe_bin_primitive =
+        vtable_of<VMSafeBinaryPrimitive>(someValidSymbol, BinaryPrim());
+    vt_safe_ter_primitive =
+        vtable_of<VMSafeTernaryPrimitive>(someValidSymbol, TernaryPrim());
 
-    auto* sbp1 = new (GetHeap<HEAP_CLS>(), 0)
-        VMSafeUnaryPrimitive(someValidSymbol, UnaryPrim());
-    vt_safe_un_primitive = get_vtable(sbp1);
-
-    auto* sbp2 = new (GetHeap<HEAP_CLS>(), 0)
-        VMSafeBinaryPrimitive(someValidSymbol, BinaryPrim());
-    vt_safe_bin_primitive = get_vtable(sbp2);
-
-    auto* sbp3 = new (GetHeap<HEAP_CLS>(), 0)
-        VMSafeTernaryPrimitive(someValidSymbol, TernaryPrim());
-    vt_safe_ter_primitive = get_vtable(sbp3);
-
-#ifdef FRUCTUS
-  #define V
-#else
     vector<Variable> v;
-  #define V v,
-#endif
-    auto* lr = new (GetHeap<HEAP_CLS>(), 0)
-        VMLiteralReturn(someValidSymbol, V someValidSymbol);
-    vt_literal_return = get_vtable(lr);
+    vt_literal_return =
+        vtable_of<VMLiteralReturn>(someValidSymbol, v, someValidSymbol);
+    vt_global_return =
+        vtable_of<VMGlobalReturn>(someValidSymbol, v, someValidSymbol);
+    vt_getter = vtable_of<VMGetter>(someValidSymbol, v, 0);
+    vt_setter = vtable_of<VMSetter>(someValidSymbol, v, 0, 0);
 
-    auto* gr = new (GetHeap<HEAP_CLS>(), 0)
-        VMGlobalReturn(someValidSymbol, V someValidSymbol);
-    vt_global_return = get_vtable(gr);
-
-    auto* get = new (GetHeap<HEAP_CLS>(), 0) VMGetter(someValidSymbol, V 0);
-    vt_getter = get_vtable(get);
-
-    auto* set = new (GetHeap<HEAP_CLS>(), 0) VMSetter(someValidSymbol, V 0, 0);
-#undef V
-    vt_setter = get_vtable(set);
-
-    auto* str = new (GetHeap<HEAP_CLS>(), 0) VMString(0, nullptr);
-    vt_string = get_vtable(str);
+    vt_string = vtable_of<VMString>(0, nullptr);
     vt_symbol = get_vtable(someValidSymbol);
 }
 #endif

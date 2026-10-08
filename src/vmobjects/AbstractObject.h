@@ -70,6 +70,18 @@ public:
     som_int_t GetFieldIndex(VMSymbol* fieldName) const;
 #endif
 
+    /**
+     * Visits every reference the object holds, skipping any that may be
+     * nullptr. The collector also walks dead objects: the remembered set may
+     * hold them, and a minor collection after an object was diverted to old
+     * space walks all of old space. So from the constructor on, every
+     * reference this visits must hold a tagged integer or a pointer to an
+     * object that still exists. Allocated memory isn't zeroed, so the
+     * constructor sets them. The few it leaves (frame arguments, method
+     * bytecodes, the copied fields of an expanded array) are filled in with
+     * no allocation in between, so neither a collection nor an abandoned
+     * compilation sees them unset.
+     */
     virtual void WalkObjects(walk_heap_fn /*walk*/) {}
 
 #ifndef FRUCTUS
