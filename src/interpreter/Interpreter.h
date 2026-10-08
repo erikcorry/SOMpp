@@ -113,6 +113,14 @@ public:
      */
     bool SendUnknownGlobal(VMSymbol* globalName);
 
+#ifdef FRUCTUS
+    /**
+     * The error of a send of `selector`, a name, that an instance of cls
+     * doesn't understand, for primitives that refuse some receivers.
+     */
+    [[noreturn]] void DoesNotUnderstand(const char* selector, VMClass* cls);
+#endif
+
 private:
     vm_oop_t GetSelf();
 

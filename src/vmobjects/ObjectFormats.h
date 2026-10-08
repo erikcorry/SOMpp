@@ -57,8 +57,9 @@ inline som_int_t SmallIntHash(som_uint_t bits) {
 }
 
 /**
- * The hash of an object, which is its address: fructus' GC doesn't move
- * objects. Addresses are even, so the low bit is dropped.
+ * The hash of an object in the image, which is its address: the collector
+ * doesn't move those, but it moves the heap's, which have no hash, see
+ * objHashcode(). Addresses are even, so the low bit is dropped.
  */
 inline som_int_t AddressHash(const void* obj) {
     return SmallIntHash((som_uint_t)obj >> 1U);

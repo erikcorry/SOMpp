@@ -798,8 +798,12 @@ void Interpreter::sendMiss(uint8_t* site, VMClass* receiverClass) {
 // names, so this is in the form tools/fructus-trace translates.
 void Interpreter::triggerDoesNotUnderstand(VMSymbol* signature, VMClass* cls) {
     char selector[16];
-    char className[16];
     FormatTagged(selector, "sel", (uintptr_t)signature);
+    DoesNotUnderstand(selector, cls);
+}
+
+void Interpreter::DoesNotUnderstand(const char* selector, VMClass* cls) {
+    char className[16];
     FormatTagged(className, "class", (uintptr_t)cls);
     ErrorPrintf("ERROR: %s not understood by an instance of %s\n", selector,
                 className);

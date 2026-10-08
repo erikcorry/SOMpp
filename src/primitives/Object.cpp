@@ -31,7 +31,11 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "../interpreter/Interpreter.h"
 #include "../memory/Heap.h"
+#ifdef FRUCTUS
+#include "../memory/SlidingHeap.h"
+#endif
 #include "../vm/Globals.h"
 #include "../vm/Universe.h"  // NOLINT(misc-include-cleaner) it's required to make the types complete
 #include "../vmobjects/ObjectFormats.h"
@@ -56,6 +60,15 @@ vm_oop_t objHashcode(vm_oop_t self) {
     if (IS_TAGGED(self)) {
         return self;
     }
+#ifdef FRUCTUS
+    // Objects hash by their address, which only the image's objects keep:
+    // the collector moves the heap's, so they have no hashcode. Strings and
+    // integers hash by their contents, in their own primitives.
+    if (GetHeap<HEAP_CLS>()->Contains(self)) {
+        GetInterpreter()->DoesNotUnderstand("#hashcode",
+                                            AS_OBJ(self)->GetClass());
+    }
+#endif
     return NEW_INT(AS_OBJ(self)->GetHash());
 }
 
