@@ -115,11 +115,7 @@ public:
         zpCards[(uintptr_t)holder / SlidingLayout::PAGELET] =
             (uint8_t)(uintptr_t)zpCards;
 #else
-        // The host's cards cover only the heap, and objects outside it are
-        // made on the stack, to read their vtables.
-        if (!Contains(holder)) {
-            return;
-        }
+        assert(Contains(holder));
         cards[pageletIndex(holder)] = SlidingLayout::DIRTY_CARD;
 #endif
     }

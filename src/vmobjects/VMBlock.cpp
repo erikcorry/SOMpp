@@ -38,10 +38,7 @@ const int VMBlock::VMBlockNumberOfFields = 2;
 VMBlock::VMBlock(VMInvokable* method, VMFrame* context)
     : VMObject(VMBlockNumberOfFields, sizeof(VMBlock)),
       blockMethod(store_with_separate_barrier(method)),
-      context(store_with_separate_barrier(context)) {
-    write_barrier(this, method);
-    write_barrier(this, context);
-}
+      context(store_with_separate_barrier(context)) {}
 
 VMBlock* VMBlock::CloneForMovingGC() const {
     VMBlock* clone = nullptr;

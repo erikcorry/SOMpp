@@ -89,8 +89,6 @@ VMMethod::VMMethod(VMSymbol* signature, size_t bcCount, size_t numLocals,
 #ifdef BYTECODE_HEATMAP
     heatmap = new uint64_t[bcCount]();
 #endif
-
-    write_barrier(this, signature);
 }
 
 VMMethod* VMMethod::CloneForMovingGC() const {

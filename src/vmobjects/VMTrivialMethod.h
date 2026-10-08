@@ -84,10 +84,7 @@ public:
     VMLiteralReturn(VMSymbol* sig, TRIVIAL_ARGUMENTS_PARAM vm_oop_t literal)
         : VMTrivialMethod(sig TRIVIAL_ARGUMENTS),
           literal(store_with_separate_barrier(literal)),
-          numberOfArguments(Signature::GetNumberOfArguments(sig)) {
-        write_barrier(this, sig);
-        write_barrier(this, literal);
-    }
+          numberOfArguments(Signature::GetNumberOfArguments(sig)) {}
 #endif
 
     [[nodiscard]] inline size_t GetObjectSize() const override {
@@ -137,10 +134,7 @@ public:
     VMGlobalReturn(VMSymbol* sig, TRIVIAL_ARGUMENTS_PARAM VMSymbol* globalName)
         : VMTrivialMethod(sig TRIVIAL_ARGUMENTS),
           globalName(store_with_separate_barrier(globalName)),
-          numberOfArguments(Signature::GetNumberOfArguments(sig)) {
-        write_barrier(this, sig);
-        write_barrier(this, globalName);
-    }
+          numberOfArguments(Signature::GetNumberOfArguments(sig)) {}
 #endif
 
     [[nodiscard]] inline size_t GetObjectSize() const override {
@@ -191,9 +185,7 @@ public:
 #ifndef FRUCTUS
     VMGetter(VMSymbol* sig, TRIVIAL_ARGUMENTS_PARAM size_t fieldIndex)
         : VMTrivialMethod(sig TRIVIAL_ARGUMENTS), fieldIndex(fieldIndex),
-          numberOfArguments(Signature::GetNumberOfArguments(sig)) {
-        write_barrier(this, sig);
-    }
+          numberOfArguments(Signature::GetNumberOfArguments(sig)) {}
 #endif
 
     [[nodiscard]] inline size_t GetObjectSize() const override {
@@ -241,9 +233,7 @@ public:
              size_t argIndex)
         : VMTrivialMethod(sig TRIVIAL_ARGUMENTS), fieldIndex(fieldIndex),
           argIndex(argIndex),
-          numberOfArguments(Signature::GetNumberOfArguments(sig)) {
-        write_barrier(this, sig);
-    }
+          numberOfArguments(Signature::GetNumberOfArguments(sig)) {}
 #endif
 
     [[nodiscard]] inline size_t GetObjectSize() const override {

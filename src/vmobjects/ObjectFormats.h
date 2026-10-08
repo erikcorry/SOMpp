@@ -271,8 +271,10 @@ inline typename T::Stored* tmp_ptr(T* vm_val) {
     return (typename T::Stored*)vm_val;
 }
 
-/** To store object a field, needs special care to correctly call
- * `write_barrier()` separately. */
+/** To store an object into a field, which needs `write_barrier()` called
+ * separately, or to initialize a field of a new object, which doesn't: a
+ * new object is young, so no collection needs to remember what it points to.
+ */
 template <typename T>
 inline typename T::Stored* store_with_separate_barrier(T* vm_val) {
     return (typename T::Stored*)vm_val;

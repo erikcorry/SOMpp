@@ -13,10 +13,8 @@
   #include "../vm/Universe.h"
   #include "../vmobjects/ObjectFormats.h"
   #include "../vmobjects/VMArray.h"
-  #include "../vmobjects/VMBlock.h"
   #include "../vmobjects/VMClass.h"
   #include "../vmobjects/VMDouble.h"
-  #include "../vmobjects/VMEvaluationPrimitive.h"
   #include "../vmobjects/VMFrame.h"
   #include "../vmobjects/VMInteger.h"
   #include "../vmobjects/VMMethod.h"
@@ -68,31 +66,6 @@ void WriteBarrierTest::testWriteArray() {
                    load_ptr(nilObject));
 }
 
-void WriteBarrierTest::testWriteBlock() {
-    if (!DEBUG) {
-        CPPUNIT_FAIL(
-            "WriteBarrier tests only work in DEBUG builds for speed reasons");
-    }
-
-    // reset set...
-    GetHeap<HEAP_CLS>()->writeBarrierCalledOn.clear();
-
-    VMSymbol* methodSymbol = NewSymbol("someMethod");
-
-    vector<BackJump> inlinedLoops;
-    VMMethod* method = Universe::NewMethod(
-        methodSymbol, 0, 0, 0, new LexicalScope(nullptr, {}, {}), inlinedLoops);
-
-    VMBlock* block = Universe::NewBlock(method, GetInterpreter()->GetFrame(),
-                                        method->GetNumberOfArguments());
-    TEST_WB_CALLED("VMBlock failed to call writeBarrier when creating", block,
-                   block->GetClass());
-    TEST_WB_CALLED("VMBlock failed to call writeBarrier when creating", block,
-                   block->GetMethod());
-    TEST_WB_CALLED("VMBlock failed to call writeBarrier when creating", block,
-                   block->GetContext());
-}
-
 void WriteBarrierTest::testWriteFrame() {
     if (!DEBUG) {
         CPPUNIT_FAIL(
@@ -126,20 +99,6 @@ void WriteBarrierTest::testWriteMethod() {
     method->SetHolder(load_ptr(integerClass));
     TEST_WB_CALLED("VMMethod failed to call writeBarrier on SetHolder", method,
                    load_ptr(integerClass));
-}
-
-void WriteBarrierTest::testWriteEvaluationPrimitive() {
-    if (!DEBUG) {
-        CPPUNIT_FAIL(
-            "WriteBarrier tests only work in DEBUG builds for speed reasons");
-    }
-
-    // reset set...
-    GetHeap<HEAP_CLS>()->writeBarrierCalledOn.clear();
-    auto* evPrim = new (GetHeap<HEAP_CLS>(), 0) VMEvaluationPrimitive(1);
-    TEST_WB_CALLED(
-        "VMEvaluationPrimitive failed to call writeBarrier when creating",
-        evPrim, evPrim->GetClass());
 }
 
 void WriteBarrierTest::testWriteClass() {

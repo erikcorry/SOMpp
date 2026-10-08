@@ -22,7 +22,6 @@ VMVector::VMVector(vm_oop_t first, vm_oop_t last, VMArray* storage)
       last(store_with_separate_barrier(last)),
       storage(store_with_separate_barrier(storage)) {
     static_assert(VMVectorNumberOfFields == 3);
-    write_barrier(this, storage);
 }
 
 #ifndef FRUCTUS

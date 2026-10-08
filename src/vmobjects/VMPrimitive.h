@@ -41,9 +41,8 @@ public:
     static VMInvokable* GetEmptyPrimitive(VMSymbol* sig, bool classSide);
     static VMInvokable* GetFramePrim(VMSymbol* sig, FramePrim prim);
 
-    VMPrimitive(VMSymbol* sig, FramePrim prim) : VMInvokable(sig), prim(prim) {
-        write_barrier(this, sig);
-    }
+    VMPrimitive(VMSymbol* sig, FramePrim prim)
+        : VMInvokable(sig), prim(prim) {}
 
     [[nodiscard]] VMClass* GetClass() const final {
         return load_ptr(primitiveClass);

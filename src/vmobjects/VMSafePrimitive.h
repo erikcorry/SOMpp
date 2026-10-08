@@ -39,9 +39,7 @@ public:
     typedef GCSafeUnaryPrimitive Stored;
 
     VMSafeUnaryPrimitive(VMSymbol* sig, UnaryPrim prim)
-        : VMSafePrimitive(sig), prim(prim) {
-        write_barrier(this, sig);
-    }
+        : VMSafePrimitive(sig), prim(prim) {}
 
     [[nodiscard]] inline size_t GetObjectSize() const override {
         return sizeof(VMSafeUnaryPrimitive);
@@ -75,9 +73,7 @@ public:
     typedef GCSafeBinaryPrimitive Stored;
 
     VMSafeBinaryPrimitive(VMSymbol* sig, BinaryPrim prim)
-        : VMSafePrimitive(sig), prim(prim) {
-        write_barrier(this, sig);
-    }
+        : VMSafePrimitive(sig), prim(prim) {}
 
     [[nodiscard]] inline size_t GetObjectSize() const override {
         return sizeof(VMSafeBinaryPrimitive);
@@ -111,9 +107,7 @@ public:
     typedef GCSafeTernaryPrimitive Stored;
 
     VMSafeTernaryPrimitive(VMSymbol* sig, TernaryPrim prim)
-        : VMSafePrimitive(sig), prim(prim) {
-        write_barrier(this, sig);
-    }
+        : VMSafePrimitive(sig), prim(prim) {}
 
     [[nodiscard]] inline size_t GetObjectSize() const override {
         return sizeof(VMSafeTernaryPrimitive);
