@@ -65,6 +65,11 @@ constexpr size_t MARK_STACK_ENTRIES = 128;
  * inlined barrier needs no register for the value it stores.
  */
 constexpr uint8_t DIRTY_CARD = 0;
+#ifndef FRUCTUS
+// VMObjectBase.h's MASK_OBJECT_IS_OLD and MASK_SEEN_BY_WRITE_BARRIER
+constexpr size_t OLD = 1U << 1U;
+constexpr size_t SEEN = 1U << 2U;
+#endif
 #ifdef FRUCTUS
 /** zp_hi, the half of the zero page above its base. */
 constexpr uintptr_t FRUCTUS_CARDS = 0x200;
@@ -99,15 +104,22 @@ public:
     }
 
     /**
-     * Remembers that `holder` may point into young space now. It filters
-     * only the small integers, so it doesn't need to know where young space
-     * is.
+     * Remembers that `holder` may point into young space now.
+     *
+     * On the host, like the generational heap's barrier, it uses the GC
+     * field in the holder's header: only an old holder that isn't remembered
+     * yet gets its card dirtied, and is then SEEN until the next collection.
+     * That branch nearly always goes the same way, and the header is in the
+     * cache, since a field of the holder was just written.
+     *
+     * Fructus has no GC field, so its barrier filters only the small
+     * integers, and doesn't need to know where young space is.
      */
     void writeBarrier(const void* holder, const void* value) {
+#ifdef FRUCTUS
         if (IS_TAGGED(value)) {
             return;
         }
-#ifdef FRUCTUS
         // The cards are zp_hi, which cover all 64K, so any holder has one.
         // Their address is the zero page base, and its low byte is 0, so the
         // base register is all the barrier needs.
@@ -115,7 +127,16 @@ public:
         zpCards[(uintptr_t)holder / SlidingLayout::PAGELET] =
             (uint8_t)(uintptr_t)zpCards;
 #else
+        (void)value;
+        // the GC field follows the vtable, as GenerationalHeap's barrier has
+        // it, since VMObjectBase.h can't be included here
+        auto* const gcField = (size_t*)holder + 1;
+        if ((*gcField & (SlidingLayout::OLD | SlidingLayout::SEEN)) !=
+            SlidingLayout::OLD) {
+            return;
+        }
         assert(Contains(holder));
+        *gcField |= SlidingLayout::SEEN;
         cards[pageletIndex(holder)] = SlidingLayout::DIRTY_CARD;
 #endif
     }

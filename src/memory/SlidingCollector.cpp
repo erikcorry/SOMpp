@@ -148,9 +148,11 @@ static void drainMarkStack() {
 /**
  * Walks the old objects that start in dirty cards: those that may point into
  * young space. In the pagelet that young space ends in, the objects below
- * oldBottom are young, and are left out.
+ * oldBottom are young, and are left out. With `forget`, the barrier
+ * forgets that it saw them, as the cards are cleared.
  */
-static void walkDirtyCards(walk_heap_fn walk, bool drain) {
+static void walkDirtyCards(walk_heap_fn walk, bool drain,
+                           [[maybe_unused]] bool forget) {
     size_t const end = theHeap->pageletIndex(theHeap->top);
     for (size_t pagelet = theHeap->pageletIndex(theHeap->oldBottom);
          pagelet < end; pagelet++) {
@@ -168,6 +170,12 @@ static void walkDirtyCards(walk_heap_fn walk, bool drain) {
         while (p < pageletEnd && p < theHeap->top) {
             auto* obj = (AbstractVMObject*)p;
             obj->WalkObjects(walk);
+#ifndef FRUCTUS
+            // the barrier sees it again
+            if (forget) {
+                obj->SetGCField(OLD);
+            }
+#endif
             if (drain) {
                 drainMarkStack();
             }
@@ -185,7 +193,7 @@ void SlidingCollector::markLiveObjects(bool major) {
     Universe::WalkGlobals(mark_object);
     drainMarkStack();
     if (!major) {
-        walkDirtyCards(mark_object, /*drain=*/true);
+        walkDirtyCards(mark_object, /*drain=*/true, /*forget=*/false);
     }
     while (markStackOverflowed) {
         markStackOverflowed = false;
@@ -222,6 +230,10 @@ void SlidingCollector::rescanGrayPagelets() {
 #ifndef FRUCTUS
 /** After a collection, the host's heap grows until it has this much room. */
 static constexpr size_t MIN_YOUNG_SPACE = (size_t)1024 * 1024;
+#endif
+
+#ifndef FRUCTUS
+static_assert(OLD == MASK_OBJECT_IS_OLD && SEEN == MASK_SEEN_BY_WRITE_BARRIER);
 #endif
 
 static constexpr size_t GRANULES_PER_COUNT = MARK_BITS * MARK_WORDS_PER_COUNT;
@@ -323,6 +335,10 @@ void SlidingCollector::slide() {
         for (char* p = to; p < destination;) {
             auto* obj = (AbstractVMObject*)p;
             obj->WalkObjects(update_pointer);
+#ifndef FRUCTUS
+            // it's old now, and the barrier hasn't seen it
+            obj->SetGCField(OLD);
+#endif
             size_t const pagelet = theHeap->pageletIndex(p);
             if (pagelet != lastPagelet) {
                 theHeap->setObjectStart(p);
@@ -381,7 +397,7 @@ void SlidingCollector::Collect() {
     // Old objects don't move, and the mark bits say where the objects they
     // point to go, so they can be updated before the slide.
     if (!major) {
-        walkDirtyCards(update_pointer, /*drain=*/false);
+        walkDirtyCards(update_pointer, /*drain=*/false, /*forget=*/true);
     }
     slide();
     // the mark bits say where the objects were, to update the roots with
@@ -474,6 +490,9 @@ void SlidingCollector::verify() {
     for (char* p = theHeap->allocation; p < theHeap->top;) {
         auto* obj = (AbstractVMObject*)p;
         assert(IsValidObject(obj));
+  #ifndef FRUCTUS
+        assert(obj->GetGCField() == OLD);
+  #endif
         verifiedObject = p;
         verifiedObjectEnd = p + objectSize(obj);
         obj->WalkObjects(check_pointer);
