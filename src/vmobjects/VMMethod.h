@@ -146,7 +146,7 @@ public:
      * The bytecodes come right after numberOfArguments, an odd offset, since
      * the bytecodes don't need aligning. ImageFructus.cpp checks it.
      */
-    static constexpr size_t headerSize = 11;
+    static constexpr size_t headerSize = 9;
 
     [[nodiscard]] inline size_t GetObjectSize() const override {
         return PADDED_SIZE(headerSize + bcLength);

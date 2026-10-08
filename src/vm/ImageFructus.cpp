@@ -154,7 +154,6 @@ void FructusImage::CheckLayout() {
     static_assert(VMTAGGEDINTEGER_MIN == L::smallIntMin, "small integers");
     static_assert(VMTAGGEDINTEGER_MAX == L::smallIntMax, "small integers");
 
-    CHECK_FIELD(VMObject, gcField, gcField);
     CHECK_FIELD(VMObject, totalObjectSize, VMObject_totalObjectSize);
     CHECK_FIELD(VMObject, numberOfFields, VMObject_numberOfFields);
     CHECK_FIELD(VMObject, clazz, VMObject_clazz);
@@ -168,12 +167,10 @@ void FructusImage::CheckLayout() {
 
     CHECK_SIZE(VMArray, L::VMArray_size);
 
-    CHECK_FIELD(VMInteger, gcField, gcField);
     CHECK_FIELD(VMInteger, embeddedInteger, VMInteger_value);
     static_assert(sizeof(som_box_int_t) == L::VMInteger_valueSize);
     CHECK_SIZE(VMInteger, L::VMInteger_size);
 
-    CHECK_FIELD(VMString, gcField, gcField);
     CHECK_FIELD(VMString, length, VMString_length);
     CHECK_FIELD(VMString, chars, VMString_chars);
     CHECK_SIZE(VMString, L::VMString_size);
@@ -186,7 +183,6 @@ void FructusImage::CheckLayout() {
     static_assert(SendSite::Target(BC_SEND_1) == L::SendSite_unaryTarget);
     static_assert(SendSite::Length(BC_SEND_1) == L::SendSite_unaryLength);
 
-    CHECK_FIELD(VMInvokable, gcField, gcField);
     CHECK_FIELD(VMInvokable, signature, VMInvokable_signature);
 
     CHECK_FIELD(VMMethod, bcLength, VMMethod_bcLength);

@@ -82,34 +82,33 @@ constexpr size_t word = 2;
 /** A vtable pointer points past the offset-to-top and RTTI words. */
 constexpr size_t vtableOffset = 2 * word;
 
-constexpr size_t gcField = 2;
-
-// objects hash by their address, so there is no hash field
-constexpr size_t VMObject_totalObjectSize = 4;
-constexpr size_t VMObject_numberOfFields = 6;
-constexpr size_t VMObject_clazz = 8;
-constexpr size_t VMObject_size = 10;
+// There is no GC field, and objects hash by their address, so there is no
+// hash field: the fields follow the vtable.
+constexpr size_t VMObject_totalObjectSize = 2;
+constexpr size_t VMObject_numberOfFields = 4;
+constexpr size_t VMObject_clazz = 6;
+constexpr size_t VMObject_size = 8;
 
 // no name: classes have none
 /** The number of fields, tagged: the image has no field names. */
-constexpr size_t VMClass_numberOfInstanceFields = 10;
-constexpr size_t VMClass_instanceInvokables = 12;
-constexpr size_t VMClass_superClass = 14;
-constexpr size_t VMClass_size = 16;
+constexpr size_t VMClass_numberOfInstanceFields = 8;
+constexpr size_t VMClass_instanceInvokables = 10;
+constexpr size_t VMClass_superClass = 12;
+constexpr size_t VMClass_size = 14;
 
-constexpr size_t VMArray_size = 10;
+constexpr size_t VMArray_size = 8;
 
 /**
  * An integer that isn't a small one, with 64 bits that wrap around, see
  * som_box_int_t.
  */
-constexpr size_t VMInteger_value = 4;
+constexpr size_t VMInteger_value = 2;
 constexpr size_t VMInteger_valueSize = 8;
-constexpr size_t VMInteger_size = 12;
+constexpr size_t VMInteger_size = 10;
 
-constexpr size_t VMString_length = 4;
-constexpr size_t VMString_chars = 6;
-constexpr size_t VMString_size = 8;
+constexpr size_t VMString_length = 2;
+constexpr size_t VMString_chars = 4;
+constexpr size_t VMString_size = 6;
 
 /**
  * A selector, or the name of a global, is a number, not an object, see
@@ -118,32 +117,32 @@ constexpr size_t VMString_size = 8;
  */
 constexpr size_t selectorLimit = 0x1000;
 
-constexpr size_t VMInvokable_signature = 4;
+constexpr size_t VMInvokable_signature = 2;
 // no holder: the image writer links the super sends, see Interpreter.cpp
 
-constexpr size_t VMMethod_bcLength = 6;
-constexpr size_t VMMethod_numberOfLocals = 8;
-constexpr size_t VMMethod_maximumNumberOfStackElements = 9;
-constexpr size_t VMMethod_numberOfArguments = 10;
+constexpr size_t VMMethod_bcLength = 4;
+constexpr size_t VMMethod_numberOfLocals = 6;
+constexpr size_t VMMethod_maximumNumberOfStackElements = 7;
+constexpr size_t VMMethod_numberOfArguments = 8;
 /** The bytecodes come right after the header, unaligned. */
-constexpr size_t VMMethod_size = 11;
+constexpr size_t VMMethod_size = 9;
 
-constexpr size_t VMLiteralReturn_literal = 6;
-constexpr size_t VMLiteralReturn_numberOfArguments = 8;
-constexpr size_t VMLiteralReturn_size = 10;
+constexpr size_t VMLiteralReturn_literal = 4;
+constexpr size_t VMLiteralReturn_numberOfArguments = 6;
+constexpr size_t VMLiteralReturn_size = 8;
 
-constexpr size_t VMGlobalReturn_globalName = 6;
-constexpr size_t VMGlobalReturn_numberOfArguments = 8;
-constexpr size_t VMGlobalReturn_size = 10;
+constexpr size_t VMGlobalReturn_globalName = 4;
+constexpr size_t VMGlobalReturn_numberOfArguments = 6;
+constexpr size_t VMGlobalReturn_size = 8;
 
-constexpr size_t VMGetter_fieldIndex = 6;
-constexpr size_t VMGetter_numberOfArguments = 8;
-constexpr size_t VMGetter_size = 10;
+constexpr size_t VMGetter_fieldIndex = 4;
+constexpr size_t VMGetter_numberOfArguments = 6;
+constexpr size_t VMGetter_size = 8;
 
-constexpr size_t VMSetter_fieldIndex = 6;
-constexpr size_t VMSetter_argIndex = 8;
-constexpr size_t VMSetter_numberOfArguments = 10;
-constexpr size_t VMSetter_size = 12;
+constexpr size_t VMSetter_fieldIndex = 4;
+constexpr size_t VMSetter_argIndex = 6;
+constexpr size_t VMSetter_numberOfArguments = 8;
+constexpr size_t VMSetter_size = 10;
 
 /**
  * A send bytecode and its inline cache, see interpreter/SendSite.h. A unary
@@ -161,13 +160,13 @@ constexpr size_t SendSite_unaryLength = 5;
  * VMPrimitive has the number of arguments too, which a VMSafe*Primitive's
  * kind gives.
  */
-constexpr size_t VMPrimitive_prim = 6;
-constexpr size_t VMPrimitive_numberOfArguments = 8;
-constexpr size_t VMPrimitive_size = 10;
-constexpr size_t VMSafePrimitive_size = 8;
+constexpr size_t VMPrimitive_prim = 4;
+constexpr size_t VMPrimitive_numberOfArguments = 6;
+constexpr size_t VMPrimitive_size = 8;
+constexpr size_t VMSafePrimitive_size = 6;
 
-constexpr size_t VMEvaluationPrimitive_numberOfArguments = 6;
-constexpr size_t VMEvaluationPrimitive_size = 8;
+constexpr size_t VMEvaluationPrimitive_numberOfArguments = 4;
+constexpr size_t VMEvaluationPrimitive_size = 6;
 
 /**
  * Small integers are tagged, so they have 15 bits. Other integers are a

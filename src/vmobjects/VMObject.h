@@ -147,15 +147,15 @@ public:
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Winvalid-offsetof"
         constexpr size_t word = sizeof(void*);
+#ifdef FRUCTUS
+        // there is no GC field or hash field, see FructusLayout
+        constexpr size_t fieldsFrom = word;
+#else
         static_assert(
             offsetof(VMObject, gcField) == word,
             "vtable ptr should push gcField to offset 1 word. If "
             "this fails, please update the offsets in the VMObject structure "
             "at the top of this file accordingly.");
-#ifdef FRUCTUS
-        // there is no hash field, see FructusLayout
-        constexpr size_t fieldsFrom = 2 * word;
-#else
         static_assert(offsetof(VMObject, hash) == 2 * word,
                       "hash should be at offset 2 words");
         constexpr size_t fieldsFrom = 3 * word;

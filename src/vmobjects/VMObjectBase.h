@@ -11,16 +11,22 @@
 class VMObjectBase : public VMOop {
     friend class FructusImage;
 
+#ifndef FRUCTUS
+    // fructus's collector keeps what it needs in tables of its own
 protected:
     size_t gcField{0};
 
 public:
     [[nodiscard]] inline size_t GetGCField() const;
     inline void SetGCField(size_t /*val*/);
+#endif
+
+public:
     VMObjectBase() : VMOop() {}
     ~VMObjectBase() override = default;
 };
 
+#ifndef FRUCTUS
 size_t VMObjectBase::GetGCField() const {
     return gcField;
 }
@@ -35,3 +41,4 @@ void VMObjectBase::SetGCField(size_t val) {
 #endif
     gcField = val;
 }
+#endif

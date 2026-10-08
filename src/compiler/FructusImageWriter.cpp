@@ -689,7 +689,6 @@ void FructusImage::AsmFile::write(AbstractVMObject* obj, const std::string& labe
 void FructusImage::AsmFile::writeHeader(ObjectWriter& w, const std::string& vtable,
                           const std::string& comment) {
     w.Word(0, vtable, comment);
-    w.Word(L::gcField, 0, "gcField");
 }
 
 /** The fields of every class on the host, see VMClass::VMClassNumberOfFields. */

@@ -781,10 +781,11 @@ VMArray* Universe::NewArray(size_t size) {
         AbandonIfCompiling();
         return nullptr;
     }
-    // NOLINTNEXTLINE(misc-redundant-expression)
-    if ((GC_TYPE == GENERATIONAL) && outsideNursery) {
+#if GC_TYPE == GENERATIONAL
+    if (outsideNursery) {
         result->SetGCField(MASK_OBJECT_IS_OLD);
     }
+#endif
 
     result->SetClass(load_ptr(arrayClass));
 
@@ -813,10 +814,11 @@ VMArray* Universe::NewExpandedArrayFromArray(size_t size, VMArray* array) {
         AbandonIfCompiling();
         return nullptr;
     }
-    // NOLINTNEXTLINE(misc-redundant-expression)
-    if ((GC_TYPE == GENERATIONAL) && outsideNursery) {
+#if GC_TYPE == GENERATIONAL
+    if (outsideNursery) {
         result->SetGCField(MASK_OBJECT_IS_OLD);
     }
+#endif
 
     result->SetClass(load_ptr(arrayClass));
 
