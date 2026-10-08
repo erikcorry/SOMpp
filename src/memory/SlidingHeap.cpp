@@ -20,6 +20,21 @@ static constexpr size_t roundUp(size_t n, size_t unit) {
     return (n + unit - 1) / unit * unit;
 }
 
+/**
+ * The mark words of a heap of `size` bytes, in whole groups of a live count,
+ * since the counting reads whole groups. Those past the top stay clear.
+ */
+static constexpr size_t markWordsFor(size_t size) {
+    return roundUp(size / GRANULE / MARK_BITS, MARK_WORDS_PER_COUNT);
+}
+
+/** The live counts' table, which is the mark stack too. */
+static constexpr size_t liveCountEntries(size_t markWords) {
+    // and one for the end
+    size_t const counts = markWords / MARK_WORDS_PER_COUNT + 1;
+    return counts > MARK_STACK_ENTRIES ? counts : MARK_STACK_ENTRIES;
+}
+
 #ifdef FRUCTUS
 // The region the linker leaves between the stack and the program, see
 // ld/fructus-sim.ld in the fructus repository: the heap and its tables.
@@ -29,9 +44,9 @@ extern "C" char __heap_end[];
 /** The bytes of the side tables of a heap of `size` bytes. */
 static constexpr size_t tablesSize(size_t size) {
     size_t const pagelets = size / PAGELET;
-    size_t const markWords = size / GRANULE / MARK_BITS;
+    size_t const markWords = markWordsFor(size);
     return pagelets + markWords * sizeof(MarkWord) +
-           (markWords / MARK_WORDS_PER_COUNT + 1) * sizeof(size_t) +
+           liveCountEntries(markWords) * sizeof(size_t) +
            roundUp(pagelets, 8) / 8;
 }
 
@@ -43,20 +58,20 @@ static void* takeTable(char** free, size_t size) {
 }
 
 // The heap can't grow. It takes what the linker left below the program, with
-// its tables first. Its base is 256 aligned, so that firstObjectIn() can
-// rebuild an address from its low byte, and its cards are zp_hi's, which
-// cover all 64K, so the barrier indexes them by the address alone.
+// its tables first. Its pagelets are aligned, so that firstObjectIn() can
+// rebuild an address from its low byte, and so that the heap's cards are
+// those of zp_hi that the barrier indexes by the address alone.
 static char collectorStorage[sizeof(SlidingCollector)]
     __attribute__((aligned(alignof(SlidingCollector))));
 
 SlidingHeap::SlidingHeap(size_t /*objectSpaceSize*/)
     : Heap<SlidingHeap>(new (collectorStorage) SlidingCollector(this)) {
-    top = (char*)((uintptr_t)__heap_end & ~(uintptr_t)255);
+    top = (char*)((uintptr_t)__heap_end & ~(uintptr_t)(PAGELET - 1));
     auto const region = (size_t)(top - __heap_start);
-    size_t size = region & ~(size_t)255;
+    size_t size = region & ~(size_t)(PAGELET - 1);
     // the tables round up to words, a few bytes each
     while (tablesSize(size) + 4 * sizeof(size_t) + size > region) {
-        size -= 256;
+        size -= PAGELET;
     }
     reservedSize = size;
     base = top - size;
@@ -65,16 +80,15 @@ SlidingHeap::SlidingHeap(size_t /*objectSpaceSize*/)
     oldBottom = top;
 
     size_t const pagelets = size / PAGELET;
-    size_t const markWords = size / GRANULE / MARK_BITS;
+    size_t const markWords = markWordsFor(size);
     char* free = __heap_start;
     objectStarts = static_cast<uint8_t*>(takeTable(&free, pagelets));
     memset(objectStarts, NO_OBJECT_START, pagelets);
     markBits = static_cast<MarkWord*>(
         takeTable(&free, markWords * sizeof(MarkWord)));
     memset(markBits, 0, markWords * sizeof(MarkWord));
-    size_t const counts = markWords / MARK_WORDS_PER_COUNT + 1;
-    liveCounts =
-        static_cast<size_t*>(takeTable(&free, counts * sizeof(size_t)));
+    liveCounts = static_cast<size_t*>(
+        takeTable(&free, liveCountEntries(markWords) * sizeof(size_t)));
     grayBits =
         static_cast<uint8_t*>(takeTable(&free, roundUp(pagelets, 8) / 8));
     memset(grayBits, 0, roundUp(pagelets, 8) / 8);
@@ -133,7 +147,7 @@ SlidingHeap::SlidingHeap(size_t objectSpaceSize)
     markBits =
         static_cast<MarkWord*>(allocateTable(markWords * sizeof(MarkWord)));
     liveCounts = static_cast<size_t*>(
-        allocateTable((markWords / MARK_WORDS_PER_COUNT + 1) * sizeof(size_t)));
+        allocateTable(liveCountEntries(markWords) * sizeof(size_t)));
     grayBits = static_cast<uint8_t*>(allocateTable(roundUp(pagelets, 8) / 8));
     cards = static_cast<uint8_t*>(allocateTable(pagelets));
     memset(cards, CLEAN_CARD, pagelets);
@@ -150,7 +164,7 @@ SlidingHeap::~SlidingHeap() {
     munmap(base, reservedSize);
     munmap(objectStarts, pagelets);
     munmap(markBits, markWords * sizeof(MarkWord));
-    munmap(liveCounts, (markWords / MARK_WORDS_PER_COUNT + 1) * sizeof(size_t));
+    munmap(liveCounts, liveCountEntries(markWords) * sizeof(size_t));
     munmap(grayBits, roundUp(pagelets, 8) / 8);
     munmap(cards, pagelets);
 }

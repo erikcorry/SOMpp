@@ -23,10 +23,10 @@
 
 using namespace SlidingLayout;
 
-// The collection in progress. On fructus the mark stack will have a fixed
-// place in memory, which it shares with the live counts.
+// The collection in progress. The mark stack is the live counts' table,
+// which isn't used until the marking is done.
 static SlidingHeap* theHeap;
-static AbstractVMObject* markStack[MARK_STACK_ENTRIES];
+static AbstractVMObject** markStack;
 static size_t markStackSize;
 static size_t markStackLimit;
 static bool markStackOverflowed;
@@ -188,6 +188,8 @@ static void walkDirtyCards(walk_heap_fn walk, bool drain,
 }
 
 void SlidingCollector::markLiveObjects(bool major) {
+    static_assert(sizeof(AbstractVMObject*) == sizeof(size_t));
+    markStack = (AbstractVMObject**)theHeap->liveCounts;
     markStackSize = 0;
     // so that stress mode tests the overflows
     markStackLimit = gcStressMode ? 4 : MARK_STACK_ENTRIES;
