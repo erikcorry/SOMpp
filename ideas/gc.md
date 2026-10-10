@@ -1,40 +1,9 @@
 # GC plan for SOM++ on Fructus
 
-## Decisions (2026-10-08)
-
-* No fixed old-young boundary: the young space is everything below the
-  lowest old object, wherever that is.  The write barrier ideas that assume a
-  fixed boundary (bit-fiddling, "only filter on the stored value") are ruled
-  out.  The barrier marks the holder's byte for every store that isn't a
-  small integer or an immortal, or for every store.
-* Instant promotion: every collection promotes all survivors, so afterwards
-  the young space is empty and the remembered set is clear.  There is no
-  remembered set upkeep during a collection.
-* The remembered set covers the whole 64k, 512 bytes, so the barrier needs no
-  bounds check.  The top half covers the image above the heap.  The image
-  writer puts the image objects that can hold heap pointers (class objects and
-  so on) in a section the linker gives start and stop symbols for, and a
-  minor collection walks that list as roots, using the bytes of the top half
-  as a filter: it scans only the objects whose byte is marked.
-* Sliding doesn't use object_starts: it scans the mark bits down for a run of
-  1s.  The bottom of a run is an object start, since the whole extent of
-  objects is marked.  The run moves up as a block (overlapping, so a memmove,
-  or a descending ldm/stm copy, postponed), then its objects are scanned
-  forwards to update their pointers and object_starts: the first object in
-  each pagelet in a run writes the pagelet's entry, and a lower run may
-  overwrite what a higher run wrote.  Then the next run down.
-* Interior pointers (a frame's locals and stack pointer) move with their
-  object, by the run's distance.
-* Unreachable old objects are walked (the remembered set scan can't know which
-  old objects are reachable, and the gray pagelet rescan steps over unmarked
-  objects by their size), but no object known to be dead is.
-* Hash codes on fructus are a virtual method that not all objects have, like
-  Dart.  Image objects don't move, so they can hash by address.
-* Fructus has popcount (and bitrev and clz).
-* The host build has the same GC as a GC_TYPE, for testing, with the same
-  128-byte pagelets (object_starts stores one byte), and the granule, mark
-  word and heap size scaled.  The host heap is page aligned, reserved with
-  mmap and committed with mprotect.
+SOM++ on Fructus is a fork of SOM++, optimized for the semi-fictional
+16 bit ISA, Fructus, github.com/erikcorry/fructus .  Reflection features are
+removed and we run on a cut down libc/OS that has no malloc heap.  Goals
+of the GC:
 
 * No allocation during GC - no unexpected OOM
 * Don't waste memory on semispaces
@@ -50,21 +19,18 @@ Compromises
 * All objects need a header
 
 Loosely based on Palcom, Dartino, Toit GCs.  Related to DartVM GC.
-Related to some research GC the name of which I've forgotten.
+Related to some research GC the name of which I've forgotten (TODO).
 
 Based on pagelets of 128 bytes and a max heap extent of the 0-32k range.
 Heap area assumed contiguous (can work with non-contiguous, but much
-higher complexity).
+higher complexity).  On host (mainly for testing) the heap is also
+contiguous in virtual memory.
 
 ## object_starts
 
 We maintain an object_starts byte array, one entry per 128-byte pagelet (256
-bytes for the 32k extent).
-It's at 0x300, which is in the ZP.  When the interpreter is
-written in assembler we expect to have a register pointing at 0x200 to
-access all the zp objects with imm10 addressing.  The point of object_starts
-is that we can always iterate a small part of the heap by starting at a known
-object boundary.
+bytes cover the 32k extent).  The point of object_starts is that we can always
+iterate a small part of the heap by starting at a known object boundary.
 
 On every allocation we write the low byte of the address of the new object to
 the object_starts array.  Since objects are tagged with 0 this will always be
@@ -72,41 +38,52 @@ an even number, so we initialize with 1 or -1 to indicate no known objects
 start on the pagelet. Since allocation and compaction goes from high to low
 address, the address in the object_starts array is always the first object on the
 pagelet!  Since a pagelet is less than 256 bytes we only need the low byte 
-of the address to determine the address of the first object.
+of the address to determine the address of the first object in each pagelet.
 
 Allocations are expected to be both in the interpreter and in C++ code.
+
+Object_starts is in the 1024 byte "zero page" area.  When the interpreter is
+written in assembler we expect to have a register pointing at the zp base to
+access all the zp objects with imm10 addressing.
 
 ## Allocation
 
 A bump allocator goes down. At any time it points at the latest object
 allocated.  Normally allocation will start at 32k.
 
-(Need to fix SOM++ to do a GC on any allocation!)
+The Fructus SOM++ fork has been modified to trigger a GC on any non-compiler
+non-reflective allocation.
 
 ## Write barrier and remembered_set
 
 We remember which old space objects might contain pointers to young space
-so we can minimize the scanning for minor GCs.
+so we can minimize the scanning for minor GCs, using a card marking scheme.
 
 A byte per pagelet determines if the pagelet contains objects in the remembered
 set.  Normally we expect 256 bytes to be enough. A 0 indicates being in the
 set, which reduces register pressure since the base register is always 0 in its
 low 8 bits.
 
+On Fructus there's no gc field in the object, so we write to the remembered
+set based only on the addresses/tagging of the pointers involved.  On host
+sliding GC the gc field is preserved and we can use a flag there to avoid
+repeatedly updating the remembered set for an object.
+
 ## Updating the remembered set
 
-Several ideas considered. The remembered set has backing even for young
+Several ideas considered. Spoiler: The current implmentation uses the last
+one, "Only filter on the stored value".
+
+The remembered set has backing even for young
 space so we don't strictly need to avoid recording stores in young space.
 
-I think I like the "Only filter on the stored value" variant below.
-
 The one with the fudge factor is interesting and flexible wrt generation
-sizing though.  Would mean the young gen could be large (fast) when the
-old gen was almost empty.
+sizing.  Like the one we picked it means the young gen can be large (fast)
+when the old gen was almost empty.
 
 ### Detecting which stores need to update the remembered set, bit-fiddling idea
 
-The old-young boundary is at 0x4000 (can objects straddle the
+Assuming the the old-young boundary is at 0x4000 (can objects straddle the
 boundary?  Probably OK.  A straddling object is considered part of the young
 space.)  A write of a young-gen (&lt; 0x4000) pointer to an object
 that is in the old gen (object start >= 0x4000) forces a write
@@ -115,6 +92,7 @@ to the remembered set, probably located at 0x200-0x2ff.
 Assuming we never write to program objects >= 0x8000 we need one free
 reg for the remembered set, plus the register that just held the
 pointed-to object.
+
 ´´´
   st r0, [r1, #field_offset]                  ; May need wb.
   isset r5, r0, 0xc000                        ; r5 = not_in_young_space.
@@ -129,7 +107,7 @@ pointed-to object.
   ;  Dispatch next byte code or ret.
 ´´´
 
-### Detecting which stores need to update the remembered set, pointer-direction idea
+### Detecting which stores need to update the remembered set, pointer-direction idea with fudge factor
 
 Only pointers that go down need to update the remembered set and if we can say they
 have to go a long way down before they need to update, which could mean the lowest
@@ -262,10 +240,12 @@ assumptions on location of old-new boundary):
 ### Marking
 
 We start by marking all live objects either in the whole heap or in just the young
-space for minor collections.  The marking stack is constant size so we have to can
-cope with mark stack overflow.  A contiguous bitmap indicates blackness and a tiny
-per-pagelet gray marker (grayness_table, one bit per pagelet, 32 bytes in all)
-helps track grayness in the presence of overflows:
+space for minor collections.  The marking stack is constant size so we have to
+be able to cope with mark stack overflow.  A contiguous bitmap indicates
+blackness and a tiny per-pagelet gray marker (grayness_table, one bit per
+pagelet, 32 bytes in all) helps track grayness in the presence of overflows.
+Experience from Toit says recovery from overflow is very cheap and even very small
+marking stacks have almost unchanged performance.
 
 * White:  Mark bit is zero
 * Gray:   Mark bit is one and object is either on the mark stack or its pagelet is marked gray in the grayness_table
@@ -274,10 +254,10 @@ helps track grayness in the presence of overflows:
 Because the grayness_table is coarse we sometimes mark objects gray when they were
 black. This causes a harmless rescan when the mark stack overflows.
 
-Allocation granularity is probably 4 bytes, so the mark_bits array has one 16 bit
+Allocation granularity is 4 bytes, so the mark_bits array has one 16 bit
 word covering 64 bytes.  For the 32k region we need 512 words or 1k of marking
 bytes.  When we mark an object we mark its full extent, not just the bit corresponding
-to the object address.
+to the object address!  This can be done with shifts and masks.
 
 Rescanning the gray pagelets and scanning the remembered set is done in a similar
 way. Most pagelets can be skipped based on the grayness bitmap and the remembered
@@ -298,7 +278,9 @@ bit again, and it may even be the bit for the current pagelet.
 
 ### Compaction
 
-We never sweep or have freelists, only compact.
+We never sweep or have freelists, only compact, but the young gen can compact
+in a minor GC and we only do work for surviving objects (not counting bitmap
+scans, which are proportional to the whole young space size, but fast).
 
 We are moving object up in memory only, never down.  To determine their new
 location we will use popcount on the marking bits, plus an array that
@@ -315,12 +297,16 @@ the objects originally at or above the given location.  To speed up
 popcount_above we precalculate the number of cumulative 1-bits in the marking
 map for each 256 byte page (two pagelets).  Since four 16 bit mark words cover
 a 256 byte page that means we only actually have to do 0 to 4 popcount operations
-to get the new location.  The cumulative_mark_count array is calculated with a
-single backwards sweep of the mark bits and takes 256 bytes (128 words).
+to get a new location.
+
+The cumulative_mark_count array is calculated with a single backwards sweep of
+the mark bits and takes 256 bytes (128 words).  Experimenting with a finer
+precalculated table showed no noticeable advantage, but cost memory.
 
 Since the new location can be calculated using only the old location, the
 marking bits, and the cumulative_mark_count array it is easy to update
-pointers when we encounter them.
+pointers when we encounter them and the lookup doesn't touch the old object
+location.
 
 The mark array is used to find the survivors and where they are moved to (high
 to low address), as they are moved, any pointers they contain are
@@ -328,8 +314,9 @@ updated.  We scan from high to low addresses moving objects.  Start at the
 top of memory for major GCs, or at 0x4000 for minor GCs since we are
 compacting upwards.
 
-In a minor GC we use the remembered set again to find and update pointers to
-surviving young objects.
+In a minor GC we can use the remembered set again to find and update pointers to
+surviving young objects, but currently surviving young objects go straight to
+the old generation, so we just clear the remembered set.
 
 While moving objects we update the object_starts.  Again because we are going
 high to low we can effortlessly maintain the invariant that it records the
@@ -346,10 +333,14 @@ Every object needs a header so it knows its size and pointer/tagged fields.
 This is what keeps the heap iterable.  The object_starts means we can iterate
 random access pagelets.
 
-The memory map as implemented (2026-10-08), see cmake/fructus-som.ld. The
+The memory map as implemented (2026-10-08), see cmake/jructus-som.ld. The
 tables are sized for the heap at startup, from what the program leaves.
 Nothing above 32K is written apart from the inline caches of the methods,
 since in one mode the top 32K is the frame buffer for writes.
+
+Approximate memory map.  Actually the linker packs automatically and
+slightly differently and many of the tables are slightly smaller because
+no objects can be allocated in the lowest addresses.
 
 * 0000-0002  `jmp _start`
 * 0003-01ff  zp_lo (just theInterpreter now: no malloc)
@@ -378,4 +369,54 @@ About 2k is overhead used or 7% of the heap.  In return:
 * No problems with mark stack overflow
 * No fragmentation
 * Bump allocation
-* Generations
+
+## Decisions (2026-10-08) - some of these have been edited into the text above.
+
+* No fixed old-young boundary: the young space is everything below the
+  lowest old object, wherever that is.  The write barrier ideas that assume a
+  fixed boundary (bit-fiddling, "only filter on the stored value") are ruled
+  out.  The barrier marks the holder's byte for every store that isn't a
+  small integer or an immortal, or for every store.
+* Instant promotion: every collection promotes all survivors, so afterwards
+  the young space is empty and the remembered set is clear.  There is no
+  remembered set upkeep during a collection.
+* The linker has been changed to put mutable program image just below the
+  32k position. This doesn't include inline caches, which are truly inlined
+  in the bytecodes in this SOMpp fork, but it does include class fields.
+  This means the remembered set and other tables only have to cover the 0-32k
+  range, and also works better for the VGA-framebuffer build of Fructus which
+  can direct 32k-64k range writes to the inactive dual buffer.
+* The image writer puts the image objects that can hold heap pointers (class
+  objects and so on) in a section the linker gives start and stop symbols for,
+  and a minor collection walks that list as roots, using the remembered set
+  bytes as a filter: it scans only the objects whose byte is marked.
+* Sliding doesn't use object_starts: it scans the mark bits down for a run of
+  1s.  The bottom of a run is an object start, since the whole extent of
+  objects is marked.  The run moves up as a block (overlapping, so a memmove,
+  recently optimized in libc), then its objects are scanned forwards to update
+  their pointers and object_starts: the first object in each pagelet in a run
+  writes the pagelet's entry, and a lower run may overwrite what a higher run
+  wrote.  Then the next run down.  This is different from similar GCs in which
+  sliding is downwards and we can slide and fixup in a single pass.  Advantage
+  of this direction is that the object_starts can easily (without complicating
+  bump allocation) point to the first object in a pagelet instead of an
+  arbitrary one, making partial heap walks much simpler. Disadvantage is two
+  passes over the objects, though this is not a huge deal on Fructus because
+  there's no d-cache and memmove/memcpy are very fast relative to the visiting
+  pointer-fixup pass.
+* Interior pointers (a frame's locals and stack pointer) move with their
+  object, by the run's distance.  The relocation tables naturally work for
+  inner pointers without special treatment, but marking has to understand them,
+  which restricts us to self-inner pointers that can be ignored by marking.
+* Unreachable old objects are walked (the remembered set scan can't know which
+  old objects are reachable, and the gray pagelet rescan steps over unmarked
+  objects by their size), but no object known to be dead is.
+* Hash codes on Fructus are a virtual method that not all objects have, like
+  Dart.  Image objects don't move, so they can hash by address.
+* Fructus has popcount (and bitrev and clz).
+* The host build has the same GC as a GC_TYPE, for testing, with the same
+  128-byte pagelets (object_starts stores one byte), and the granule, mark
+  word and heap size scaled.  The host heap is page aligned, reserved with
+  mmap and committed with mprotect as it grows downwards.  Since virtual
+  address space is not generally a limited resource on 64 bit platforms, this
+  is actually quite efficient.
