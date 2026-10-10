@@ -93,7 +93,7 @@ Assuming we never write to program objects >= 0x8000 we need one free
 reg for the remembered set, plus the register that just held the
 pointed-to object.
 
-´´´
+```
   st r0, [r1, #field_offset]                  ; May need wb.
   isset r5, r0, 0xc000                        ; r5 = not_in_young_space.
   or r0, r5, r0                               ; r0 = safe (not in young space or SMI).
@@ -105,7 +105,7 @@ pointed-to object.
   lsr r5, r1, #7                              ; Get index in remembered set.
   st8 base [base, r5]                         ; Store 0 in rembered set.
   ;  Dispatch next byte code or ret.
-´´´
+```
 
 ### Detecting which stores need to update the remembered set, pointer-direction idea with fudge factor
 
@@ -116,7 +116,7 @@ pagelet was not marked.
 
 One temp register needed.  Zero if the stored value is dead.
 
-´´´
+```
   st r0, [r1, #field_offset]                  ; May need wb.
   shl r5, r0, #15                             ; Smi -> 0x8000, non-smi -> 0
   or r0, r0, r5                               ; Make Smis look like unproblematic high adresses
@@ -127,7 +127,7 @@ One temp register needed.  Zero if the stored value is dead.
   lsr r5, r1, #7                              ; Get index in remembered set.
   st8 base [base, r5]                         ; Store 0 in rembered set.
   ;  Dispatch next byte code or ret.
-´´´
+```
 
 Question is how many false alarms this makes.  The remembered set is always precise after
 a GC.
@@ -142,12 +142,12 @@ style.
 
 No temps if the written pointer is dead.
 
-´´´
+```
   st r0, [r1, #field_offset]                  ; May need wb.
   lsr r5, r1, #7                              ; Get index in remembered set.
   st8 base [base, r5]                         ; Store 0 in rembered set.
   ;  Dispatch next byte code or ret.
-´´´
+```
 
 Pollutes the remembered set on Smi writes, nil writes, bool writes.
 
@@ -155,19 +155,19 @@ Stores are slow but not really slower than all the cleverness above.  Costs a
 bit more if we run out of registers and have to load the base register every
 time:
 
-´´´
+```
   st r0, [r1, #field_offset]                  ; May need wb.
   lsr r5, r1, #7                              ; Get index in remembered set.
   add r5, r5, #0x200                          ; Immbit5 register, so two-byte insn.
   st8 r1 [r5, #0]                             ; Store even number in rembered set.
   ;  Dispatch next byte code or ret.
-´´´
+```
 
 ## Only filter on the stored value
 
 Assume the old-new border is at 0x4000
 
-´´´
+```
   st r0, [r1, #field_offset]                  ; May need wb.
   shl r5, r0, #14                             ; Smi -> 0x8000, non-smi -> 0
   or r0, r0, r5                               ; Make Smis look like unproblematic high adresses
@@ -177,11 +177,11 @@ Assume the old-new border is at 0x4000
   lsr r5, r1, #7                              ; Get index in remembered set.
   st8 base [base, r5]                         ; Store 0 in rembered set.
   ;  Dispatch next byte code or ret.
-´´´
+```
 
 Equivalent:
 
-´´´
+```
   st r0, [r1, #field_offset]                  ; May need wb.
   isset r5, r0, #0xc000                       ; old gen -> 1, young gen -> 0
   or r0, r0, r5                               ; Smis are like old gen (1-tagged)
@@ -191,11 +191,11 @@ Equivalent:
   lsr r5, r1, #7                              ; Get index in remembered set.
   st8 base [base, r5]                         ; Store 0 in rembered set.
   ;  Dispatch next byte code or ret.
-´´´
+```
 
 More branches, fewer registers - no temps if stored value is dead:
 
-´´´
+```
   st r0, [r1, #field_offset]                  ; May need wb.
   brclr r0, #1, .not_smi                      ; 4 cycles when taken :-(
   ; Dispatch or ret.
@@ -206,11 +206,11 @@ More branches, fewer registers - no temps if stored value is dead:
   lsr r0, r1, #7                              ; Get index in remembered set.
   st8 base [base, r0]                         ; Store 0 in rembered set.
   ;  Dispatch next byte code or ret.
-´´´
+```
 
 Sadly brclr doesn't take a register or this constant:
 
-´´´
+```
   st r0, [r1, #field_offset]                  ; May need wb.
   brclr r0, #0xc001, .need_wb                 ; Sadly impossible.
   ;  Dispatch next byte code or ret.
@@ -218,12 +218,12 @@ Sadly brclr doesn't take a register or this constant:
   lsr r5, r1, #7                              ; Get index in remembered set.
   st8 base [base, r5]                         ; Store 0 in rembered set.
   ;  Dispatch next byte code or ret.
-´´´
+```
 
 Only filter on immortals/oddballs above 32k and smis, write all others (make no
 assumptions on location of old-new boundary):
 
-´´´
+```
   st r0, [r1, #field_offset]                  ; May need wb.
   isset r5, r0, #0x8000                       ; immortals gen -> 1, young gen -> 0
   or r0, r0, r5                               ; Smis are like old gen (1-tagged)
@@ -233,7 +233,7 @@ assumptions on location of old-new boundary):
   lsr r5, r1, #7                              ; Get index in remembered set.
   st8 base [base, r5]                         ; Store 0 in rembered set.
   ;  Dispatch next byte code or ret.
-´´´
+```
 
 ## Garbage collections
 
@@ -350,11 +350,11 @@ no objects can be allocated in the lowest addresses.
 * 0400-04ff  IO page, whose guard traps a stack overflow
 * 0500-06ff  native stack, 512 bytes (frames are on the SOM heap; 312 bytes
              at most in the tests and AWFY)
-* 0700-      object_starts (1 byte per pagelet), mark bits (1 bit per 4
+* 0700- ...  object_starts (1 byte per pagelet), mark bits (1 bit per 4
              bytes), cumulative mark counts (1 word per 256 bytes, also the
              marking stack), gray bits (1 bit per pagelet): about 4.9% of
              the heap
-*      -rw   GCed contiguous heap, to below the writable part
+* ...  -rw   GCed contiguous heap, to below the writable part
 * rw  -7fff  the image's objects the program stores into (classes, plain
              objects, arrays: the som_roots), and the C++ .data and .bss
 * ro  -ffff  code, constants, the rest of the image; at 0x8000, or lower if
