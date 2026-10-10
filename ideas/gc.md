@@ -1,9 +1,9 @@
 # GC plan for SOM++ on Fructus
 
 SOM++ on Fructus is a fork of SOM++, optimized for the semi-fictional
-16 bit ISA, Fructus, github.com/erikcorry/fructus .  Reflection features are
-removed and we run on a cut down libc/OS that has no malloc heap.  Goals
-of the GC:
+16 bit ISA, [Fructus](https://github.com/erikcorry/fructus).  Reflection
+features are removed and we run on a cut down libc/OS that has no malloc heap.
+Goals of the GC:
 
 * No allocation during GC - no unexpected OOM
 * Don't waste memory on semispaces
