@@ -1065,18 +1065,42 @@ void Interpreter::doReturnNonLocal() {
     popFrameAndPushResult(result);
 }
 
-void Interpreter::doInc() {
-    vm_oop_t val = GetFrame()->Top();
-
+/**
+ * The slow path of addToNumber(): a small integer whose result overflows
+ * int64_t, which becomes a big integer, a big integer, or a double.
+ */
+__attribute__((noinline)) static vm_oop_t addToNumberSlow(vm_oop_t val,
+                                                          int64_t delta) {
     if (IS_SMALL_INT(val)) {
-        int64_t const result = SMALL_INT_VAL(val) + 1;
-        val = NEW_INT(result);
-    } else if (CLASS_OF(val) == load_ptr(doubleClass)) {
-        double const d = static_cast<VMDouble*>(val)->GetEmbeddedDouble();
-        val = Universe::NewDouble(d + 1.0);
-    } else {
-        ErrorExit("unsupported");
+        return Universe::NewInt(InfInt(SMALL_INT_VAL(val)) + InfInt(delta));
     }
+    if (IS_BIG_INT(val)) {
+        return AS_BIG_INT(val)->Add(delta);
+    }
+    if (CLASS_OF(val) == load_ptr(doubleClass)) {
+        double const d = static_cast<VMDouble*>(val)->GetEmbeddedDouble();
+        return Universe::NewDouble(d + (double)delta);
+    }
+    ErrorExit("unsupported");
+}
+
+/**
+ * val + delta, for the increment and decrement bytecodes. Only the small
+ * integer case is inlined into the interpreter loop.
+ */
+__attribute__((always_inline)) static inline vm_oop_t addToNumber(
+    vm_oop_t val,
+    int64_t delta) {
+    int64_t result = 0;
+    if (likely(IS_SMALL_INT(val)) &&
+        likely(!__builtin_add_overflow(SMALL_INT_VAL(val), delta, &result))) {
+        return NEW_INT(result);
+    }
+    return addToNumberSlow(val, delta);
+}
+
+void Interpreter::doInc() {
+    vm_oop_t const val = addToNumber(GetFrame()->Top(), 1);
 
     if (IS_TAGGED(val)) {
         GetFrame()->SetTopNoBarrier(val);
@@ -1086,17 +1110,7 @@ void Interpreter::doInc() {
 }
 
 void Interpreter::doDec() {
-    vm_oop_t val = GetFrame()->Top();
-
-    if (IS_SMALL_INT(val)) {
-        int64_t const result = SMALL_INT_VAL(val) - 1;
-        val = NEW_INT(result);
-    } else if (CLASS_OF(val) == load_ptr(doubleClass)) {
-        double const d = static_cast<VMDouble*>(val)->GetEmbeddedDouble();
-        val = Universe::NewDouble(d - 1.0);
-    } else {
-        ErrorExit("unsupported");
-    }
+    vm_oop_t const val = addToNumber(GetFrame()->Top(), -1);
 
     if (IS_TAGGED(val)) {
         GetFrame()->SetTopNoBarrier(val);
@@ -1114,17 +1128,7 @@ void Interpreter::doIncField(uint8_t fieldIndex) {
 
     auto* selfObj = (VMObject*)self;
 
-    vm_oop_t val = selfObj->GetField(fieldIndex);
-
-    if (IS_SMALL_INT(val)) {
-        int64_t const result = SMALL_INT_VAL(val) + 1;
-        val = NEW_INT(result);
-    } else if (CLASS_OF(val) == load_ptr(doubleClass)) {
-        double const d = static_cast<VMDouble*>(val)->GetEmbeddedDouble();
-        val = Universe::NewDouble(d + 1.0);
-    } else {
-        ErrorExit("unsupported");
-    }
+    vm_oop_t const val = addToNumber(selfObj->GetField(fieldIndex), 1);
 
     selfObj->SetField(fieldIndex, val);
 }
@@ -1138,17 +1142,7 @@ void Interpreter::doIncFieldPush(uint8_t fieldIndex) {
 
     auto* selfObj = (VMObject*)self;
 
-    vm_oop_t val = selfObj->GetField(fieldIndex);
-
-    if (IS_SMALL_INT(val)) {
-        int64_t const result = SMALL_INT_VAL(val) + 1;
-        val = NEW_INT(result);
-    } else if (CLASS_OF(val) == load_ptr(doubleClass)) {
-        double const d = static_cast<VMDouble*>(val)->GetEmbeddedDouble();
-        val = Universe::NewDouble(d + 1.0);
-    } else {
-        ErrorExit("unsupported");
-    }
+    vm_oop_t const val = addToNumber(selfObj->GetField(fieldIndex), 1);
 
     selfObj->SetField(fieldIndex, val);
     if (IS_TAGGED(val)) {
