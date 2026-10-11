@@ -882,8 +882,7 @@ void FructusImage::AsmFile::writeVMObject(VMObject* obj, const std::string& labe
             (isClass ? FructusClassFieldIndex(i) : i) * L::word;
         if (isClass && i == nameField) {
             // fructus has no names, see VMClass.h
-            w.Word(offset,
-                   IntRef((int64_t)image.ClassId(static_cast<VMClass*>(obj))),
+            w.Word(offset, (int64_t)image.ClassId(static_cast<VMClass*>(obj)),
                    "classId");
             continue;
         }

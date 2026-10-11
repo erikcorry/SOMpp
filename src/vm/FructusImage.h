@@ -101,7 +101,7 @@ constexpr size_t VMObject_numberOfFields = 4;
 constexpr size_t VMObject_clazz = 6;
 constexpr size_t VMObject_size = 8;
 
-/** Tagged, where the host has the name, see VMClass.h. */
+/** Unsigned and untagged, where the host has the name, see VMClass.h. */
 constexpr size_t VMClass_classId = 8;
 /** The number of fields, tagged: the image has no field names. */
 constexpr size_t VMClass_numberOfInstanceFields = 10;

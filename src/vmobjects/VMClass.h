@@ -74,9 +74,7 @@ public:
 #endif
 #ifdef FRUCTUS
     /** The number of the class in preorder of the hierarchy. */
-    [[nodiscard]] size_t GetClassId() const {
-        return SMALL_INT_VAL(load_ptr(classId));
-    }
+    [[nodiscard]] size_t GetClassId() const { return classId; }
 #else
     // fructus finds the invokables by their classIds, see
     // VMInvokable::IsMethodOf
@@ -106,6 +104,10 @@ public:
     void LoadPrimitives(bool showWarning);
 #endif
     [[nodiscard]] VMClass* CloneForMovingGC() const override;
+#ifdef FRUCTUS
+    // the classId isn't an oop
+    void WalkObjects(walk_heap_fn walk) override;
+#endif
 
     DECLARE_AS_DEBUG_STRING(override)
 
@@ -123,8 +125,9 @@ private:
     // Theses are treated like VMObject fields and initialized that way
 #ifdef FRUCTUS
     // where the host has the name: the number of the class in preorder of
-    // the hierarchy, tagged, see vm/FructusImage.h
-    gc_oop_t classId;
+    // the hierarchy, untagged, see vm/FructusImage.h, so the collector
+    // doesn't walk it
+    uintptr_t classId;
 #else
     GCSymbol* name;
 #endif

@@ -55,6 +55,17 @@ const size_t VMClass::VMClassNumberOfFields = 4;
 // NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init, hicpp-member-init)
 VMClass::VMClass() : VMObject(VMClassNumberOfFields, sizeof(VMClass)) {}
 
+#ifdef FRUCTUS
+void VMClass::WalkObjects(walk_heap_fn walk) {
+    clazz = static_cast<GCClass*>(walk(clazz));
+    // the fields after the classId, which isn't an oop, see VMObject
+    size_t const numFields = GetNumberOfFields();
+    for (size_t i = 1; i < numFields; ++i) {
+        FIELDS[i] = walk(FIELDS[i]);
+    }
+}
+#endif
+
 VMClass* VMClass::CloneForMovingGC() const {
     auto* clone =
         new (GetHeap<HEAP_CLS>(),
