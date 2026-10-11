@@ -38,6 +38,7 @@ extern GCSymbol* symbolIfFalse;
 
 extern GCSymbol* symbolPlus;
 extern GCSymbol* symbolMinus;
+extern GCSymbol* symbolEqualEqual;
 
 const char* const strBlockSelf = "$blockSelf";
 const char* const strSuper = "super";

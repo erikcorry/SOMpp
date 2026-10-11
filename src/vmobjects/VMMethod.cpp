@@ -415,7 +415,8 @@ void VMMethod::inlineInto(MethodGenerationContext& mgenc,
             case BC_SEND_1:
             case BC_SEND_2:
             case BC_SEND_3:
-            case BC_SEND_N: {
+            case BC_SEND_N:
+            case BC_SEND_EQEQ: {
                 VMSymbol* const sym = GetSendSelector(i);
                 EmitSEND(mgenc, parser, sym);
                 break;
@@ -582,6 +583,7 @@ void VMMethod::AdaptAfterOuterInlined(
             case BC_SEND_1:
             case BC_SEND_2:
             case BC_SEND_3:
+            case BC_SEND_EQEQ:
             case BC_SUPER_SEND:
             case BC_RETURN_LOCAL:
             case BC_RETURN_NON_LOCAL:

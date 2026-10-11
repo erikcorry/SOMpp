@@ -99,8 +99,9 @@
 #define BC_JUMP2_ON_NIL_TOP_TOP    62
 #define BC_JUMP2_IF_GREATER        63
 #define BC_JUMP2_BACKWARD          64
+#define BC_SEND_EQEQ               65
 
-#define _LAST_BYTECODE BC_JUMP2_BACKWARD
+#define _LAST_BYTECODE BC_SEND_EQEQ
 
 #define BC_INVALID           255
 // clang-format on

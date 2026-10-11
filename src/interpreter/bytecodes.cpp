@@ -99,6 +99,8 @@ const uint8_t Bytecode::bytecodeLengths[] = {
     3,  // BC_JUMP2_ON_NIL_TOP_TOP
     3,  // BC_JUMP2_IF_GREATER
     3,  // BC_JUMP2_BACKWARD
+
+    SendSite::Length(BC_SEND_EQEQ),  // BC_SEND_EQEQ
 };
 
 const char* Bytecode::bytecodeNames[] = {
@@ -167,6 +169,7 @@ const char* Bytecode::bytecodeNames[] = {
     "JUMP2_ON_NIL_TOP_TOP",      // 62
     "JUMP2_IF_GREATER",          // 63
     "JUMP2_BACKWARD  ",          // 64
+    "SEND_EQEQ       ",          // 65
 };
 
 uint8_t GetNumberOfWords(uint8_t bc) {
@@ -178,6 +181,7 @@ uint8_t GetNumberOfWords(uint8_t bc) {
         case BC_SEND:
         case BC_SEND_1:
         case BC_SUPER_SEND:
+        case BC_SEND_EQEQ:
             return 2;
         default:
             return 0;
@@ -185,7 +189,8 @@ uint8_t GetNumberOfWords(uint8_t bc) {
 }
 
 bool IsSendBytecode(uint8_t bc) {
-    return bc == BC_SEND || bc == BC_SEND_1 || bc == BC_SUPER_SEND;
+    return bc == BC_SEND || bc == BC_SEND_1 || bc == BC_SUPER_SEND ||
+           bc == BC_SEND_EQEQ;
 }
 
 bool IsJumpBytecode(uint8_t bc) {

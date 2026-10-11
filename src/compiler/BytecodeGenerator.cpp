@@ -334,7 +334,11 @@ void EmitSEND(MethodGenerationContext& mgenc, const Parser& /*parser*/,
     const uint8_t numArgs = Signature::GetNumberOfArguments(msg);
     const som_int_t stackEffect = -numArgs + 1;  // +1 for the result
 
-    emitSendSite(mgenc, numArgs == 1 ? BC_SEND_1 : BC_SEND, msg, stackEffect);
+    uint8_t bytecode = numArgs == 1 ? BC_SEND_1 : BC_SEND;
+    if (msg == load_ptr(symbolEqualEqual)) {
+        bytecode = BC_SEND_EQEQ;
+    }
+    emitSendSite(mgenc, bytecode, msg, stackEffect);
 }
 
 void EmitSUPERSEND(MethodGenerationContext& mgenc, const Parser& /*parser*/,

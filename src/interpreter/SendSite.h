@@ -7,7 +7,9 @@
  *
  * target and receiverClass are words, see bytecodes.h. A unary send,
  * SEND_1, has no numberOfArguments, since it's always 1 (the receiver), so
- * its inline cache is a byte earlier and it's a byte shorter.
+ * its inline cache is a byte earlier and it's a byte shorter. SEND_EQEQ, a
+ * send of #==, is laid out like SEND, and is only a send when the interpreter
+ * can't answer it itself.
  *
  * A send starts out unlinked: the target is the selector and the
  * receiverClass is null. The first time it's executed it's linked, and is

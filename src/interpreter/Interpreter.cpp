@@ -143,7 +143,8 @@ vm_oop_t Interpreter::Start() {
                                        &&LABEL_BC_JUMP2_ON_NOT_NIL_TOP_TOP,
                                        &&LABEL_BC_JUMP2_ON_NIL_TOP_TOP,
                                        &&LABEL_BC_JUMP2_IF_GREATER,
-                                       &&LABEL_BC_JUMP2_BACKWARD};
+                                       &&LABEL_BC_JUMP2_BACKWARD,
+                                       &&LABEL_BC_SEND_EQEQ};
 
     goto* loopTargets[*pc];
 
@@ -700,6 +701,27 @@ LABEL_BC_JUMP2_BACKWARD: {
     pc -= offset;
 }
     DISPATCH_NOGC();
+
+    // A send of #==, answered here for nil, two integers and a symbol, since
+    // the core library doesn't override #== for any of them: Integer>>== is
+    // =, which for two small integers is identity. Anything else is a send.
+LABEL_BC_SEND_EQEQ: {
+    PROLOGUE();
+    vm_oop_t const arg = GetFrame()->Top();
+    vm_oop_t const receiver = GetFrame()->Top2();
+    if (receiver == load_ptr(nilObject) ||
+        (IS_TAGGED(receiver) ? IS_TAGGED(arg)
+                             : CLASS_OF(receiver) == load_ptr(symbolClass))) {
+        GetFrame()->PopVoid();
+        GetFrame()->SetTopNoBarrier(
+            load_ptr(receiver == arg ? trueObject : falseObject));
+        NEXT_NOGC(SendSite::Length(BC_SEND_EQEQ));
+    }
+}
+    SAVE_NEXT_PC(SendSite::Length(BC_SEND_EQEQ));
+    doSend(pc);
+    RELOAD_PC();
+    DISPATCH_GC(SendSite::Length(BC_SEND_EQEQ));
 
     // An allocation of the bytecode at pc failed, and it changed nothing:
     // collect, and run it again. The bytecodes that go to DISPATCH_GC do this

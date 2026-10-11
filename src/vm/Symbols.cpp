@@ -28,6 +28,7 @@ GCSymbol* symbolIfTrue;
 GCSymbol* symbolIfFalse;
 GCSymbol* symbolPlus;
 GCSymbol* symbolMinus;
+GCSymbol* symbolEqualEqual;
 
 static size_t hashChars(const char* str, size_t length) {
     size_t hash = 5381U;
@@ -112,6 +113,7 @@ void InitializeSymbols() {
 
     symbolPlus = store_root(SymbolFor("+"));
     symbolMinus = store_root(SymbolFor("-"));
+    symbolEqualEqual = store_root(SymbolFor("=="));
 }
 
 void WalkSymbols(walk_heap_fn walk) {
@@ -130,4 +132,5 @@ void WalkSymbols(walk_heap_fn walk) {
 
     symbolPlus = static_cast<GCSymbol*>(walk(symbolPlus));
     symbolMinus = static_cast<GCSymbol*>(walk(symbolMinus));
+    symbolEqualEqual = static_cast<GCSymbol*>(walk(symbolEqualEqual));
 }

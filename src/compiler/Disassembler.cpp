@@ -294,6 +294,7 @@ void Disassembler::dumpMethod(uint8_t* bytecodes, size_t numberOfBytecodes,
             }
             case BC_SEND:
             case BC_SEND_1:
+            case BC_SEND_EQEQ:
             case BC_SUPER_SEND: {
                 const uint8_t* site = &bytecodes[bc_idx];
                 VMClass const* cls = SendSite::GetReceiverClass(site);
@@ -630,7 +631,8 @@ void Disassembler::DumpBytecode(VMFrame* frame, VMMethod* method,
         }
         case BC_SUPER_SEND:
         case BC_SEND:
-        case BC_SEND_1: {
+        case BC_SEND_1:
+        case BC_SEND_EQEQ: {
             VMSymbol* sel = method->GetSendSelector(bc_idx);
 
             DebugPrint("signature: %s (", sel->GetStdString().c_str());
