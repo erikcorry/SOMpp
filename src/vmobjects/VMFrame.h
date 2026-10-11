@@ -118,16 +118,21 @@ public:
         store_ptr(*stack_ptr, obj);
     }
 
-    /* Only valid for tagged integers, nil, true, and false.
-     * nil, true, and false are roots, and do not need the read barrier. */
+    /* Stores that skip the write barrier. Only valid for tagged integers,
+     * which are not heap objects, and for nil, true, and false. Being roots
+     * keeps those alive, but isn't enough by itself: a minor collection moves
+     * young objects, and only updates the old objects that the write barrier
+     * remembered. They are allocated in the nursery, but promoted by the first
+     * GC and never moved again. A frame can only be old after a GC, so storing
+     * them into a frame never needs the write barrier. */
     inline void SetTopNoBarrier(vm_oop_t val) {
         assert(IS_TAGGED(val) || val == load_ptr(nilObject) ||
                val == load_ptr(trueObject) || val == load_ptr(falseObject));
         *stack_ptr = store_with_separate_barrier(val);
     }
 
-    /* Only valid for tagged integers, nil, true, and false.
-     * nil, true, and false are roots, and do not need the read barrier. */
+    /* Only valid for tagged integers, nil, true, and false, see
+     * SetTopNoBarrier(). */
     inline void PushNoBarrier(vm_oop_t obj) {
         assert(IS_TAGGED(obj) || obj == load_ptr(nilObject) ||
                obj == load_ptr(trueObject) || obj == load_ptr(falseObject));
