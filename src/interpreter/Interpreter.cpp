@@ -702,16 +702,17 @@ LABEL_BC_JUMP2_BACKWARD: {
 }
     DISPATCH_NOGC();
 
-    // A send of #==, answered here for nil, two integers and a symbol, since
-    // the core library doesn't override #== for any of them: Integer>>== is
-    // =, which for two small integers is identity. Anything else is a send.
+    // A send of #==, answered here by identity for nil, a small integer and a
+    // symbol. The core library doesn't override #== for nil or symbols, and an
+    // integer is a small one whenever it fits, so a small integer is only
+    // equal to itself: Integer>>== is a primitive that says so, even for a
+    // double of the same value. Anything else is a send.
 LABEL_BC_SEND_EQEQ: {
     PROLOGUE();
     vm_oop_t const arg = GetFrame()->Top();
     vm_oop_t const receiver = GetFrame()->Top2();
-    if (receiver == load_ptr(nilObject) ||
-        (IS_TAGGED(receiver) ? IS_TAGGED(arg)
-                             : CLASS_OF(receiver) == load_ptr(symbolClass))) {
+    if (receiver == load_ptr(nilObject) || IS_TAGGED(receiver) ||
+        CLASS_OF(receiver) == load_ptr(symbolClass)) {
         GetFrame()->PopVoid();
         GetFrame()->SetTopNoBarrier(
             load_ptr(receiver == arg ? trueObject : falseObject));
