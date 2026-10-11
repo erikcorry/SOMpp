@@ -27,6 +27,15 @@
  * makes them, for the sends that can only call one invokable, see
  * FructusImage.h, and they aren't send sites: IsSendBytecode() is false.
  *
+ * On fructus a send has no receiverClass, and no selector: the target is
+ * always an invokable, which starts out as the first of the ring of the
+ * invokables with the selector, see FructusImage.h. A send hits if the
+ * receiver's classId is in the target's first range of classIds. Otherwise
+ * the interpreter looks for the receiver's classId in the target's other
+ * ranges and then in the ranges of the others in the ring, and links the
+ * send to the one it finds. A send whose selector no class has is
+ * NOT_UNDERSTOOD instead, which is just an error: the bytecode, the number
+ * of arguments and the selector.
  */
 
 #include <cstddef>
@@ -46,6 +55,11 @@ constexpr size_t Target(uint8_t bc) {
     return bc == BC_SEND_1 ? 1 : 2;
 }
 
+#ifdef FRUCTUS
+constexpr size_t Length(uint8_t bc) {
+    return Target(bc) + sizeof(void*);
+}
+#else
 constexpr size_t ReceiverClass(uint8_t bc) {
     return Target(bc) + sizeof(void*);
 }
@@ -53,10 +67,15 @@ constexpr size_t ReceiverClass(uint8_t bc) {
 constexpr size_t Length(uint8_t bc) {
     return ReceiverClass(bc) + sizeof(void*);
 }
+#endif
 
 /** Where the target of a static send is, which is all it has. */
 constexpr size_t staticTarget = 1;
 constexpr size_t staticLength = staticTarget + sizeof(void*);
+
+/** Where the selector of a NOT_UNDERSTOOD is. */
+constexpr size_t notUnderstoodSelector = 2;
+constexpr size_t notUnderstoodLength = notUnderstoodSelector + sizeof(void*);
 
 /** The longest a send is. */
 constexpr size_t maxLength = Length(BC_SEND);
@@ -66,8 +85,9 @@ inline uint8_t GetNumberOfArguments(const uint8_t* site) {
 }
 
 /**
- * The selector if the send is unlinked, otherwise the invokable. `bc` is
- * the send's bytecode, which the interpreter knows.
+ * The selector if the send is unlinked, otherwise the invokable, which it
+ * always is on fructus. `bc` is the send's bytecode, which the interpreter
+ * knows.
  */
 inline void* GetTarget(const uint8_t* site, uint8_t bc) {
     return LoadWord(site + Target(bc));
@@ -77,6 +97,12 @@ inline void* GetTarget(const uint8_t* site) {
     return GetTarget(site, site[0]);
 }
 
+#ifdef FRUCTUS
+/** Make the send call `invokable`, see above. */
+inline void Link(uint8_t* site, VMInvokable* invokable) {
+    StoreWord(site + Target(site[0]), invokable);
+}
+#else
 /** Null if the send is unlinked. */
 inline VMClass* GetReceiverClass(const uint8_t* site, uint8_t bc) {
     return (VMClass*)LoadWord(site + ReceiverClass(bc));
@@ -102,4 +128,5 @@ inline void Link(uint8_t* site, VMInvokable* invokable,
     StoreWord(site + Target(site[0]), invokable);
     StoreWord(site + ReceiverClass(site[0]), receiverClass);
 }
+#endif
 }  // namespace SendSite

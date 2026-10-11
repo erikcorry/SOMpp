@@ -39,7 +39,8 @@ extern VMObject som_false;
 extern VMObject som_system;
 extern VMArray som_arguments;
 extern GCClass* const som_main_class;
-extern GCSymbol* const som_main_selector;
+extern GCInvokable* const som_main_new;
+extern GCInvokable* const som_main_run;
 extern GCClass* const som_block_classes[maxBlockClassArguments + 1];
 
 extern VMClass som_class_Object;
@@ -100,8 +101,12 @@ VMArray* FructusImage::Arguments() {
     return &som_arguments;
 }
 
-VMSymbol* FructusImage::MainSelector() {
-    return load_ptr(som_main_selector);
+VMInvokable* FructusImage::MainNew() {
+    return load_ptr(som_main_new);
+}
+
+VMInvokable* FructusImage::MainRun() {
+    return load_ptr(som_main_run);
 }
 
 VMClass* FructusImage::BlockClass(uint8_t numberOfArguments) {
@@ -162,7 +167,6 @@ void FructusImage::CheckLayout() {
     CHECK_FIELD(VMClass, classId, VMClass_classId);
     CHECK_FIELD(VMClass, numberOfInstanceFields,
                 VMClass_numberOfInstanceFields);
-    CHECK_FIELD(VMClass, instanceInvokables, VMClass_instanceInvokables);
     CHECK_FIELD(VMClass, superClass, VMClass_superClass);
     CHECK_SIZE(VMClass, L::VMClass_size);
 
@@ -178,15 +182,17 @@ void FructusImage::CheckLayout() {
 
     static_assert(SendSite::numberOfArguments == L::SendSite_numberOfArguments);
     static_assert(SendSite::Target(BC_SEND) == L::SendSite_target);
-    static_assert(SendSite::ReceiverClass(BC_SEND) ==
-                  L::SendSite_receiverClass);
     static_assert(SendSite::Length(BC_SEND) == L::SendSite_length);
     static_assert(SendSite::Target(BC_SEND_1) == L::SendSite_unaryTarget);
     static_assert(SendSite::Length(BC_SEND_1) == L::SendSite_unaryLength);
     static_assert(SendSite::staticTarget == L::StaticSend_target);
     static_assert(SendSite::staticLength == L::StaticSend_length);
+    static_assert(SendSite::numberOfArguments ==
+                  L::NotUnderstood_numberOfArguments);
+    static_assert(SendSite::notUnderstoodSelector == L::NotUnderstood_selector);
+    static_assert(SendSite::notUnderstoodLength == L::NotUnderstood_length);
 
-    CHECK_FIELD(VMInvokable, signature, VMInvokable_signature);
+    CHECK_FIELD(VMInvokable, nextWithSignature, VMInvokable_nextWithSignature);
 
     CHECK_FIELD(VMMethod, bcLength, VMMethod_bcLength);
     CHECK_FIELD(VMMethod, numberOfLocals, VMMethod_numberOfLocals);

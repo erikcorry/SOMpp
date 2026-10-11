@@ -37,8 +37,11 @@ bool VMInvokable::IsPrimitive() const {
 }
 
 void VMInvokable::WalkObjects(walk_heap_fn walk) {
+#ifdef FRUCTUS
+    // the invokables are in the image, which the collector doesn't walk
+    (void)walk;
+#else
     signature = static_cast<GCSymbol*>(walk(signature));
-#ifndef FRUCTUS
     if (holder != nullptr) {
         holder = static_cast<GCClass*>(walk(holder));
     }

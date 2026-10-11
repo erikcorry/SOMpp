@@ -156,26 +156,6 @@ std::string Vtable(const char* mangledClassName) {
            std::to_string(L::vtableOffset);
 }
 
-/**
- * The signature of `inv` in the image. The parser names a block's method
- * $blockMethod@<line>, which only shows in stack traces, so instead the
- * blocks with the same number of arguments share the signature of their
- * #value, and the image has no symbol for each block.
- */
-VMSymbol* ImageSignature(VMInvokable* inv) {
-    VMSymbol* sig = inv->GetSignature();
-    if (dynamic_cast<VMMethod*>(inv) == nullptr ||
-        sig->GetStdString().rfind("$blockMethod@", 0) != 0) {
-        return sig;
-    }
-    // value, value:, value:with:, ... with the block itself an argument
-    std::string selector = "value";
-    for (uint8_t i = 1; i < inv->GetNumberOfArguments(); i++) {
-        selector += i == 1 ? ":" : "with:";
-    }
-    return SymbolFor(selector);
-}
-
 /** Methods are only for dispatch, the program can't have them. */
 bool IsInvokable(vm_oop_t obj) {
     return !IS_TAGGED(obj) &&
@@ -320,6 +300,8 @@ private:
     Lines writeBytecodes(ObjectWriter& w, size_t offset, VMMethod* method,
                          const std::vector<uint8_t>& fructusBytecodes);
     void writeDebugInfo();
+    /** What the bytecode at `index` of `method` is on fructus. */
+    uint8_t fructusBytecode(VMMethod* method, size_t index);
     /** Write the send at `index`, and return how long it is on fructus. */
     size_t writeSendSite(ObjectWriter& w, size_t offset, VMMethod* method,
                          size_t index);
@@ -437,6 +419,25 @@ public:
         return it == dispatchRanges.end() ? nullptr : &it->second;
     }
 
+    /**
+     * The next invokable of a class with the same signature as `inv`, in a
+     * ring, or nullptr if `inv` isn't one, see findSignatureGroups().
+     */
+    [[nodiscard]] VMInvokable* NextWithSignature(VMInvokable* inv) const {
+        auto const it = nextWithSignature.find(inv);
+        return it == nextWithSignature.end() ? nullptr : it->second;
+    }
+
+    /**
+     * The first invokable of the ring of `selector`, which a send of it
+     * starts out calling, or nullptr if no class has it, see
+     * findSignatureGroups().
+     */
+    [[nodiscard]] VMInvokable* RingHead(VMSymbol* selector) const {
+        auto const it = ringHeads.find(selector);
+        return it == ringHeads.end() ? nullptr : it->second;
+    }
+
     /** The fructus primitive `prim` stands for, or nullptr if there's none. */
     const PrimitiveSpec* PrimitiveFor(VMPrimitive* prim) const {
         auto const it = primitives.find(prim);
@@ -455,6 +456,7 @@ private:
     void addGlobalsOf(VMInvokable* inv);
     void numberClasses();
     void findDispatchRanges();
+    void findSignatureGroups();
     void findStaticSends();
     void findStaticSends(VMClass* holder, VMMethod* method, size_t depth);
     VMInvokable* lookup(VMClass* cls, VMSymbol* selector);
@@ -480,6 +482,8 @@ private:
     std::map<VMClass*, size_t> classIds;
     std::map<AbstractVMObject*, std::vector<std::pair<uint8_t, uint8_t>>>
         dispatchRanges;
+    std::map<VMInvokable*, VMInvokable*> nextWithSignature;
+    std::map<VMSymbol*, VMInvokable*> ringHeads;
     std::map<std::pair<VMMethod*, size_t>, VMInvokable*> staticSends;
     std::map<std::pair<VMClass*, VMSymbol*>, VMInvokable*> uniqueTargets;
 };
@@ -779,18 +783,26 @@ void FructusImage::AsmFile::writeHeader(ObjectWriter& w, const std::string& vtab
 
 /**
  * The fields of every class on the host, see VMClass::VMClassNumberOfFields.
- * On fructus the first is the classId, and the second the number of fields.
+ * On fructus the first is the classId, the second the number of fields, and
+ * there are no instanceInvokables, so the fields after them are one lower.
  */
 const char* const classFields[] = {"name", "instanceFields",
                                    "instanceInvokables", "superClass"};
 constexpr size_t nameField = 0;
 constexpr size_t instanceFieldsField = 1;
+constexpr size_t instanceInvokablesField = 2;
 constexpr size_t superClassField = 3;
 static_assert(L::VMClass_classId == L::VMObject_size + nameField * L::word);
 static_assert(L::VMClass_numberOfInstanceFields ==
               L::VMObject_size + instanceFieldsField * L::word);
 static_assert(L::VMClass_superClass ==
-              L::VMObject_size + superClassField * L::word);
+              L::VMObject_size + (superClassField - 1) * L::word);
+
+/** The index on fructus of field `index` of a class, see classFields. */
+static size_t FructusClassFieldIndex(size_t index) {
+    assert(index != instanceInvokablesField);
+    return index > instanceInvokablesField ? index - 1 : index;
+}
 
 /**
  * Whether the receivers of `holder`'s methods are classes: Class, and its
@@ -806,11 +818,33 @@ static bool IsClassSide(VMClass* holder) {
     return false;
 }
 
+/** Whether `bc` has the index of a field after it. */
+static bool HasFieldOperand(uint8_t bc) {
+    return bc == BC_PUSH_FIELD || bc == BC_POP_FIELD || bc == BC_INC_FIELD ||
+           bc == BC_INC_FIELD_PUSH;
+}
+
+/**
+ * The index on fructus of field `index` of an instance of `holder`. A class
+ * has no instanceInvokables there, so the fields after them are one lower.
+ * The class side can't have them, see checkClassFields().
+ */
+static size_t FructusFieldIndex(VMClass* holder, size_t index) {
+    if (holder == nullptr || !IsClassSide(holder)) {
+        return index;
+    }
+    if (index == instanceInvokablesField) {
+        Fail("the invokables of a class aren't a field on fructus");
+    }
+    return FructusClassFieldIndex(index);
+}
+
 /** VMObject, VMClass, VMArray: a header, and fields that are all oops. */
 void FructusImage::AsmFile::writeVMObject(VMObject* obj, const std::string& label) {
     ObjectWriter w(out, label);
     bool const isClass = dynamic_cast<VMClass*>(obj) != nullptr;
-    size_t const numberOfFields = obj->GetNumberOfFields();
+    // a class has no instanceInvokables on fructus, see VMClass.h
+    size_t const numberOfFields = obj->GetNumberOfFields() - (isClass ? 1 : 0);
     size_t const size = L::VMObject_size + numberOfFields * L::word;
 
     std::string vtable;
@@ -838,9 +872,14 @@ void FructusImage::AsmFile::writeVMObject(VMObject* obj, const std::string& labe
     // the program can get at the other objects, and at the class-side
     // fields of classes
     bool const isInternal = image.IsClassArray(obj);
-    for (size_t i = 0; i < numberOfFields; i++) {
+    for (size_t i = 0; i < obj->GetNumberOfFields(); i++) {
         bool const isClassField = isClass && i < 4;
-        size_t const offset = L::VMObject_size + i * L::word;
+        if (isClass && i == instanceInvokablesField) {
+            continue;
+        }
+        size_t const offset =
+            L::VMObject_size +
+            (isClass ? FructusClassFieldIndex(i) : i) * L::word;
         if (isClass && i == nameField) {
             // fructus has no names, see VMClass.h
             w.Word(offset,
@@ -907,8 +946,10 @@ void FructusImage::AsmFile::writeInvokableHeader(ObjectWriter& w, VMInvokable* i
                                    const std::string& vtable,
                                    const std::string& comment) {
     writeHeader(w, vtable, comment + " " + describe(inv));
-    w.Word(L::VMInvokable_signature, SelectorRef(ImageSignature(inv)),
-           "signature");
+    // no signature: the ring has it
+    VMInvokable* next = image.NextWithSignature(inv);
+    w.Word(L::VMInvokable_nextWithSignature, next == nullptr ? "0" : Ref(next),
+           "nextWithSignature");
 }
 
 void FructusImage::AsmFile::writeMethod(VMMethod* method, const std::string& label) {
@@ -916,9 +957,7 @@ void FructusImage::AsmFile::writeMethod(VMMethod* method, const std::string& lab
     // the words are shorter on fructus, and writeBytecodes() writes them
     std::vector<uint8_t> const fructusBytecodes = method->ResizeWords(
         L::word, [](void* /*word*/, uint8_t* /*out*/) {}, false,
-        [&](size_t index) {
-            return image.StaticTarget(method, index) != nullptr;
-        });
+        [&](size_t index) { return fructusBytecode(method, index); }, true);
     size_t const bcLength = fructusBytecodes.size();
 
     if (method->numberOfLocals > UINT8_MAX ||
@@ -999,7 +1038,10 @@ FructusImage::AsmFile::Lines FructusImage::AsmFile::writeBytecodes(
         std::ostringstream line;
         line << "\t.byte\t";
         for (size_t j = 0; j < numBytes; j++) {
-            unsigned const byte = fructusBytecodes[n + j];
+            unsigned byte = fructusBytecodes[n + j];
+            if (j == 1 && HasFieldOperand(bc)) {
+                byte = FructusFieldIndex(method->GetHolder(), byte);
+            }
             line << (j == 0 ? "" : ", ") << byte;
         }
         std::string name = Bytecode::GetBytecodeName(fructusBytecodes[n]);
@@ -1031,38 +1073,65 @@ FructusImage::AsmFile::Lines FructusImage::AsmFile::writeBytecodes(
 }
 
 /**
- * A send, unlinked, see SendSite.h, or a static send if it can only call one
- * invokable, see ImageWriter::findStaticSends().
+ * A send is a static send if it can only call one invokable, see
+ * ImageWriter::findStaticSends(), and NOT_UNDERSTOOD if no class has its
+ * selector, see SendSite.h.
+ */
+uint8_t FructusImage::AsmFile::fructusBytecode(VMMethod* method, size_t index) {
+    uint8_t const bc = method->GetBytecode(index);
+    if (!IsSendBytecode(bc)) {
+        return bc;
+    }
+    if (image.StaticTarget(method, index) != nullptr) {
+        return bc == BC_SEND_1 ? BC_STATIC_SEND_1 : BC_STATIC_SEND;
+    }
+    if (image.RingHead(method->GetSendSelector(index)) == nullptr) {
+        return BC_NOT_UNDERSTOOD;
+    }
+    return bc;
+}
+
+/**
+ * A send, which calls the first invokable of the ring of its selector, see
+ * SendSite.h, a static send, or a NOT_UNDERSTOOD, see fructusBytecode().
  */
 size_t FructusImage::AsmFile::writeSendSite(ObjectWriter& w, size_t offset,
                                             VMMethod* method, size_t index) {
     uint8_t const bc = method->GetBytecode(index);
+    uint8_t const newBc = fructusBytecode(method, index);
     VMSymbol* selector = method->GetSendSelector(index);
-    std::string name = Bytecode::GetBytecodeName(bc);
+    std::string name = Bytecode::GetBytecodeName(newBc);
     name.erase(name.find_last_not_of(' ') + 1);
     std::string comment = name + " #" + Printable(selector);
+    unsigned const numArgs =
+        SendSite::GetNumberOfArguments(&method->GetBytecodes()[index]);
 
     std::ostringstream line;
-    if (VMInvokable* target = image.StaticTarget(method, index)) {
-        uint8_t const staticBc =
-            bc == BC_SEND_1 ? BC_STATIC_SEND_1 : BC_STATIC_SEND;
-        line << "\t.byte\t" << (unsigned)staticBc << "\t; " << comment
+    if (newBc == BC_STATIC_SEND || newBc == BC_STATIC_SEND_1) {
+        VMInvokable* target = image.StaticTarget(method, index);
+        line << "\t.byte\t" << (unsigned)newBc << "\t; " << comment
              << ", static " << describe(target) << "\n"
              << "\t.short\t" << Ref(target) << "\n";
         w.Raw(offset, L::StaticSend_length, line.str());
         return L::StaticSend_length;
     }
+    if (newBc == BC_NOT_UNDERSTOOD) {
+        line << "\t.byte\t" << (unsigned)newBc << ", " << numArgs << "\t; "
+             << comment << ", which no class has\n"
+             << "\t.short\t" << SelectorRef(selector) << "\n";
+        w.Raw(offset, L::NotUnderstood_length, line.str());
+        return L::NotUnderstood_length;
+    }
     assert(bc != BC_SUPER_SEND);
 
     // a unary send has no number of arguments
+    VMInvokable* head = image.RingHead(selector);
     line << "\t.byte\t" << (unsigned)bc;
     if (bc != BC_SEND_1) {
-        line << ", "
-             << (unsigned)method->GetBytecode(index +
-                                              SendSite::numberOfArguments);
+        line << ", " << numArgs;
     }
-    line << "\t; " << comment << "\n"
-         << "\t.short\t" << SelectorRef(selector) << ", 0\n";
+    line << "\t; " << comment << ", first " << describe(head) << "\n"
+         << "\t.short\t" << Ref(head) << "\n";
     size_t const length =
         bc == BC_SEND_1 ? L::SendSite_unaryLength : L::SendSite_length;
     w.Raw(offset, length, line.str());
@@ -1137,7 +1206,9 @@ void FructusImage::AsmFile::writeGlobalReturn(VMGlobalReturn* inv,
 void FructusImage::AsmFile::writeGetter(VMGetter* inv, const std::string& label) {
     ObjectWriter w(out, label);
     writeInvokableHeader(w, inv, Vtable("8VMGetter"), "Getter");
-    w.Word(L::VMGetter_fieldIndex, (int64_t)inv->fieldIndex, "fieldIndex");
+    w.Word(L::VMGetter_fieldIndex,
+           (int64_t)FructusFieldIndex(inv->GetHolder(), inv->fieldIndex),
+           "fieldIndex");
     w.Byte(L::VMGetter_numberOfArguments, inv->numberOfArguments,
            "numberOfArguments");
     w.End(L::VMGetter_size);
@@ -1146,7 +1217,9 @@ void FructusImage::AsmFile::writeGetter(VMGetter* inv, const std::string& label)
 void FructusImage::AsmFile::writeSetter(VMSetter* inv, const std::string& label) {
     ObjectWriter w(out, label);
     writeInvokableHeader(w, inv, Vtable("8VMSetter"), "Setter");
-    w.Word(L::VMSetter_fieldIndex, (int64_t)inv->fieldIndex, "fieldIndex");
+    w.Word(L::VMSetter_fieldIndex,
+           (int64_t)FructusFieldIndex(inv->GetHolder(), inv->fieldIndex),
+           "fieldIndex");
     w.Word(L::VMSetter_argIndex, (int64_t)inv->argIndex, "argIndex");
     w.Byte(L::VMSetter_numberOfArguments, inv->numberOfArguments,
            "numberOfArguments");
@@ -1461,6 +1534,34 @@ void FructusImage::ImageWriter::findDispatchRanges() {
     }
 }
 
+/**
+ * Link the invokables of the classes with the same signature in a ring, in
+ * the order of their classes' classIds, see FructusImage.h.
+ */
+void FructusImage::ImageWriter::findSignatureGroups() {
+    std::vector<VMClass*> byId(allClasses);
+    std::sort(byId.begin(), byId.end(),
+              [&](VMClass* a, VMClass* b) { return ClassId(a) < ClassId(b); });
+    std::map<VMSymbol*, std::vector<VMInvokable*>> groups;
+    for (VMClass* c : byId) {
+        size_t const n = c->GetNumberOfInstanceInvokables();
+        for (size_t i = 0; i < n; i++) {
+            VMInvokable* inv = c->GetInstanceInvokable(i);
+            groups[inv->GetSignature()].push_back(inv);
+        }
+    }
+    for (auto const& [signature, group] : groups) {
+        ringHeads[signature] = group[0];
+        for (size_t i = 0; i < group.size(); i++) {
+            if (!nextWithSignature
+                     .emplace(group[i], group[(i + 1) % group.size()])
+                     .second) {
+                Fail("#" + Printable(signature) + " is in a class twice");
+            }
+        }
+    }
+}
+
 /** What a send of `selector` to an instance of `cls` calls in the image. */
 VMInvokable* FructusImage::ImageWriter::lookup(VMClass* cls,
                                                VMSymbol* selector) {
@@ -1686,6 +1787,13 @@ void FructusImage::ImageWriter::writeClass(VMClass* cls) {
     std::string const label = ClassLabel(cls);
     file.WriteGlobal(cls, label);
     file.WriteGlobal(cls->GetClass(), ClassLabel(cls->GetClass()));
+    // the classes don't refer to their invokables on fructus, see VMClass.h
+    for (VMClass* c : {cls, cls->GetClass()}) {
+        size_t const n = c->GetNumberOfInstanceInvokables();
+        for (size_t i = 0; i < n; i++) {
+            (void)file.Ref(c->GetInstanceInvokable(i));
+        }
+    }
 
     // the Universe::Global for the class
     std::string const nameRef = file.SelectorRef(cls->GetName());
@@ -1710,18 +1818,26 @@ void FructusImage::ImageWriter::writeUniverse(
 
     // System>>initialize: on the host, but known now
     VMClass* mainClass = Universe::LoadClass(SymbolFor(arguments[0]));
-    bool const hasRunWithArguments =
-        mainClass->LookupInvokable(SymbolFor("run:")) != nullptr;
+    VMInvokable* mainNew = lookup(mainClass->GetClass(), SymbolFor("new"));
+    VMInvokable* mainRun = lookup(mainClass, SymbolFor("run:"));
+    if (mainRun == nullptr) {
+        mainRun = lookup(mainClass, SymbolFor("run"));
+    }
+    if (mainNew == nullptr || mainRun == nullptr) {
+        Fail(Printable(mainClass->GetName()) +
+             " has no #new, or neither #run: nor #run");
+    }
     std::ostream& out = file.Out();
     out << "\n\t.globl\tsom_main_class\n"
         << "\t.balign\t2\n"
         << "som_main_class:\n"
         << "\t.short\t" << ClassLabel(mainClass) << "\n"
-        << "\n\t.globl\tsom_main_selector\n"
-        << "som_main_selector:\n"
-        << "\t.short\t"
-        << file.SelectorRef(SymbolFor(hasRunWithArguments ? "run:" : "run"))
-        << "\n";
+        << "\n\t.globl\tsom_main_new\n"
+        << "som_main_new:\n"
+        << "\t.short\t" << file.Ref(mainNew) << "\n"
+        << "\n\t.globl\tsom_main_run\n"
+        << "som_main_run:\n"
+        << "\t.short\t" << file.Ref(mainRun) << "\n";
 
     // indexed by the number of arguments, with the receiver
     out << "\n\t.globl\tsom_block_classes\n"
@@ -1745,12 +1861,6 @@ void FructusImage::ImageWriter::writeUniverse(
             << name << "\n";
     }
     out << "\t.data\n";
-
-    // the selectors the VM uses
-#define FRUCTUS_REF_SYMBOL(mangled, selector) \
-    file.SelectorRef(SymbolFor(selector));
-    FRUCTUS_VM_SYMBOLS(FRUCTUS_REF_SYMBOL)
-#undef FRUCTUS_REF_SYMBOL
 
     writeSymbols(file);
     file.Finish();
@@ -1781,6 +1891,7 @@ void FructusImage::ImageWriter::Write(const std::vector<std::string>& arguments)
     checkClosedWorld();
     numberClasses();
     findDispatchRanges();
+    findSignatureGroups();
     findStaticSends();
     for (VMClass* cls : classes) {
         writeClass(cls);

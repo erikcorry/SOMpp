@@ -42,8 +42,9 @@ public:
     typedef GCInvokable Stored;
 
 #ifdef FRUCTUS
-    explicit VMInvokable(VMSymbol* sig)
-        : signature(store_with_separate_barrier(sig)) {}
+    // the image writer makes them, and they have no signature, see
+    // nextWithSignature
+    explicit VMInvokable(VMSymbol* /*sig*/) {}
 
     [[nodiscard]] som_int_t GetHash() const override {
         return AddressHash(this);
@@ -77,9 +78,38 @@ public:
 
     [[nodiscard]] virtual bool IsPrimitive() const;
 
+#ifdef FRUCTUS
+    /**
+     * Whether a send to an instance of the class with `classId` calls this,
+     * from the ranges of classIds before it, see vm/FructusImage.h. `from`
+     * is the first range to look at.
+     */
+    [[nodiscard]] bool IsMethodOf(size_t classId, size_t from = 0) const {
+        for (const uint8_t* range = (const uint8_t*)this - 2 * (from + 1);
+             range[1] != 0;
+             range -= 2) {
+            if (classId - range[0] < range[1]) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Whether `classId` is in the first range, which a send hits. */
+    [[nodiscard]] bool IsFirstMethodOf(size_t classId) const {
+        const uint8_t* range = (const uint8_t*)this - 2;
+        return classId - range[0] < range[1];
+    }
+
+    /** The next invokable with the same signature, in a ring. */
+    [[nodiscard]] VMInvokable* GetNextWithSignature() const {
+        return load_ptr(nextWithSignature);
+    }
+#else
     [[nodiscard]] inline VMSymbol* GetSignature() const {
         return load_ptr(signature);
     }
+#endif
 
 #ifndef FRUCTUS
     // fructus links the super sends in the image, so it needs no holders
@@ -91,8 +121,10 @@ public:
     void WalkObjects(walk_heap_fn /*unused*/) override;
 
     void MarkObjectAsInvalid() override {
+#ifdef FRUCTUS
+        nextWithSignature = (GCInvokable*)INVALID_GC_POINTER;
+#else
         signature = (GCSymbol*)INVALID_GC_POINTER;
-#ifndef FRUCTUS
         holder = (GCClass*)INVALID_GC_POINTER;
 #endif
     }
@@ -102,14 +134,28 @@ public:
 #endif
 
 protected:
+    /** Whether MarkObjectAsInvalid() marked it. */
+    [[nodiscard]] bool isInvokableMarkedInvalid() const {
+#ifdef FRUCTUS
+        return nextWithSignature == (GCInvokable*)INVALID_GC_POINTER;
+#else
+        return signature == (GCSymbol*)INVALID_GC_POINTER;
+#endif
+    }
+
     make_testable(public);
 
 #ifndef FRUCTUS
     som_int_t hash;
 #endif
 
+#ifdef FRUCTUS
+    // the next invokable of a class with the same signature, in a ring,
+    // which the image writer links, see FructusImage.h, or nullptr. All of
+    // them have the signature, so it needn't be anywhere.
+    GCInvokable* nextWithSignature{nullptr};
+#else
     GCSymbol* signature;
-#ifndef FRUCTUS
     GCClass* holder{nullptr};
 #endif
 };

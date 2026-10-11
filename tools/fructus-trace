@@ -13,7 +13,8 @@ program (a file, or stdin):
     the debug info the image writer puts in the ELF file.
   - sel@<n> is a selector or the name of a global, from the absolute
     symbols of _selectors.s, and class@<address> is a class, from its
-    label.
+    label. method@<address> is the selector of a method of a class, which
+    all the methods in its ring have, from the method's label.
 
 The binutils for fructus are $FRUCTUS_ADDR2LINE and $FRUCTUS_NM,
 fructus-elf-addr2line and fructus-elf-nm, or those in ~/fructus/build.
@@ -54,23 +55,30 @@ def demangle(mangled):
 
 
 def names(elf):
-    """The selectors by number and the classes by address."""
+    """The selectors by number, the classes by address, and the selectors of
+    the methods by address."""
     result = subprocess.run([binutil("nm", "nm-new"), elf],
                             capture_output=True, text=True, check=True)
     selectors = {}
     classes = {}
+    methods = {}
     for line in result.stdout.splitlines():
         words = line.split()
-        if len(words) != 3 or "." in words[2]:
+        if len(words) != 3:
             continue
         value, label = int(words[0], 16), words[2]
+        if "." in label:
+            # <class label>.<mangled selector>
+            if label.startswith(("som_class_", "som_meta_")):
+                methods[value] = "#" + demangle(label.split(".", 1)[1])
+            continue
         if label.startswith("som_sym_"):
             selectors[value] = "#" + demangle(label[len("som_sym_"):])
         elif label.startswith("som_class_"):
             classes[value] = demangle(label[len("som_class_"):])
         elif label.startswith("som_meta_"):
             classes[value] = demangle(label[len("som_meta_"):]) + " class"
-    return selectors, classes
+    return selectors, classes, methods
 
 
 def lookup(elf, pcs):
@@ -92,16 +100,17 @@ def main():
         sys.exit(__doc__.strip())
     elf = sys.argv[1]
     output = open(sys.argv[2]) if len(sys.argv) == 3 else sys.stdin
-    selectors, classes = names(elf)
+    selectors, classes, methods = names(elf)
+    tables = {"sel": selectors, "class": classes, "method": methods}
 
     def name(match):
-        table = selectors if match.group(1) == "sel" else classes
+        table = tables[match.group(1)]
         return table.get(int(match.group(2), 16), match.group(0))
 
     for line in output:
         if not line.startswith("pcs:"):
-            sys.stdout.write(re.sub(r"\b(sel|class)@([0-9a-f]+)\b", name,
-                                    line))
+            sys.stdout.write(re.sub(r"\b(sel|class|method)@([0-9a-f]+)\b",
+                                    name, line))
             continue
         print("Stack trace:")
         pcs = [int(word, 16) for word in line.split()[1:]]

@@ -129,6 +129,7 @@ void VMMethod::WalkObjects(walk_heap_fn walk) {
 #endif
 }
 
+#ifndef FRUCTUS
 VMSymbol* VMMethod::GetSendSelector(size_t bytecodeIndex) const {
     const uint8_t* site = &GetBytecodes()[bytecodeIndex];
     assert(IsSendBytecode(site[0]));
@@ -138,6 +139,7 @@ VMSymbol* VMMethod::GetSendSelector(size_t bytecodeIndex) const {
     }
     return ((VMInvokable*)target)->GetSignature();
 }
+#endif
 
 #ifdef UNSAFE_FRAME_OPTIMIZATION
 GCFrame* VMMethod::GetCachedFrame() const {
@@ -752,26 +754,31 @@ void VMMethod::MergeScopeInto(MethodGenerationContext& mgenc) {
 std::vector<uint8_t> VMMethod::ResizeWords(
     size_t wordSize, const std::function<void(void*, uint8_t*)>& writeWord,
     bool unaryNumberOfArguments,
-    const std::function<bool(size_t)>& isStatic) const {
+    const std::function<uint8_t(size_t)>& newBytecode,
+    bool oneWordSends) const {
     const uint8_t* bytecodes = GetBytecodes();
     // the bytecode at i becomes
-    auto newBytecode = [&](size_t i) -> uint8_t {
-        uint8_t const bc = bytecodes[i];
-        if (!isStatic || !isStatic(i)) {
-            return bc;
-        }
-        assert(IsSendBytecode(bc));
-        return bc == BC_SEND_1 ? BC_STATIC_SEND_1 : BC_STATIC_SEND;
+    auto newBc = [&](size_t i) -> uint8_t {
+        uint8_t const bc = newBytecode ? newBytecode(i) : bytecodes[i];
+        assert(bc == bytecodes[i] || IsSendBytecode(bytecodes[i]));
+        return bc;
+    };
+    auto numberOfWords = [&](uint8_t bc) -> uint8_t {
+        return oneWordSends && IsSendBytecode(bc) ? 1 : GetNumberOfWords(bc);
+    };
+    // the bytes before the words
+    auto numberOfBytes = [](uint8_t bc) -> size_t {
+        return Bytecode::GetBytecodeLength(bc) -
+               GetNumberOfWords(bc) * sizeof(void*);
     };
     // where each bytecode goes
     std::vector<size_t> newIndex(bcLength + 1);
     size_t n = 0;
     for (size_t i = 0; i < bcLength;
          i += Bytecode::GetBytecodeLength(bytecodes[i])) {
-        uint8_t const bc = newBytecode(i);
+        uint8_t const bc = newBc(i);
         newIndex[i] = n;
-        n += Bytecode::GetBytecodeLength(bc) +
-             GetNumberOfWords(bc) * (wordSize - sizeof(void*)) +
+        n += numberOfBytes(bc) + numberOfWords(bc) * wordSize +
              (unaryNumberOfArguments && bc == BC_SEND_1 ? 1 : 0);
     }
     newIndex[bcLength] = n;
@@ -779,18 +786,23 @@ std::vector<uint8_t> VMMethod::ResizeWords(
     std::vector<uint8_t> result(n);
     for (size_t i = 0; i < bcLength;
          i += Bytecode::GetBytecodeLength(bytecodes[i])) {
-        uint8_t const bc = newBytecode(i);
+        uint8_t const bc = newBc(i);
         uint8_t* out = &result[newIndex[i]];
-        uint8_t const numWords = GetNumberOfWords(bc);
-        size_t const numBytes =
-            Bytecode::GetBytecodeLength(bc) - numWords * sizeof(void*);
-        memcpy(out, &bytecodes[i], numBytes);
+        uint8_t const numWords = numberOfWords(bc);
+        size_t const numBytes = numberOfBytes(bc);
+        if (bc == bytecodes[i]) {
+            memcpy(out, &bytecodes[i], numBytes);
+        } else if (bc == BC_NOT_UNDERSTOOD) {
+            out[SendSite::numberOfArguments] =
+                SendSite::GetNumberOfArguments(&bytecodes[i]);
+        }
         out[0] = bc;
         size_t numOutBytes = numBytes;
         if (unaryNumberOfArguments && bc == BC_SEND_1) {
             out[numOutBytes++] = 1;
         }
-        // a static send's word is the target of the send it was
+        // the word of a static send or a NOT_UNDERSTOOD is the target of the
+        // send it was, or its selector
         size_t const words =
             bc == bytecodes[i] ? numBytes : SendSite::Target(bytecodes[i]);
         for (uint8_t w = 0; w < numWords; w++) {

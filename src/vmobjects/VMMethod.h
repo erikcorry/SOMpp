@@ -174,18 +174,24 @@ public:
      * The bytecodes with each word `wordSize` long, and the jumps adjusted.
      * `writeWord(word, out)` writes each of them. With
      * `unaryNumberOfArguments`, a unary send has the number of arguments
-     * like the other sends, see SendSite.h. The send at each index that
-     * `isStatic` is true for becomes a static send, whose word is the
-     * send's target.
+     * like the other sends, see SendSite.h. The send at each index becomes
+     * the bytecode `newBytecode` gives for the index: itself, a static send,
+     * whose word is the send's target, or NOT_UNDERSTOOD, whose word is the
+     * selector. With `oneWordSends`, a send has just its target, as on
+     * fructus.
      */
     [[nodiscard]] std::vector<uint8_t> ResizeWords(
         size_t wordSize, const std::function<void(void*, uint8_t*)>& writeWord,
         bool unaryNumberOfArguments = false,
-        const std::function<bool(size_t)>& isStatic = nullptr) const;
+        const std::function<uint8_t(size_t)>& newBytecode = nullptr,
+        bool oneWordSends = false) const;
 #endif
 
+#ifndef FRUCTUS
+    // fructus sends have no selector, see SendSite.h
     /** The selector of the send at `bytecodeIndex`, see SendSite.h. */
     [[nodiscard]] VMSymbol* GetSendSelector(size_t bytecodeIndex) const;
+#endif
 
 #ifndef FRUCTUS
     void SetHolder(VMClass* hld) override;
@@ -221,7 +227,7 @@ public:
     VMFrame* Invoke1(VMFrame* frame) override;
 
     [[nodiscard]] bool IsMarkedInvalid() const override {
-        return signature == (GCSymbol*)INVALID_GC_POINTER;
+        return isInvokableMarkedInvalid();
     }
 
     DECLARE_AS_DEBUG_STRING(override)

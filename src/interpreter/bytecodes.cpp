@@ -103,6 +103,7 @@ const uint8_t Bytecode::bytecodeLengths[] = {
     SendSite::Length(BC_SEND_EQEQ),  // BC_SEND_EQEQ
     SendSite::staticLength,  // BC_STATIC_SEND
     SendSite::staticLength,  // BC_STATIC_SEND_1
+    SendSite::notUnderstoodLength,  // BC_NOT_UNDERSTOOD
 };
 
 const char* Bytecode::bytecodeNames[] = {
@@ -174,6 +175,7 @@ const char* Bytecode::bytecodeNames[] = {
     "SEND_EQEQ       ",          // 65
     "STATIC_SEND     ",          // 66
     "STATIC_SEND_1   ",          // 67
+    "NOT_UNDERSTOOD  ",          // 68
 };
 
 uint8_t GetNumberOfWords(uint8_t bc) {
@@ -183,6 +185,7 @@ uint8_t GetNumberOfWords(uint8_t bc) {
         case BC_PUSH_GLOBAL:
         case BC_STATIC_SEND:
         case BC_STATIC_SEND_1:
+        case BC_NOT_UNDERSTOOD:
             return 1;
         case BC_SEND:
         case BC_SEND_1:

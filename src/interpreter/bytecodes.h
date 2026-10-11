@@ -102,8 +102,9 @@
 #define BC_SEND_EQEQ               65
 #define BC_STATIC_SEND             66
 #define BC_STATIC_SEND_1           67
+#define BC_NOT_UNDERSTOOD          68
 
-#define _LAST_BYTECODE BC_STATIC_SEND_1
+#define _LAST_BYTECODE BC_NOT_UNDERSTOOD
 
 #define BC_INVALID           255
 // clang-format on

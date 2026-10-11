@@ -45,7 +45,12 @@
 #include "VMObject.h"
 #include "VMSymbol.h"
 
+#ifdef FRUCTUS
+// no instanceInvokables, see VMClass.h
+const size_t VMClass::VMClassNumberOfFields = 3;
+#else
 const size_t VMClass::VMClassNumberOfFields = 4;
+#endif
 
 // NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init, hicpp-member-init)
 VMClass::VMClass() : VMObject(VMClassNumberOfFields, sizeof(VMClass)) {}
@@ -175,6 +180,8 @@ void VMClass::SetInstanceInvokables(VMArray* invokables) {
 }
 #endif
 
+#ifndef FRUCTUS
+// fructus finds the invokables by their classIds, see VMInvokable::IsMethodOf
 size_t VMClass::GetNumberOfInstanceInvokables() const {
     return load_ptr(instanceInvokables)->GetNumberOfIndexableFields();
 }
@@ -184,7 +191,6 @@ VMInvokable* VMClass::GetInstanceInvokable(size_t index) const {
         load_ptr(instanceInvokables)->GetIndexableField(index));
 }
 
-#ifndef FRUCTUS
 void VMClass::SetInstanceInvokable(size_t index, VMInvokable* invokable) {
     load_ptr(instanceInvokables)->SetIndexableField(index, invokable);
 
@@ -193,7 +199,6 @@ void VMClass::SetInstanceInvokable(size_t index, VMInvokable* invokable) {
         invokable->SetHolder(this);
     }
 }
-#endif
 
 VMInvokable* VMClass::LookupInvokable(VMSymbol* name) {
     assert(IsValidObject(this));
@@ -215,6 +220,7 @@ VMInvokable* VMClass::LookupInvokable(VMSymbol* name) {
     // invokable not found
     return nullptr;
 }
+#endif
 
 #ifndef FRUCTUS
 // fructus has no reflection on field names
@@ -302,6 +308,8 @@ void VMClass::SetInstanceFields(VMArray* instFields) {
 }
 #endif
 
+#ifndef FRUCTUS
 VMArray* VMClass::GetInstanceInvokables() const {
     return load_ptr(instanceInvokables);
 }
+#endif

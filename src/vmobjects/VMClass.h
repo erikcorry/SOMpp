@@ -72,16 +72,21 @@ public:
     [[nodiscard]] VMArray* GetInstanceFields() const;
     void SetInstanceFields(VMArray* instFields);
 #endif
+#ifdef FRUCTUS
+    /** The number of the class in preorder of the hierarchy. */
+    [[nodiscard]] size_t GetClassId() const {
+        return SMALL_INT_VAL(load_ptr(classId));
+    }
+#else
+    // fructus finds the invokables by their classIds, see
+    // VMInvokable::IsMethodOf
     [[nodiscard]] VMArray* GetInstanceInvokables() const;
-#ifndef FRUCTUS
     void SetInstanceInvokables(VMArray* /*invokables*/);
-#endif
     [[nodiscard]] size_t GetNumberOfInstanceInvokables() const;
     [[nodiscard]] VMInvokable* GetInstanceInvokable(size_t index) const;
-#ifndef FRUCTUS
     void SetInstanceInvokable(size_t index, VMInvokable* invokable);
-#endif
     VMInvokable* LookupInvokable(VMSymbol* name);
+#endif
 #ifndef FRUCTUS
     // fructus has no reflection on field names
     som_int_t LookupFieldIndex(VMSymbol* name) const;
@@ -106,7 +111,8 @@ public:
 
     /**
      * The fields of every class: name (classId on fructus), instanceFields
-     * (numberOfInstanceFields on fructus) and so on.
+     * (numberOfInstanceFields on fructus), instanceInvokables (not on
+     * fructus) and superClass.
      */
     static const size_t VMClassNumberOfFields;
 
@@ -128,7 +134,7 @@ private:
     gc_oop_t numberOfInstanceFields;
 #else
     GCArray* instanceFields;
-#endif
     GCArray* instanceInvokables;
+#endif
     GCObject* superClass;
 };

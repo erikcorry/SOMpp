@@ -205,7 +205,7 @@ public:
     void MarkObjectAsInvalid() final { VMTrivialMethod::MarkObjectAsInvalid(); }
 
     [[nodiscard]] bool IsMarkedInvalid() const final {
-        return signature == (GCSymbol*)INVALID_GC_POINTER;
+        return isInvokableMarkedInvalid();
     }
 
     void WalkObjects(walk_heap_fn /*walk*/) override;
@@ -253,7 +253,7 @@ public:
     void MarkObjectAsInvalid() final { VMTrivialMethod::MarkObjectAsInvalid(); }
 
     [[nodiscard]] bool IsMarkedInvalid() const final {
-        return signature == (GCSymbol*)INVALID_GC_POINTER;
+        return isInvokableMarkedInvalid();
     }
 
     void WalkObjects(walk_heap_fn /*walk*/) override;

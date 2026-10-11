@@ -19,6 +19,8 @@
 #include "VMInvokable.h"
 #include "VMSymbol.h"
 
+#ifndef FRUCTUS
+// fructus has no sends from the VM: they are errors there
 bool AbstractVMObject::Send(VMSymbol* selector, vm_oop_t* arguments,
                             size_t argc) {
     assert(!GetHeap<HEAP_CLS>()->isRetryRequested());
@@ -42,6 +44,7 @@ bool AbstractVMObject::Send(VMSymbol* selector, vm_oop_t* arguments,
     }
     return true;
 }
+#endif
 
 #ifndef FRUCTUS
 // fructus has no reflection on field names

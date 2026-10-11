@@ -35,6 +35,7 @@ public:
     [[nodiscard]] virtual som_int_t GetHash() const = 0;
     [[nodiscard]] virtual VMClass* GetClass() const = 0;
     [[nodiscard]] virtual AbstractVMObject* CloneForMovingGC() const = 0;
+#ifndef FRUCTUS
     /**
      * Sends selector from the interpreter's frame, with the receiver and
      * arguments pushed onto its stack. Answers false, and pops them again,
@@ -43,6 +44,7 @@ public:
      */
     [[nodiscard]] bool Send(VMSymbol* selector, vm_oop_t* arguments,
                             size_t argc);
+#endif
 
     /** Size in bytes of the object. */
     [[nodiscard]] virtual size_t GetObjectSize() const = 0;

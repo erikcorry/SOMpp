@@ -323,8 +323,7 @@ void Universe::printUsageAndExit(char* executable) {
 VMMethod* Universe::createBootstrapMethod(VMClass* holder,
                                           uint8_t numArgsOfMsgSend) {
 #ifdef FRUCTUS
-    VMMethod* bootstrapMethod =
-        NewMethod(&som_sym_bootstrap, 1, 0, numArgsOfMsgSend, 1);
+    VMMethod* bootstrapMethod = NewMethod(nullptr, 1, 0, numArgsOfMsgSend, 1);
 #else
     vector<BackJump> inlinedLoops;
     auto* bootStrapScope = new LexicalScope(nullptr, {}, {});
@@ -399,16 +398,15 @@ void Universe::initialize(int32_t /*argc*/, char** /*argv*/) {
     InitializeGlobals();
 
     // What System>>initialize: does elsewhere, but with the main class and
-    // whether it has #run: known when the image was written. There is no
-    // command line, the arguments come with the image.
-    VMClass* mainClass = FructusImage::MainClass();
+    // what #new and #run: or #run call known when the image was written.
+    // There is no command line, the arguments come with the image.
     auto* application = static_cast<VMObject*>(interpretMethod(
-        mainClass, mainClass->GetClass()->LookupInvokable(&som_sym_new),
-        nullptr));
+        FructusImage::MainClass(), FructusImage::MainNew(), nullptr));
     GetInterpreter()->ClearFrames();
-    VMSymbol* run = FructusImage::MainSelector();
-    interpretMethod(application, CLASS_OF(application)->LookupInvokable(run),
-                    run == &som_sym_run ? nullptr : FructusImage::Arguments());
+    VMInvokable* run = FructusImage::MainRun();
+    interpretMethod(
+        application, run,
+        run->GetNumberOfArguments() == 1 ? nullptr : FructusImage::Arguments());
 }
 #else
 void Universe::initialize(int32_t _argc, char** _argv) {

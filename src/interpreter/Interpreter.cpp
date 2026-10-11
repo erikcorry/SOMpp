@@ -146,7 +146,8 @@ vm_oop_t Interpreter::Start() {
                                        &&LABEL_BC_JUMP2_BACKWARD,
                                        &&LABEL_BC_SEND_EQEQ,
                                        &&LABEL_BC_STATIC_SEND,
-                                       &&LABEL_BC_STATIC_SEND_1};
+                                       &&LABEL_BC_STATIC_SEND_1,
+                                       &&LABEL_BC_NOT_UNDERSTOOD};
 
     goto* loopTargets[*pc];
 
@@ -375,6 +376,20 @@ LABEL_BC_STATIC_SEND_1:
     ((VMInvokable*)LoadWord(pc + SendSite::staticTarget))->Invoke1(GetFrame());
     RELOAD_PC();
     DISPATCH_GC(SendSite::staticLength);
+
+    // A send of a selector no class has, see SendSite.h.
+LABEL_BC_NOT_UNDERSTOOD:
+#ifdef FRUCTUS
+    PROLOGUE();
+    SAVE_NEXT_PC(SendSite::notUnderstoodLength);
+    triggerDoesNotUnderstand(
+        (VMSymbol*)LoadWord(pc + SendSite::notUnderstoodSelector),
+        CLASS_OF(
+            GetFrame()->GetStackElement(pc[SendSite::numberOfArguments] - 1)));
+#else
+    // only the fructus image writer makes them
+    __builtin_unreachable();
+#endif
 
 LABEL_BC_RETURN_LOCAL:
     PROLOGUE();
@@ -804,30 +819,28 @@ void Interpreter::popFrameAndPushResult(vm_oop_t result) {
     GetFrame()->Push(result);
 }
 
-// The slow path of a send, which looks the selector up, and links the send
-// if it's unlinked, see SendSite.h.
-void Interpreter::sendMiss(uint8_t* site, VMClass* receiverClass) {
-    bool const isUnlinked = SendSite::GetReceiverClass(site) == nullptr;
-    VMSymbol* selector = method->GetSendSelector(site - method->GetBytecodes());
-    VMInvokable* invokable = receiverClass->LookupInvokable(selector);
-
-    if (invokable == nullptr) {
 #ifdef FRUCTUS
-        triggerDoesNotUnderstand(selector, receiverClass);
-#else
-        triggerDoesNotUnderstand(selector);
-        return;
-#endif
-    }
-    if (isUnlinked) {
-        SendSite::Link(site, invokable, receiverClass);
-#ifndef FRUCTUS
-        // On fructus the classes and invokables are all in the image, which
-        // the collector doesn't move or free, and the methods are above 32K,
+// The slow path of a send, where the receiver's classId isn't in the first
+// range of the target: look in its other ranges, and then in the others in
+// its ring, and link the send to the one that has it, see SendSite.h.
+void Interpreter::sendMiss(uint8_t* site, VMClass* receiverClass) {
+    auto* const target = (VMInvokable*)SendSite::GetTarget(site);
+    size_t const classId = receiverClass->GetClassId();
+    VMInvokable* invokable = target;
+    if (!target->IsMethodOf(classId, 1)) {
+        do {
+            invokable = invokable->GetNextWithSignature();
+            if (invokable == target) {
+                // the ring's selector, see tools/fructus-trace
+                char selector[16];
+                FormatTagged(selector, "method", (uintptr_t)target);
+                DoesNotUnderstand(selector, receiverClass);
+            }
+        } while (!invokable->IsMethodOf(classId));
+        // On fructus the invokables are all in the image, which the
+        // collector doesn't move or free, and the methods are above 32K,
         // which the cards don't cover.
-        write_barrier(method, invokable);
-        write_barrier(method, receiverClass);
-#endif
+        SendSite::Link(site, invokable);
     }
     recordStat(CallStats, receiverClass, invokable);
     if (site[0] == BC_SEND_1) {
@@ -836,11 +849,38 @@ void Interpreter::sendMiss(uint8_t* site, VMClass* receiverClass) {
         invokable->Invoke(GetFrame());
     }
 }
+#else
+// The slow path of a send, which looks the selector up, and links the send
+// if it's unlinked, see SendSite.h.
+void Interpreter::sendMiss(uint8_t* site, VMClass* receiverClass) {
+    bool const isUnlinked = SendSite::GetReceiverClass(site) == nullptr;
+    VMSymbol* selector = method->GetSendSelector(site - method->GetBytecodes());
+    VMInvokable* invokable = receiverClass->LookupInvokable(selector);
+
+    if (invokable == nullptr) {
+        triggerDoesNotUnderstand(selector);
+        return;
+    }
+    if (isUnlinked) {
+        SendSite::Link(site, invokable, receiverClass);
+        write_barrier(method, invokable);
+        write_barrier(method, receiverClass);
+    }
+    recordStat(CallStats, receiverClass, invokable);
+    if (site[0] == BC_SEND_1) {
+        invokable->Invoke1(GetFrame());
+    } else {
+        invokable->Invoke(GetFrame());
+    }
+}
+#endif
 
 #ifdef FRUCTUS
 // a closed world: the program can't have the selector, so it's an error, and
-// doesNotUnderstand:arguments: is never sent. Selectors and classes have no
-// names, so this is in the form tools/fructus-trace translates.
+// doesNotUnderstand:arguments: is never sent. A send of a selector that no
+// class has is NOT_UNDERSTOOD, which has the selector, see SendSite.h.
+// Selectors and classes have no names, so this is in the form
+// tools/fructus-trace translates.
 void Interpreter::triggerDoesNotUnderstand(VMSymbol* signature, VMClass* cls) {
     char selector[16];
     FormatTagged(selector, "sel", (uintptr_t)signature);
@@ -1040,6 +1080,18 @@ void Interpreter::doPopFieldWithIndex(uint8_t fieldIndex) {
     }
 }
 
+// Whether the send at `site`, whose bytecode is `bc`, calls its target for
+// an instance of `receiverClass` without a lookup, see SendSite.h.
+static inline bool hits(const uint8_t* site, uint8_t bc,
+                        VMClass* receiverClass) {
+#ifdef FRUCTUS
+    return ((VMInvokable*)SendSite::GetTarget(site, bc))
+        ->IsFirstMethodOf(receiverClass->GetClassId());
+#else
+    return receiverClass == SendSite::GetReceiverClass(site, bc);
+#endif
+}
+
 void Interpreter::doSend(uint8_t* site) {
     vm_oop_t receiver = GetFrame()->GetStackElement(
         site[SendSite::numberOfArguments] - 1);
@@ -1047,7 +1099,7 @@ void Interpreter::doSend(uint8_t* site) {
     VMClass* receiverClass = CLASS_OF(receiver);
     recordStat(ReceiverType, receiverClass);
 
-    if (receiverClass == SendSite::GetReceiverClass(site, BC_SEND)) {
+    if (hits(site, BC_SEND, receiverClass)) {
         auto* invokable = (VMInvokable*)SendSite::GetTarget(site, BC_SEND);
         recordStat(CallStats, receiverClass, invokable);
         invokable->Invoke(GetFrame());
@@ -1062,7 +1114,7 @@ void Interpreter::doUnarySend(uint8_t* site) {
     VMClass* receiverClass = CLASS_OF(receiver);
     recordStat(ReceiverType, receiverClass);
 
-    if (receiverClass == SendSite::GetReceiverClass(site, BC_SEND_1)) {
+    if (hits(site, BC_SEND_1, receiverClass)) {
         auto* invokable = (VMInvokable*)SendSite::GetTarget(site, BC_SEND_1);
         recordStat(CallStats, receiverClass, invokable);
         invokable->Invoke1(GetFrame());
