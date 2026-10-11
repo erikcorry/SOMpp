@@ -1,8 +1,8 @@
 #include "VMBigInteger.h"
 
 #include <assert.h>
-#include <math.h>
 #include <cstdint>
+#include <math.h>
 
 #include "../memory/Heap.h"
 #include "../misc/defs.h"
@@ -37,9 +37,7 @@ bool VMBigInteger::IsMarkedInvalid() const {
 }
 
 vm_oop_t VMBigInteger::Add(som_int_t value) const {
-    // TODO(smarr): try to fit into SmallInt
-    return new (GetHeap<HEAP_CLS>(), 0)
-        VMBigInteger(embeddedInteger + InfInt(value));
+    return Universe::NewInt(embeddedInteger + InfInt(value));
 }
 
 vm_oop_t VMBigInteger::Add(vm_oop_t value) const {
@@ -55,21 +53,18 @@ vm_oop_t VMBigInteger::Add(vm_oop_t value) const {
 
     assert(IS_BIG_INT(value) && "assume rcvr is a big int now");
 
-    // TODO(smarr): try to fit into SmallInt
-    return new (GetHeap<HEAP_CLS>(), 0)
-        VMBigInteger(embeddedInteger + AS_BIG_INT(value)->embeddedInteger);
+    return Universe::NewInt(embeddedInteger +
+                            AS_BIG_INT(value)->embeddedInteger);
 }
 
 vm_oop_t VMBigInteger::SubtractFrom(som_int_t value) const {
     InfInt const left = InfInt(value);
-    // TODO(smarr): try to fit into SmallInt
-    return new (GetHeap<HEAP_CLS>(), 0) VMBigInteger(left - embeddedInteger);
+    return Universe::NewInt(left - embeddedInteger);
 }
 
 vm_oop_t VMBigInteger::Subtract(vm_oop_t value) const {
     if (IS_SMALL_INT(value)) {
-        return new (GetHeap<HEAP_CLS>(), 0)
-            VMBigInteger(embeddedInteger - InfInt(SMALL_INT_VAL(value)));
+        return Universe::NewInt(embeddedInteger - InfInt(SMALL_INT_VAL(value)));
     }
 
     if (IS_DOUBLE(value)) {
@@ -80,21 +75,17 @@ vm_oop_t VMBigInteger::Subtract(vm_oop_t value) const {
 
     assert(IS_BIG_INT(value) && "assume rcvr is a big int now");
 
-    // TODO(smarr): try to fit into SmallInt
-    return new (GetHeap<HEAP_CLS>(), 0)
-        VMBigInteger(embeddedInteger - AS_BIG_INT(value)->embeddedInteger);
+    return Universe::NewInt(embeddedInteger -
+                            AS_BIG_INT(value)->embeddedInteger);
 }
 
 vm_oop_t VMBigInteger::Multiply(som_int_t value) const {
-    // TODO(smarr): try to fit into SmallInt
-    return new (GetHeap<HEAP_CLS>(), 0)
-        VMBigInteger(embeddedInteger * InfInt(value));
+    return Universe::NewInt(embeddedInteger * InfInt(value));
 }
 
 vm_oop_t VMBigInteger::Multiply(vm_oop_t value) const {
     if (IS_SMALL_INT(value)) {
-        return new (GetHeap<HEAP_CLS>(), 0)
-            VMBigInteger(embeddedInteger * InfInt(SMALL_INT_VAL(value)));
+        return Universe::NewInt(embeddedInteger * InfInt(SMALL_INT_VAL(value)));
     }
 
     if (IS_DOUBLE(value)) {
@@ -105,21 +96,17 @@ vm_oop_t VMBigInteger::Multiply(vm_oop_t value) const {
 
     assert(IS_BIG_INT(value) && "assume rcvr is a big int now");
 
-    // TODO(smarr): try to fit into SmallInt
-    return new (GetHeap<HEAP_CLS>(), 0)
-        VMBigInteger(embeddedInteger * AS_BIG_INT(value)->embeddedInteger);
+    return Universe::NewInt(embeddedInteger *
+                            AS_BIG_INT(value)->embeddedInteger);
 }
 
 vm_oop_t VMBigInteger::DivisionFrom(som_int_t value) const {
-    // TODO(smarr): try to fit into SmallInt
-    return new (GetHeap<HEAP_CLS>(), 0)
-        VMBigInteger(InfInt(value) / embeddedInteger);
+    return Universe::NewInt(InfInt(value) / embeddedInteger);
 }
 
 vm_oop_t VMBigInteger::DivideBy(vm_oop_t value) const {
     if (IS_SMALL_INT(value)) {
-        return new (GetHeap<HEAP_CLS>(), 0)
-            VMBigInteger(embeddedInteger / InfInt(SMALL_INT_VAL(value)));
+        return Universe::NewInt(embeddedInteger / InfInt(SMALL_INT_VAL(value)));
     }
 
     if (IS_DOUBLE(value)) {
@@ -130,21 +117,17 @@ vm_oop_t VMBigInteger::DivideBy(vm_oop_t value) const {
 
     assert(IS_BIG_INT(value) && "assume rcvr is a big int now");
 
-    // TODO(smarr): try to fit into SmallInt
-    return new (GetHeap<HEAP_CLS>(), 0)
-        VMBigInteger(embeddedInteger / AS_BIG_INT(value)->embeddedInteger);
+    return Universe::NewInt(embeddedInteger /
+                            AS_BIG_INT(value)->embeddedInteger);
 }
 
 vm_oop_t VMBigInteger::ModuloFrom(som_int_t value) const {
-    // TODO(smarr): try to fit into SmallInt
-    return new (GetHeap<HEAP_CLS>(), 0)
-        VMBigInteger(InfInt(value) % embeddedInteger);
+    return Universe::NewInt(InfInt(value) % embeddedInteger);
 }
 
 vm_oop_t VMBigInteger::Modulo(vm_oop_t value) const {
     if (IS_SMALL_INT(value)) {
-        return new (GetHeap<HEAP_CLS>(), 0)
-            VMBigInteger(embeddedInteger % InfInt(SMALL_INT_VAL(value)));
+        return Universe::NewInt(embeddedInteger % InfInt(SMALL_INT_VAL(value)));
     }
 
     if (IS_DOUBLE(value)) {
@@ -155,14 +138,13 @@ vm_oop_t VMBigInteger::Modulo(vm_oop_t value) const {
 
     assert(IS_BIG_INT(value) && "assume rcvr is a big int now");
 
-    // TODO(smarr): try to fit into SmallInt
-    return new (GetHeap<HEAP_CLS>(), 0)
-        VMBigInteger(embeddedInteger % AS_BIG_INT(value)->embeddedInteger);
+    return Universe::NewInt(embeddedInteger %
+                            AS_BIG_INT(value)->embeddedInteger);
 }
 
 vm_oop_t VMBigInteger::Negate() {
     if (embeddedInteger < InfInt()) {
-        return new (GetHeap<HEAP_CLS>(), 0) VMBigInteger(-embeddedInteger);
+        return Universe::NewInt(-embeddedInteger);
     }
     return const_cast<VMBigInteger*>(this);
 }

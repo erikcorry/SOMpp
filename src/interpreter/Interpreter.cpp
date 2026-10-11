@@ -1181,12 +1181,14 @@ static inline bool integerAdd(vm_oop_t& val, som_int_t delta) {
 }
 #else
 /**
- * Sets val to val + delta, for a small integer or a double. Answers false if
- * the result couldn't be allocated.
+ * Sets val to val + delta, for an integer or a double. Answers false if the
+ * result couldn't be allocated.
  */
 static inline bool integerAdd(vm_oop_t& val, som_int_t delta) {
     if (IS_SMALL_INT(val)) {
         val = NEW_INT(SMALL_INT_VAL(val) + delta);
+    } else if (IS_BIG_INT(val)) {
+        val = AS_BIG_INT(val)->Add(delta);
     } else if (CLASS_OF(val) == load_ptr(doubleClass)) {
         double const d = static_cast<VMDouble*>(val)->GetEmbeddedDouble();
         val = Universe::NewDouble(d + (double)delta);
