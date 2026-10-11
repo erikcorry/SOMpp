@@ -426,6 +426,17 @@ public:
         return it == staticSends.end() ? nullptr : it->second;
     }
 
+    /**
+     * The classIds `obj` is the method of, as ranges of the first and how
+     * many, or nullptr if it isn't an invokable of a class, see
+     * findDispatchRanges().
+     */
+    [[nodiscard]] const std::vector<std::pair<uint8_t, uint8_t>>*
+    DispatchRanges(AbstractVMObject* obj) const {
+        auto const it = dispatchRanges.find(obj);
+        return it == dispatchRanges.end() ? nullptr : &it->second;
+    }
+
     /** The fructus primitive `prim` stands for, or nullptr if there's none. */
     const PrimitiveSpec* PrimitiveFor(VMPrimitive* prim) const {
         auto const it = primitives.find(prim);
@@ -443,6 +454,7 @@ private:
     void addGlobalsOf(VMClass* cls);
     void addGlobalsOf(VMInvokable* inv);
     void numberClasses();
+    void findDispatchRanges();
     void findStaticSends();
     void findStaticSends(VMClass* holder, VMMethod* method, size_t depth);
     VMInvokable* lookup(VMClass* cls, VMSymbol* selector);
@@ -466,6 +478,8 @@ private:
     /** The classes and the metaclasses, the classes of every object. */
     std::vector<VMClass*> allClasses;
     std::map<VMClass*, size_t> classIds;
+    std::map<AbstractVMObject*, std::vector<std::pair<uint8_t, uint8_t>>>
+        dispatchRanges;
     std::map<std::pair<VMMethod*, size_t>, VMInvokable*> staticSends;
     std::map<std::pair<VMClass*, VMSymbol*>, VMInvokable*> uniqueTargets;
 };
@@ -695,7 +709,18 @@ void FructusImage::AsmFile::write(AbstractVMObject* obj, const std::string& labe
     if (isWritable) {
         out << "\t.pushsection\tsom_writable,\"aw\",@progbits\n";
     }
-    out << "\t.balign\t2\n" << label << ":\n";
+    out << "\t.balign\t2\n";
+    if (const auto* ranges = image.DispatchRanges(obj)) {
+        // the farthest from the object first, see FructusImage.h
+        out << "\t.byte\t0, 0\t; the end of the classIds\n";
+        for (auto it = ranges->rbegin(); it != ranges->rend(); ++it) {
+            out << "\t.byte\t" << (unsigned)it->first << ", "
+                << (unsigned)it->second << "\t; classIds "
+                << (unsigned)it->first << " to "
+                << (unsigned)it->first + it->second - 1 << "\n";
+        }
+    }
+    out << label << ":\n";
 
     // the most derived classes first
     if (auto* str = dynamic_cast<VMString*>(obj)) {
@@ -1375,8 +1400,9 @@ void FructusImage::ImageWriter::numberClasses() {
         VMClass* c = toNumber.back();
         toNumber.pop_back();
         size_t const id = classIds.size();
-        if (id > (size_t)L::smallIntMax) {
-            Fail("the program has too many classes");
+        if (id > UINT8_MAX) {
+            Fail("the program has more than " + std::to_string(UINT8_MAX + 1) +
+                 " classes and metaclasses");
         }
         classIds[c] = id;
         std::vector<VMClass*> const& subs = subclasses[c];
@@ -1384,6 +1410,54 @@ void FructusImage::ImageWriter::numberClasses() {
     }
     if (classIds.size() != allClasses.size()) {
         Fail("the classes of the image aren't a tree");
+    }
+}
+
+/**
+ * The classIds each invokable of a class is the method of, see
+ * FructusImage.h: the classes that look it up first for its signature, up
+ * their superclasses. A subclass's own range is punched out of an
+ * invokable's when it overrides it, so it can have more than one.
+ */
+void FructusImage::ImageWriter::findDispatchRanges() {
+    std::map<VMInvokable*, std::vector<size_t>> ids;
+    for (VMClass* cls : allClasses) {
+        std::set<VMSymbol*> found;
+        for (VMClass* c = cls;; c = SuperClass(c)) {
+            size_t const n = c->GetNumberOfInstanceInvokables();
+            for (size_t i = 0; i < n; i++) {
+                VMInvokable* inv = c->GetInstanceInvokable(i);
+                if (found.insert(inv->GetSignature()).second) {
+                    ids[inv].push_back(ClassId(cls));
+                }
+            }
+            if (!c->HasSuperClass()) {
+                break;
+            }
+        }
+    }
+    for (VMClass* c : allClasses) {
+        size_t const n = c->GetNumberOfInstanceInvokables();
+        for (size_t i = 0; i < n; i++) {
+            VMInvokable* inv = c->GetInstanceInvokable(i);
+            std::vector<size_t>& invIds = ids[inv];
+            if (invIds.empty()) {
+                Fail(Printable(c->GetName()) + ">>#" +
+                     Printable(inv->GetSignature()) +
+                     " is the method of no class");
+            }
+            std::sort(invIds.begin(), invIds.end());
+            std::vector<std::pair<uint8_t, uint8_t>> ranges;
+            for (size_t const id : invIds) {
+                if (ranges.empty() ||
+                    ranges.back().first + ranges.back().second != id ||
+                    ranges.back().second == UINT8_MAX) {
+                    ranges.emplace_back(id, 0);
+                }
+                ranges.back().second++;
+            }
+            dispatchRanges[inv] = ranges;
+        }
     }
 }
 
@@ -1706,6 +1780,7 @@ void FructusImage::ImageWriter::Write(const std::vector<std::string>& arguments)
     collectClasses(arguments);
     checkClosedWorld();
     numberClasses();
+    findDispatchRanges();
     findStaticSends();
     for (VMClass* cls : classes) {
         writeClass(cls);

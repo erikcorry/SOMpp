@@ -20,7 +20,12 @@
  *    names, and no names of fields, just how many. Where the host has the
  *    name, a class has its classId, its number in preorder of the
  *    hierarchy, so the classes that inherit from it are a range of
- *    numbers.
+ *    numbers. There are at most 256 classes and metaclasses, so a classId
+ *    is a byte.
+ *  - Before each invokable of a class are the classIds of the classes that
+ *    it's the method of: the ones whose instances a send of its signature
+ *    calls it for. They're ranges, since a subclass that overrides it
+ *    punches its own range out, see DispatchRange below.
  *  - Each class adds a global to the som_globals section.
  *  - A method of a class is the global symbol <class label>.<mangled
  *    selector>, for the static sends in other files. A method has no
@@ -122,6 +127,18 @@ constexpr size_t VMString_size = 6;
 constexpr size_t selectorLimit = 0x1000;
 
 constexpr size_t VMInvokable_signature = 2;
+
+/**
+ * The classIds an invokable of a class is the method of, which come before
+ * it, the first in the word before its vtable and the next in the word
+ * before that, and so on: the first classId of a range and how many there
+ * are, in ascending order of the first. There is at least one, and the last
+ * is followed by one that is 0, 0. A range that would be 256 long is two.
+ * Nothing else has them: a block's method isn't the method of a class.
+ */
+constexpr size_t DispatchRange_size = 2;
+constexpr size_t DispatchRange_lo = 0;
+constexpr size_t DispatchRange_length = 1;
 // no holder: the image writer links the super sends, see Interpreter.cpp
 
 constexpr size_t VMMethod_bcLength = 4;
