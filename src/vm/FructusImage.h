@@ -17,10 +17,10 @@
  *  - A selector, or the name of a global, is a number, the absolute ELF
  *    symbol som_sym_<mangled name>, which _selectors.s gives each, see
  *    vmobjects/VMSymbol.h, and not an object. Classes have no
- *    names, nor a field for one, and no names of fields, just how many.
- *    Since the class side is compiled on the host, where a class's first
- *    field is its name, the image writer shifts the class side's field
- *    indices down by one.
+ *    names, and no names of fields, just how many. Where the host has the
+ *    name, a class has its classId, its number in preorder of the
+ *    hierarchy, so the classes that inherit from it are a range of
+ *    numbers.
  *  - Each class adds a global to the som_globals section.
  *  - A method of a class is the global symbol <class label>.<mangled
  *    selector>, for the static sends in other files. A method has no
@@ -92,12 +92,13 @@ constexpr size_t VMObject_numberOfFields = 4;
 constexpr size_t VMObject_clazz = 6;
 constexpr size_t VMObject_size = 8;
 
-// no name: classes have none
+/** Tagged, where the host has the name, see VMClass.h. */
+constexpr size_t VMClass_classId = 8;
 /** The number of fields, tagged: the image has no field names. */
-constexpr size_t VMClass_numberOfInstanceFields = 8;
-constexpr size_t VMClass_instanceInvokables = 10;
-constexpr size_t VMClass_superClass = 12;
-constexpr size_t VMClass_size = 14;
+constexpr size_t VMClass_numberOfInstanceFields = 10;
+constexpr size_t VMClass_instanceInvokables = 12;
+constexpr size_t VMClass_superClass = 14;
+constexpr size_t VMClass_size = 16;
 
 constexpr size_t VMArray_size = 8;
 

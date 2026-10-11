@@ -105,8 +105,8 @@ public:
     DECLARE_AS_DEBUG_STRING(override)
 
     /**
-     * The fields of every class: name (not on fructus), instanceFields and
-     * so on.
+     * The fields of every class: name (classId on fructus), instanceFields
+     * (numberOfInstanceFields on fructus) and so on.
      */
     static const size_t VMClassNumberOfFields;
 
@@ -115,7 +115,11 @@ private:
 
     // Remember to update Parser::superclass when the fields are changed
     // Theses are treated like VMObject fields and initialized that way
-#ifndef FRUCTUS
+#ifdef FRUCTUS
+    // where the host has the name: the number of the class in preorder of
+    // the hierarchy, tagged, see vm/FructusImage.h
+    gc_oop_t classId;
+#else
     GCSymbol* name;
 #endif
 #ifdef FRUCTUS

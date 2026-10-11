@@ -45,11 +45,7 @@
 #include "VMObject.h"
 #include "VMSymbol.h"
 
-#ifdef FRUCTUS
-const size_t VMClass::VMClassNumberOfFields = 3;
-#else
 const size_t VMClass::VMClassNumberOfFields = 4;
-#endif
 
 // NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init, hicpp-member-init)
 VMClass::VMClass() : VMObject(VMClassNumberOfFields, sizeof(VMClass)) {}
