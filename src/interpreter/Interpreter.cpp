@@ -144,7 +144,9 @@ vm_oop_t Interpreter::Start() {
                                        &&LABEL_BC_JUMP2_ON_NIL_TOP_TOP,
                                        &&LABEL_BC_JUMP2_IF_GREATER,
                                        &&LABEL_BC_JUMP2_BACKWARD,
-                                       &&LABEL_BC_SEND_EQEQ};
+                                       &&LABEL_BC_SEND_EQEQ,
+                                       &&LABEL_BC_STATIC_SEND,
+                                       &&LABEL_BC_STATIC_SEND_1};
 
     goto* loopTargets[*pc];
 
@@ -348,11 +350,31 @@ LABEL_BC_SEND_1:
     DISPATCH_GC(SendSite::Length(BC_SEND_1));
 
 LABEL_BC_SUPER_SEND:
+#ifdef FRUCTUS
+    // the image writer makes every super send a STATIC_SEND
+    __builtin_unreachable();
+#else
     PROLOGUE();
     SAVE_NEXT_PC(SendSite::Length(BC_SUPER_SEND));
     doSuperSend(pc);
     RELOAD_PC();
     DISPATCH_GC(SendSite::Length(BC_SUPER_SEND));
+#endif
+
+    // A send that can only call one invokable, see SendSite.h.
+LABEL_BC_STATIC_SEND:
+    PROLOGUE();
+    SAVE_NEXT_PC(SendSite::staticLength);
+    ((VMInvokable*)LoadWord(pc + SendSite::staticTarget))->Invoke(GetFrame());
+    RELOAD_PC();
+    DISPATCH_GC(SendSite::staticLength);
+
+LABEL_BC_STATIC_SEND_1:
+    PROLOGUE();
+    SAVE_NEXT_PC(SendSite::staticLength);
+    ((VMInvokable*)LoadWord(pc + SendSite::staticTarget))->Invoke1(GetFrame());
+    RELOAD_PC();
+    DISPATCH_GC(SendSite::staticLength);
 
 LABEL_BC_RETURN_LOCAL:
     PROLOGUE();
@@ -1049,15 +1071,10 @@ void Interpreter::doUnarySend(uint8_t* site) {
     }
 }
 
+#ifndef FRUCTUS
+// On fructus the image writer makes every super send a STATIC_SEND, so
+// invokables need no holder to find the superclass
 void Interpreter::doSuperSend(uint8_t* site) {
-#ifdef FRUCTUS
-    // the image writer links every super send, so invokables need no holder
-    // to find the superclass
-    assert(SendSite::GetReceiverClass(site, BC_SUPER_SEND) != nullptr);
-    ((VMInvokable*)SendSite::GetTarget(site, BC_SUPER_SEND))
-        ->Invoke(GetFrame());
-}
-#else
     // a linked super send has its invokable whatever the receiver is
     if (SendSite::GetReceiverClass(site) != nullptr) {
         auto* invokable = (VMInvokable*)SendSite::GetTarget(site);
@@ -1075,10 +1092,8 @@ void Interpreter::doSuperSend(uint8_t* site) {
 
     if (invokable != nullptr) {
         SendSite::Link(site, invokable, super);
-#ifndef FRUCTUS
         write_barrier(method, invokable);
         write_barrier(method, super);
-#endif
         invokable->Invoke(GetFrame());
     } else {
         triggerDoesNotUnderstand(signature);

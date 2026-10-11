@@ -23,13 +23,16 @@
  *    indices down by one.
  *  - Each class adds a global to the som_globals section.
  *  - A method of a class is the global symbol <class label>.<mangled
- *    selector>, for the super sends in other files. A method has no
+ *    selector>, for the static sends in other files. A method has no
  *    constants: its bytecodes refer to the objects they push, see
  *    interpreter/bytecodes.h. The sends carry their inline caches, see
- *    interpreter/SendSite.h: they are unlinked, but a super send is linked
- *    already, since it doesn't depend on the receiver, so an invokable has
- *    no holder to find the superclass with, and a super send that isn't
- *    understood is an error of the image writer.
+ *    interpreter/SendSite.h, and are unlinked. A send that can only call
+ *    one invokable is a static send of it instead: every super send, since
+ *    it doesn't depend on the receiver, so an invokable has no holder to
+ *    find the superclass with, and a super send that isn't understood is an
+ *    error of the image writer; and a send that every class its receiver
+ *    can be an instance of understands with the same invokable, such as a
+ *    send to self that no subclass overrides.
  *  - A primitive is an object in the image like a method, which refers to
  *    its routine by name, see primitives/FructusPrimitives.h. Nothing is
  *    installed at run time.
@@ -154,6 +157,9 @@ constexpr size_t SendSite_receiverClass = 4;
 constexpr size_t SendSite_length = 6;
 constexpr size_t SendSite_unaryTarget = 1;
 constexpr size_t SendSite_unaryLength = 5;
+/** A static send is the bytecode and the invokable it calls. */
+constexpr size_t StaticSend_target = 1;
+constexpr size_t StaticSend_length = 3;
 
 /**
  * VMPrimitive and VMSafe*Primitive: a Prim, which is just a routine. A

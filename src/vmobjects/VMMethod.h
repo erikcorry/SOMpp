@@ -174,11 +174,14 @@ public:
      * The bytecodes with each word `wordSize` long, and the jumps adjusted.
      * `writeWord(word, out)` writes each of them. With
      * `unaryNumberOfArguments`, a unary send has the number of arguments
-     * like the other sends, see SendSite.h.
+     * like the other sends, see SendSite.h. The send at each index that
+     * `isStatic` is true for becomes a static send, whose word is the
+     * send's target.
      */
     [[nodiscard]] std::vector<uint8_t> ResizeWords(
         size_t wordSize, const std::function<void(void*, uint8_t*)>& writeWord,
-        bool unaryNumberOfArguments = false) const;
+        bool unaryNumberOfArguments = false,
+        const std::function<bool(size_t)>& isStatic = nullptr) const;
 #endif
 
     /** The selector of the send at `bytecodeIndex`, see SendSite.h. */

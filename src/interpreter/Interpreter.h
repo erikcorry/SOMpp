@@ -160,7 +160,9 @@ private:
     void doPopFieldWithIndex(uint8_t fieldIndex);
     void doSend(uint8_t* site);
     void doUnarySend(uint8_t* site);
+#ifndef FRUCTUS
     void doSuperSend(uint8_t* site);
+#endif
     void doReturnLocal();
     bool doReturnNonLocal();
 #ifndef FRUCTUS

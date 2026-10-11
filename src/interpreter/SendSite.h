@@ -22,6 +22,11 @@
  * A super send doesn't depend on the receiver: once it's linked, the target
  * is the invokable and the receiverClass is the superclass it was found in.
  *
+ * A static send, STATIC_SEND or STATIC_SEND_1, is just the bytecode and the
+ * invokable it calls, whatever the receiver is. Only the fructus image writer
+ * makes them, for the sends that can only call one invokable, see
+ * FructusImage.h, and they aren't send sites: IsSendBytecode() is false.
+ *
  */
 
 #include <cstddef>
@@ -48,6 +53,10 @@ constexpr size_t ReceiverClass(uint8_t bc) {
 constexpr size_t Length(uint8_t bc) {
     return ReceiverClass(bc) + sizeof(void*);
 }
+
+/** Where the target of a static send is, which is all it has. */
+constexpr size_t staticTarget = 1;
+constexpr size_t staticLength = staticTarget + sizeof(void*);
 
 /** The longest a send is. */
 constexpr size_t maxLength = Length(BC_SEND);

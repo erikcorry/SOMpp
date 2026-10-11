@@ -101,6 +101,8 @@ const uint8_t Bytecode::bytecodeLengths[] = {
     3,  // BC_JUMP2_BACKWARD
 
     SendSite::Length(BC_SEND_EQEQ),  // BC_SEND_EQEQ
+    SendSite::staticLength,  // BC_STATIC_SEND
+    SendSite::staticLength,  // BC_STATIC_SEND_1
 };
 
 const char* Bytecode::bytecodeNames[] = {
@@ -170,6 +172,8 @@ const char* Bytecode::bytecodeNames[] = {
     "JUMP2_IF_GREATER",          // 63
     "JUMP2_BACKWARD  ",          // 64
     "SEND_EQEQ       ",          // 65
+    "STATIC_SEND     ",          // 66
+    "STATIC_SEND_1   ",          // 67
 };
 
 uint8_t GetNumberOfWords(uint8_t bc) {
@@ -177,6 +181,8 @@ uint8_t GetNumberOfWords(uint8_t bc) {
         case BC_PUSH_BLOCK:
         case BC_PUSH_CONSTANT:
         case BC_PUSH_GLOBAL:
+        case BC_STATIC_SEND:
+        case BC_STATIC_SEND_1:
             return 1;
         case BC_SEND:
         case BC_SEND_1:

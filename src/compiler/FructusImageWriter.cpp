@@ -399,12 +399,22 @@ public:
 
     /**
      * The global label of a method of a class, and the class, or nullptr if
-     * `obj` isn't one. Super sends refer to them from other files.
+     * `obj` isn't one. Static sends refer to them from other files.
      */
     const std::pair<std::string, VMClass*>* ClassInvokable(
         AbstractVMObject* obj) const {
         auto const it = classInvokables.find(obj);
         return it == classInvokables.end() ? nullptr : &it->second;
+    }
+
+    /**
+     * The invokable that the send at `index` of `method` always calls, or
+     * nullptr if it's an ordinary send, see findStaticSends().
+     */
+    [[nodiscard]] VMInvokable* StaticTarget(VMMethod* method,
+                                            size_t index) const {
+        auto const it = staticSends.find({method, index});
+        return it == staticSends.end() ? nullptr : it->second;
     }
 
     /** The fructus primitive `prim` stands for, or nullptr if there's none. */
@@ -423,6 +433,11 @@ private:
     void addClass(const char* name, bool required);
     void addGlobalsOf(VMClass* cls);
     void addGlobalsOf(VMInvokable* inv);
+    void findStaticSends();
+    void findStaticSends(VMClass* holder, VMMethod* method, size_t depth);
+    VMInvokable* lookup(VMClass* cls, VMSymbol* selector);
+    bool inherits(VMClass* cls, VMClass* superClass);
+    VMInvokable* uniqueTarget(VMClass* holder, VMSymbol* selector);
     void writeClass(VMClass* cls);
     void writeUniverse(const std::vector<std::string>& arguments);
     void writeSymbols(AsmFile& file);
@@ -438,6 +453,10 @@ private:
     std::set<AbstractVMObject*> classArrays;
     std::map<AbstractVMObject*, std::pair<std::string, VMClass*>>
         classInvokables;
+    /** The classes and the metaclasses, the classes of every object. */
+    std::vector<VMClass*> allClasses;
+    std::map<std::pair<VMMethod*, size_t>, VMInvokable*> staticSends;
+    std::map<std::pair<VMClass*, VMSymbol*>, VMInvokable*> uniqueTargets;
 };
 
 FructusImage::AsmFile::AsmFile(ImageWriter& image, const std::string& path,
@@ -882,8 +901,11 @@ void FructusImage::AsmFile::writeInvokableHeader(ObjectWriter& w, VMInvokable* i
 void FructusImage::AsmFile::writeMethod(VMMethod* method, const std::string& label) {
     ObjectWriter w(out, label);
     // the words are shorter on fructus, and writeBytecodes() writes them
-    std::vector<uint8_t> const fructusBytecodes =
-        method->ResizeWords(L::word, [](void* /*word*/, uint8_t* /*out*/) {});
+    std::vector<uint8_t> const fructusBytecodes = method->ResizeWords(
+        L::word, [](void* /*word*/, uint8_t* /*out*/) {}, false,
+        [&](size_t index) {
+            return image.StaticTarget(method, index) != nullptr;
+        });
     size_t const bcLength = fructusBytecodes.size();
 
     if (method->numberOfLocals > UINT8_MAX ||
@@ -1006,8 +1028,8 @@ FructusImage::AsmFile::Lines FructusImage::AsmFile::writeBytecodes(
 }
 
 /**
- * A send, unlinked, see SendSite.h. A super send is linked here, since the
- * world is closed and it doesn't depend on the receiver.
+ * A send, unlinked, see SendSite.h, or a static send if it can only call one
+ * invokable, see ImageWriter::findStaticSends().
  */
 size_t FructusImage::AsmFile::writeSendSite(ObjectWriter& w, size_t offset,
                                             VMMethod* method, size_t index) {
@@ -1015,28 +1037,21 @@ size_t FructusImage::AsmFile::writeSendSite(ObjectWriter& w, size_t offset,
     VMSymbol* selector = method->GetSendSelector(index);
     std::string name = Bytecode::GetBytecodeName(bc);
     name.erase(name.find_last_not_of(' ') + 1);
-
-    std::string target = SelectorRef(selector);
-    std::string receiverClass = "0";
     std::string comment = name + " #" + Printable(selector);
-    if (bc == BC_SUPER_SEND) {
-        VMClass* holder = method->GetHolder();
-        VMClass* super = image.SuperClass(holder);
-        VMInvokable* inv = super->LookupInvokable(selector);
-        if (inv == nullptr) {
-            // the invokables have no holder to find the superclass with at
-            // run time, see Interpreter::doSuperSend()
-            Fail(describe(method) + " sends #" + Printable(selector) +
-                 " to super, which " + Printable(super->GetName()) +
-                 " doesn't understand");
-        }
-        target = Ref(inv);
-        receiverClass = Ref(super);
-        comment += " in " + Printable(super->GetName());
+
+    std::ostringstream line;
+    if (VMInvokable* target = image.StaticTarget(method, index)) {
+        uint8_t const staticBc =
+            bc == BC_SEND_1 ? BC_STATIC_SEND_1 : BC_STATIC_SEND;
+        line << "\t.byte\t" << (unsigned)staticBc << "\t; " << comment
+             << ", static " << describe(target) << "\n"
+             << "\t.short\t" << Ref(target) << "\n";
+        w.Raw(offset, L::StaticSend_length, line.str());
+        return L::StaticSend_length;
     }
+    assert(bc != BC_SUPER_SEND);
 
     // a unary send has no number of arguments
-    std::ostringstream line;
     line << "\t.byte\t" << (unsigned)bc;
     if (bc != BC_SEND_1) {
         line << ", "
@@ -1044,7 +1059,7 @@ size_t FructusImage::AsmFile::writeSendSite(ObjectWriter& w, size_t offset,
                                               SendSite::numberOfArguments);
     }
     line << "\t; " << comment << "\n"
-         << "\t.short\t" << target << ", " << receiverClass << "\n";
+         << "\t.short\t" << SelectorRef(selector) << ", 0\n";
     size_t const length =
         bc == BC_SEND_1 ? L::SendSite_unaryLength : L::SendSite_length;
     w.Raw(offset, length, line.str());
@@ -1360,6 +1375,227 @@ void FructusImage::ImageWriter::checkClosedWorld() {
     }
 }
 
+/** What a send of `selector` to an instance of `cls` calls in the image. */
+VMInvokable* FructusImage::ImageWriter::lookup(VMClass* cls,
+                                               VMSymbol* selector) {
+    for (VMClass* c = cls;; c = SuperClass(c)) {
+        size_t const n = c->GetNumberOfInstanceInvokables();
+        for (size_t i = 0; i < n; i++) {
+            VMInvokable* inv = c->GetInstanceInvokable(i);
+            if (inv->GetSignature() == selector) {
+                return inv;
+            }
+        }
+        if (!c->HasSuperClass()) {
+            return nullptr;
+        }
+    }
+}
+
+/** Whether `cls` is `superClass` or a subclass of it in the image. */
+bool FructusImage::ImageWriter::inherits(VMClass* cls, VMClass* superClass) {
+    for (VMClass* c = cls;; c = SuperClass(c)) {
+        if (c == superClass) {
+            return true;
+        }
+        if (!c->HasSuperClass()) {
+            return false;
+        }
+    }
+}
+
+/**
+ * The invokable a send of `selector` calls for every receiver, if it's the
+ * same for all of them, or nullptr: the receiver is an instance of `holder`
+ * or a subclass of it, or anything if `holder` is nullptr.
+ */
+VMInvokable* FructusImage::ImageWriter::uniqueTarget(VMClass* holder,
+                                                     VMSymbol* selector) {
+    auto const [it, isNew] =
+        uniqueTargets.emplace(std::make_pair(holder, selector), nullptr);
+    if (!isNew) {
+        return it->second;
+    }
+    VMInvokable* result = nullptr;
+    for (VMClass* c : allClasses) {
+        if (holder != nullptr && !inherits(c, holder)) {
+            continue;
+        }
+        VMInvokable* inv = lookup(c, selector);
+        if (inv == nullptr || (result != nullptr && inv != result)) {
+            return nullptr;
+        }
+        result = inv;
+    }
+    it->second = result;
+    return result;
+}
+
+/**
+ * Find the sends that can only call one invokable, which are written as
+ * static sends, see SendSite.h. A super send is one, since it doesn't depend
+ * on the receiver. Another send is one if every class its receiver can be an
+ * instance of understands it with the same invokable: the holder of the
+ * method and its subclasses if the receiver is self, otherwise any class.
+ * The world is closed, so only the classes in the image have instances.
+ * #== isn't, since SEND_EQEQ answers it inline for some receivers.
+ */
+void FructusImage::ImageWriter::findStaticSends() {
+    for (VMClass* cls : classes) {
+        allClasses.push_back(cls);
+        allClasses.push_back(cls->GetClass());
+    }
+    for (VMClass* c : allClasses) {
+        size_t const n = c->GetNumberOfInstanceInvokables();
+        for (size_t i = 0; i < n; i++) {
+            if (auto* method =
+                    dynamic_cast<VMMethod*>(c->GetInstanceInvokable(i))) {
+                findStaticSends(c, method, 0);
+            }
+        }
+    }
+}
+
+/**
+ * The static sends of `method`, of `holder`, which is a block `depth` deep,
+ * or the method itself if `depth` is 0, see findStaticSends().
+ */
+void FructusImage::ImageWriter::findStaticSends(VMClass* holder,
+                                                VMMethod* method,
+                                                size_t depth) {
+    size_t const bcLength = method->bcLength;
+    auto next = [&](size_t i) {
+        return i + Bytecode::GetBytecodeLength(method->GetBytecode(i));
+    };
+
+    // where the jumps go, where what's on the stack depends on where it came
+    // from
+    std::set<size_t> jumpTargets;
+    for (size_t i = 0; i < bcLength; i = next(i)) {
+        uint8_t const bc = method->GetBytecode(i);
+        if (!IsJumpBytecode(bc)) {
+            continue;
+        }
+        size_t const offset = bc >= FIRST_DOUBLE_BYTE_JUMP_BYTECODE
+                                  ? ComputeOffset(method->GetBytecode(i + 1),
+                                                  method->GetBytecode(i + 2))
+                                  : method->GetBytecode(i + 1);
+        bool const isBackward =
+            bc == BC_JUMP_BACKWARD || bc == BC_JUMP2_BACKWARD;
+        jumpTargets.insert(isBackward ? i - offset : i + offset);
+    }
+
+    // whether each of the elements on top of the stack is self, as far down
+    // as is known: after a jump or a return nothing is
+    std::vector<bool> stack;
+    auto pop = [&](size_t count) {
+        stack.resize(stack.size() > count ? stack.size() - count : 0);
+    };
+    auto top = [&](size_t index) {
+        return stack.size() > index && stack[stack.size() - 1 - index];
+    };
+
+    for (size_t i = 0; i < bcLength; i = next(i)) {
+        if (jumpTargets.count(i) != 0) {
+            stack.clear();
+        }
+        uint8_t const bc = method->GetBytecode(i);
+        switch (bc) {
+            case BC_PUSH_SELF:
+                // in a block it's the block
+                stack.push_back(depth == 0);
+                break;
+            case BC_PUSH_ARGUMENT:
+                stack.push_back(method->GetBytecode(i + 1) == 0 &&
+                                method->GetBytecode(i + 2) == depth);
+                break;
+            case BC_DUP:
+                stack.push_back(top(0));
+                break;
+            case BC_DUP_SECOND:
+                stack.push_back(top(1));
+                break;
+            case BC_PUSH_BLOCK:
+                findStaticSends(holder,
+                                static_cast<VMMethod*>(method->GetConstant(i)),
+                                depth + 1);
+                stack.push_back(false);
+                break;
+            case BC_PUSH_LOCAL:
+            case BC_PUSH_LOCAL_0:
+            case BC_PUSH_LOCAL_1:
+            case BC_PUSH_LOCAL_2:
+            case BC_PUSH_ARG_1:
+            case BC_PUSH_ARG_2:
+            case BC_PUSH_FIELD:
+            case BC_PUSH_FIELD_0:
+            case BC_PUSH_FIELD_1:
+            case BC_PUSH_CONSTANT:
+            case BC_PUSH_0:
+            case BC_PUSH_1:
+            case BC_PUSH_SMALL_INT:
+            case BC_PUSH_NIL:
+            case BC_PUSH_GLOBAL:
+            case BC_INC_FIELD_PUSH:
+                stack.push_back(false);
+                break;
+            case BC_POP:
+            case BC_POP_LOCAL:
+            case BC_POP_LOCAL_0:
+            case BC_POP_LOCAL_1:
+            case BC_POP_LOCAL_2:
+            case BC_POP_ARGUMENT:
+            case BC_POP_FIELD:
+            case BC_POP_FIELD_0:
+            case BC_POP_FIELD_1:
+                pop(1);
+                break;
+            case BC_INC_FIELD:
+                break;
+            case BC_INC:
+            case BC_DEC:
+                pop(1);
+                stack.push_back(false);
+                break;
+            case BC_SEND:
+            case BC_SEND_1:
+            case BC_SUPER_SEND:
+            case BC_SEND_EQEQ: {
+                const uint8_t* site = &method->GetBytecodes()[i];
+                uint8_t const numArgs = SendSite::GetNumberOfArguments(site);
+                VMSymbol* selector = method->GetSendSelector(i);
+                VMInvokable* target = nullptr;
+                if (bc == BC_SUPER_SEND) {
+                    VMClass* super = SuperClass(holder);
+                    target = lookup(super, selector);
+                    if (target == nullptr) {
+                        // the invokables have no holder to find the
+                        // superclass with at run time
+                        Fail(Printable(holder->GetName()) + " sends #" +
+                             Printable(selector) + " to super, which " +
+                             Printable(super->GetName()) +
+                             " doesn't understand");
+                    }
+                } else if (bc != BC_SEND_EQEQ) {
+                    target = uniqueTarget(top(numArgs - 1) ? holder : nullptr,
+                                          selector);
+                }
+                if (target != nullptr) {
+                    staticSends[{method, i}] = target;
+                }
+                pop(numArgs);
+                stack.push_back(false);
+                break;
+            }
+            default:
+                // a return or a jump, after which nothing is known, which
+                // isn't worth working out for a conditional jump
+                stack.clear();
+                break;
+        }
+    }
+}
+
 void FructusImage::ImageWriter::writeClass(VMClass* cls) {
     std::string const name = cls->GetName()->GetStdString();
     AsmFile file(*this, dir + "/" + name + ".s", name + ".som");
@@ -1461,6 +1697,7 @@ void FructusImage::ImageWriter::writeSymbols(AsmFile& file) {
 void FructusImage::ImageWriter::Write(const std::vector<std::string>& arguments) {
     collectClasses(arguments);
     checkClosedWorld();
+    findStaticSends();
     for (VMClass* cls : classes) {
         writeClass(cls);
     }

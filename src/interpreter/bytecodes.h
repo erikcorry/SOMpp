@@ -100,8 +100,10 @@
 #define BC_JUMP2_IF_GREATER        63
 #define BC_JUMP2_BACKWARD          64
 #define BC_SEND_EQEQ               65
+#define BC_STATIC_SEND             66
+#define BC_STATIC_SEND_1           67
 
-#define _LAST_BYTECODE BC_SEND_EQEQ
+#define _LAST_BYTECODE BC_STATIC_SEND_1
 
 #define BC_INVALID           255
 // clang-format on
