@@ -227,6 +227,11 @@ void Disassembler::dumpMethod(uint8_t* bytecodes, size_t numberOfBytecodes,
                            bytecodes[bc_idx + 2]);
                 break;
             }
+            case BC_PUSH_STACK:
+            case BC_POP_STACK: {
+                DebugPrint("below top: %d\n", bytecodes[bc_idx + 1]);
+                break;
+            }
 
             case BC_PUSH_BLOCK: {
                 auto* block =
@@ -464,6 +469,14 @@ void Disassembler::DumpBytecode(VMFrame* frame, VMMethod* method,
         }
         case BC_DUP_SECOND: {
             printNth(1, frame, "dup-second");
+            break;
+        }
+        case BC_PUSH_STACK: {
+            printNth(BC_1, frame, "push-stack");
+            break;
+        }
+        case BC_POP_STACK: {
+            printNth(0, frame, "pop-stack");
             break;
         }
         case BC_INC: {

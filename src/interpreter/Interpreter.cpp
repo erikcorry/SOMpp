@@ -83,13 +83,13 @@ vm_oop_t Interpreter::Start() {
                                        &&LABEL_BC_DUP,
                                        &&LABEL_BC_DUP_SECOND,
                                        &&LABEL_BC_PUSH_LOCAL,
-                                       &&LABEL_BC_PUSH_LOCAL_0,
-                                       &&LABEL_BC_PUSH_LOCAL_1,
-                                       &&LABEL_BC_PUSH_LOCAL_2,
+                                       &&LABEL_NOT_STACK_RELATIVE,
+                                       &&LABEL_NOT_STACK_RELATIVE,
+                                       &&LABEL_NOT_STACK_RELATIVE,
                                        &&LABEL_BC_PUSH_ARGUMENT,
-                                       &&LABEL_BC_PUSH_SELF,
-                                       &&LABEL_BC_PUSH_ARG_1,
-                                       &&LABEL_BC_PUSH_ARG_2,
+                                       &&LABEL_NOT_STACK_RELATIVE,
+                                       &&LABEL_NOT_STACK_RELATIVE,
+                                       &&LABEL_NOT_STACK_RELATIVE,
                                        &&LABEL_BC_PUSH_FIELD,
                                        &&LABEL_BC_PUSH_FIELD_0,
                                        &&LABEL_BC_PUSH_FIELD_1,
@@ -102,9 +102,9 @@ vm_oop_t Interpreter::Start() {
                                        &&LABEL_BC_PUSH_GLOBAL,
                                        &&LABEL_BC_POP,
                                        &&LABEL_BC_POP_LOCAL,
-                                       &&LABEL_BC_POP_LOCAL_0,
-                                       &&LABEL_BC_POP_LOCAL_1,
-                                       &&LABEL_BC_POP_LOCAL_2,
+                                       &&LABEL_NOT_STACK_RELATIVE,
+                                       &&LABEL_NOT_STACK_RELATIVE,
+                                       &&LABEL_NOT_STACK_RELATIVE,
                                        &&LABEL_BC_POP_ARGUMENT,
                                        &&LABEL_BC_POP_FIELD,
                                        &&LABEL_BC_POP_FIELD_0,
@@ -147,7 +147,9 @@ vm_oop_t Interpreter::Start() {
                                        &&LABEL_BC_SEND_EQEQ,
                                        &&LABEL_BC_STATIC_SEND,
                                        &&LABEL_BC_STATIC_SEND_1,
-                                       &&LABEL_BC_NOT_UNDERSTOOD};
+                                       &&LABEL_BC_NOT_UNDERSTOOD,
+                                       &&LABEL_BC_PUSH_STACK,
+                                       &&LABEL_BC_POP_STACK};
 
     goto* loopTargets[*pc];
 
@@ -176,49 +178,26 @@ LABEL_BC_PUSH_LOCAL:
     doPushLocal(pc[1], pc[2]);
     NEXT_NOGC(3);
 
-LABEL_BC_PUSH_LOCAL_0:
-    PROLOGUE();
-    doPushLocalWithIndex(0);
-    NEXT_NOGC(1);
-
-LABEL_BC_PUSH_LOCAL_1:
-    PROLOGUE();
-    doPushLocalWithIndex(1);
-    NEXT_NOGC(1);
-
-LABEL_BC_PUSH_LOCAL_2:
-    PROLOGUE();
-    doPushLocalWithIndex(2);
-    NEXT_NOGC(1);
-
 LABEL_BC_PUSH_ARGUMENT:
     PROLOGUE();
     doPushArgument(pc[1], pc[2]);
     NEXT_NOGC(3);
 
-LABEL_BC_PUSH_SELF:
-    PROLOGUE();
-    {
-        vm_oop_t argument = GetFrame()->GetArgumentInCurrentContext(0);
-        GetFrame()->Push(argument);
-    }
-    NEXT_NOGC(1);
+    // The compiler makes the arguments and locals of the current context
+    // PUSH_STACK and POP_STACK, see VMMethod::MakeStackRelative().
+LABEL_NOT_STACK_RELATIVE:
+    assert(false && "MakeStackRelative() replaces this bytecode");
+    __builtin_unreachable();
 
-LABEL_BC_PUSH_ARG_1:
+LABEL_BC_PUSH_STACK:
     PROLOGUE();
-    {
-        vm_oop_t argument = GetFrame()->GetArgumentInCurrentContext(1);
-        GetFrame()->Push(argument);
-    }
-    NEXT_NOGC(1);
+    GetFrame()->Push(GetFrame()->GetStackElement(pc[1]));
+    NEXT_NOGC(2);
 
-LABEL_BC_PUSH_ARG_2:
+LABEL_BC_POP_STACK:
     PROLOGUE();
-    {
-        vm_oop_t argument = GetFrame()->GetArgumentInCurrentContext(2);
-        GetFrame()->Push(argument);
-    }
-    NEXT_NOGC(1);
+    GetFrame()->PopIntoStackElement(pc[1]);
+    NEXT_NOGC(2);
 
 LABEL_BC_PUSH_FIELD:
     PROLOGUE();
@@ -300,21 +279,6 @@ LABEL_BC_POP_LOCAL:
     PROLOGUE();
     doPopLocal(pc[1], pc[2]);
     NEXT_NOGC(3);
-
-LABEL_BC_POP_LOCAL_0:
-    PROLOGUE();
-    doPopLocalWithIndex(0);
-    NEXT_NOGC(1);
-
-LABEL_BC_POP_LOCAL_1:
-    PROLOGUE();
-    doPopLocalWithIndex(1);
-    NEXT_NOGC(1);
-
-LABEL_BC_POP_LOCAL_2:
-    PROLOGUE();
-    doPopLocalWithIndex(2);
-    NEXT_NOGC(1);
 
 LABEL_BC_POP_ARGUMENT:
     PROLOGUE();
@@ -938,27 +902,15 @@ void Interpreter::doDup() {
 }
 
 void Interpreter::doPushLocal(uint8_t bc1, uint8_t bc2) {
-    assert((bc1 != 0 || bc2 != 0) && "should have been BC_PUSH_LOCAL_0");
-    assert((bc1 != 1 || bc2 != 0) && "should have been BC_PUSH_LOCAL_1");
-    assert((bc1 != 2 || bc2 != 0) && "should have been BC_PUSH_LOCAL_2");
+    assert(bc2 != 0 && "should have been BC_PUSH_STACK");
 
     vm_oop_t local = GetFrame()->GetLocal(bc1, bc2);
 
     GetFrame()->Push(local);
 }
 
-void Interpreter::doPushLocalWithIndex(uint8_t localIndex) {
-    vm_oop_t local = GetFrame()->GetLocalInCurrentContext(localIndex);
-    GetFrame()->Push(local);
-}
-
 void Interpreter::doPushArgument(uint8_t argIndex, uint8_t contextLevel) {
-    assert((argIndex != 0 || contextLevel != 0) &&
-           "should have been BC_PUSH_SELF");
-    assert((argIndex != 1 || contextLevel != 0) &&
-           "should have been BC_PUSH_ARG_1");
-    assert((argIndex != 2 || contextLevel != 0) &&
-           "should have been BC_PUSH_ARG_2");
+    assert(contextLevel != 0 && "should have been BC_PUSH_STACK");
 
     vm_oop_t argument = GetFrame()->GetArgument(argIndex, contextLevel);
 
@@ -1053,11 +1005,6 @@ void Interpreter::doPopLocal(uint8_t bc1, uint8_t bc2) {
     vm_oop_t o = GetFrame()->Pop();
 
     GetFrame()->SetLocal(bc1, bc2, o);
-}
-
-void Interpreter::doPopLocalWithIndex(uint8_t localIndex) {
-    vm_oop_t o = GetFrame()->Pop();
-    GetFrame()->SetLocal(localIndex, o);
 }
 
 void Interpreter::doPopArgument(uint8_t bc1, uint8_t bc2) {

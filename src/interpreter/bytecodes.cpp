@@ -31,6 +31,10 @@
 
 #include "SendSite.h"
 
+#ifndef FRUCTUS
+  #include "../vm/Print.h"
+#endif
+
 const uint8_t Bytecode::bytecodeLengths[] = {
     1,  // BC_HALT
     1,  // BC_DUP
@@ -104,6 +108,8 @@ const uint8_t Bytecode::bytecodeLengths[] = {
     SendSite::staticLength,  // BC_STATIC_SEND
     SendSite::staticLength,  // BC_STATIC_SEND_1
     SendSite::notUnderstoodLength,  // BC_NOT_UNDERSTOOD
+    2,  // BC_PUSH_STACK
+    2,  // BC_POP_STACK
 };
 
 const char* Bytecode::bytecodeNames[] = {
@@ -176,6 +182,8 @@ const char* Bytecode::bytecodeNames[] = {
     "STATIC_SEND     ",          // 66
     "STATIC_SEND_1   ",          // 67
     "NOT_UNDERSTOOD  ",          // 68
+    "PUSH_STACK      ",          // 69
+    "POP_STACK       ",          // 70
 };
 
 uint8_t GetNumberOfWords(uint8_t bc) {
@@ -302,3 +310,136 @@ bool Bytecode::BytecodeDefinitionsAreConsistent() {
 
     return namesAndLengthMatch && lastBytecodeLinesUp;
 }
+
+#ifndef FRUCTUS
+std::vector<int> ComputeStackDepths(const uint8_t* bytecodes, size_t length) {
+    std::vector<int> depths(length, -1);
+    // the indices to go on from, whose depths are known
+    std::vector<size_t> work;
+    auto reach = [&](size_t i, int depth) {
+        assert(i < length && depth >= 0);
+        if (depths[i] == -1) {
+            depths[i] = depth;
+            work.push_back(i);
+        } else if (depths[i] != depth) {
+            ErrorExit("A bytecode is reached at two stack depths");
+        }
+    };
+    if (length > 0) {
+        reach(0, 0);
+    }
+
+    while (!work.empty()) {
+        size_t const i = work.back();
+        work.pop_back();
+        uint8_t const bc = bytecodes[i];
+        int const depth = depths[i];
+        size_t const next = i + Bytecode::GetBytecodeLength(bc);
+
+        if (IsJumpBytecode(bc)) {
+            bool const isLong = bc >= FIRST_DOUBLE_BYTE_JUMP_BYTECODE;
+            size_t const offset =
+                isLong ? ComputeOffset(bytecodes[i + 1], bytecodes[i + 2])
+                       : bytecodes[i + 1];
+            uint8_t const shortBc =
+                isLong ? bc - NUM_SINGLE_BYTE_JUMP_BYTECODES : bc;
+            // the depth after the jump if it jumps, and if it doesn't
+            int taken = depth;
+            int notTaken = depth;
+            switch (shortBc) {
+                case BC_JUMP:
+                case BC_JUMP_BACKWARD:
+                    notTaken = -1;
+                    break;
+                case BC_JUMP_ON_FALSE_POP:
+                case BC_JUMP_ON_TRUE_POP:
+                case BC_JUMP_ON_NOT_NIL_POP:
+                case BC_JUMP_ON_NIL_POP:
+                    taken = depth - 1;
+                    notTaken = depth - 1;
+                    break;
+                case BC_JUMP_ON_FALSE_TOP_NIL:
+                case BC_JUMP_ON_TRUE_TOP_NIL:
+                case BC_JUMP_ON_NOT_NIL_TOP_TOP:
+                case BC_JUMP_ON_NIL_TOP_TOP:
+                    notTaken = depth - 1;
+                    break;
+                case BC_JUMP_IF_GREATER:
+                    taken = depth - 2;
+                    break;
+                default:
+                    ErrorExit("Unexpected jump bytecode");
+            }
+            reach(shortBc == BC_JUMP_BACKWARD ? i - offset : i + offset, taken);
+            if (notTaken != -1) {
+                reach(next, notTaken);
+            }
+            continue;
+        }
+
+        int effect = 0;
+        switch (bc) {
+            case BC_HALT:
+            case BC_RETURN_LOCAL:
+            case BC_RETURN_NON_LOCAL:
+            case BC_RETURN_SELF:
+            case BC_RETURN_FIELD_0:
+            case BC_RETURN_FIELD_1:
+            case BC_RETURN_FIELD_2:
+                continue;
+            case BC_DUP:
+            case BC_DUP_SECOND:
+            case BC_PUSH_LOCAL:
+            case BC_PUSH_LOCAL_0:
+            case BC_PUSH_LOCAL_1:
+            case BC_PUSH_LOCAL_2:
+            case BC_PUSH_ARGUMENT:
+            case BC_PUSH_SELF:
+            case BC_PUSH_ARG_1:
+            case BC_PUSH_ARG_2:
+            case BC_PUSH_FIELD:
+            case BC_PUSH_FIELD_0:
+            case BC_PUSH_FIELD_1:
+            case BC_PUSH_BLOCK:
+            case BC_PUSH_CONSTANT:
+            case BC_PUSH_0:
+            case BC_PUSH_1:
+            case BC_PUSH_SMALL_INT:
+            case BC_PUSH_NIL:
+            case BC_PUSH_GLOBAL:
+            case BC_INC_FIELD_PUSH:
+            case BC_PUSH_STACK:
+                effect = 1;
+                break;
+            case BC_POP:
+            case BC_POP_LOCAL:
+            case BC_POP_LOCAL_0:
+            case BC_POP_LOCAL_1:
+            case BC_POP_LOCAL_2:
+            case BC_POP_ARGUMENT:
+            case BC_POP_FIELD:
+            case BC_POP_FIELD_0:
+            case BC_POP_FIELD_1:
+            case BC_POP_STACK:
+                effect = -1;
+                break;
+            case BC_INC:
+            case BC_DEC:
+            case BC_INC_FIELD:
+                break;
+            case BC_SEND:
+            case BC_SEND_1:
+            case BC_SUPER_SEND:
+            case BC_SEND_EQEQ:
+            case BC_NOT_UNDERSTOOD:
+                // the receiver and arguments become the result
+                effect = 1 - SendSite::GetNumberOfArguments(&bytecodes[i]);
+                break;
+            default:
+                ErrorExit("Unexpected bytecode in ComputeStackDepths");
+        }
+        reach(next, depth + effect);
+    }
+    return depths;
+}
+#endif

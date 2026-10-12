@@ -1677,15 +1677,24 @@ void FructusImage::ImageWriter::findStaticSends(VMClass* holder,
         return stack.size() > index && stack[stack.size() - 1 - index];
     };
 
+    // self is the first argument, the slot of the frame the furthest below
+    // the stack, see VMMethod::MakeStackRelative()
+    std::vector<int> const stackDepths =
+        ComputeStackDepths(method->GetBytecodes(), bcLength);
+    int const selfBelowStack =
+        (int)(method->GetNumberOfArguments() + method->GetNumberOfLocals()) - 1;
+
     for (size_t i = 0; i < bcLength; i = next(i)) {
         if (jumpTargets.count(i) != 0) {
             stack.clear();
         }
         uint8_t const bc = method->GetBytecode(i);
         switch (bc) {
-            case BC_PUSH_SELF:
-                // in a block it's the block
-                stack.push_back(depth == 0);
+            case BC_PUSH_STACK:
+                // in a block the first argument is the block
+                stack.push_back(depth == 0 && stackDepths[i] != -1 &&
+                                method->GetBytecode(i + 1) ==
+                                    selfBelowStack + stackDepths[i]);
                 break;
             case BC_PUSH_ARGUMENT:
                 stack.push_back(method->GetBytecode(i + 1) == 0 &&
@@ -1704,11 +1713,6 @@ void FructusImage::ImageWriter::findStaticSends(VMClass* holder,
                 stack.push_back(false);
                 break;
             case BC_PUSH_LOCAL:
-            case BC_PUSH_LOCAL_0:
-            case BC_PUSH_LOCAL_1:
-            case BC_PUSH_LOCAL_2:
-            case BC_PUSH_ARG_1:
-            case BC_PUSH_ARG_2:
             case BC_PUSH_FIELD:
             case BC_PUSH_FIELD_0:
             case BC_PUSH_FIELD_1:
@@ -1723,9 +1727,7 @@ void FructusImage::ImageWriter::findStaticSends(VMClass* holder,
                 break;
             case BC_POP:
             case BC_POP_LOCAL:
-            case BC_POP_LOCAL_0:
-            case BC_POP_LOCAL_1:
-            case BC_POP_LOCAL_2:
+            case BC_POP_STACK:
             case BC_POP_ARGUMENT:
             case BC_POP_FIELD:
             case BC_POP_FIELD_0:

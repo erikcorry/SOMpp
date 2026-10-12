@@ -171,6 +171,15 @@ public:
     [[nodiscard]] size_t GetBytecodeHash() const;
 
     /**
+     * A copy of the method and of its blocks that accesses its own
+     * arguments and locals relative to the top of the stack, with
+     * PUSH_STACK and POP_STACK. The compiler makes it once it can't inline
+     * the blocks any more, since inlining needs the indices of the
+     * variables. Takes the lexical scope and the lines.
+     */
+    [[nodiscard]] VMMethod* MakeStackRelative();
+
+    /**
      * The bytecodes with each word `wordSize` long, and the jumps adjusted.
      * `writeWord(word, out)` writes each of them. With
      * `unaryNumberOfArguments`, a unary send has the number of arguments
@@ -295,6 +304,8 @@ private:
     LexicalScope* lexicalScope;
     BackJump* inlinedLoops;
     std::vector<uint16_t>* lines{nullptr};
+    // the hash of the bytecodes before MakeStackRelative(), or 0
+    size_t bytecodeHash{0};
 #endif
 
 #ifdef UNSAFE_FRAME_OPTIMIZATION

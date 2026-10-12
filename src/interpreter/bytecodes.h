@@ -29,6 +29,10 @@
 #include <assert.h>
 #include <string.h>
 
+#ifndef FRUCTUS
+  #include <vector>
+#endif
+
 #include "../misc/defs.h"
 
 // bytecode constants used by SOM++
@@ -103,8 +107,10 @@
 #define BC_STATIC_SEND             66
 #define BC_STATIC_SEND_1           67
 #define BC_NOT_UNDERSTOOD          68
+#define BC_PUSH_STACK              69
+#define BC_POP_STACK               70
 
-#define _LAST_BYTECODE BC_NOT_UNDERSTOOD
+#define _LAST_BYTECODE BC_POP_STACK
 
 #define BC_INVALID           255
 // clang-format on
@@ -179,3 +185,13 @@ uint8_t IsPushArgBytecode(uint8_t bc);
 uint8_t IsPopFieldBytecode(uint8_t bc);
 uint8_t IsPopSmthBytecode(uint8_t bc);
 uint8_t IsReturnFieldBytecode(uint8_t bc);
+
+#ifndef FRUCTUS
+/**
+ * The depth of the stack before the bytecode at each index of `bytecodes`,
+ * or -1 if no bytecode starts there or it can't be reached. The compiler
+ * makes every bytecode run at one depth, however it's reached. The bytecodes
+ * must not have static sends, which lose the number of arguments.
+ */
+std::vector<int> ComputeStackDepths(const uint8_t* bytecodes, size_t length);
+#endif

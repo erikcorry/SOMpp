@@ -162,6 +162,13 @@ public:
         return load_ptr(stack_ptr[-std::make_signed_t<som_int_t>(index)]);
     }
 
+    /** Stores the top into the element `index` below it, and pops it. */
+    inline void PopIntoStackElement(size_t index) {
+        store_ptr(stack_ptr[-std::make_signed_t<som_int_t>(index)],
+                  load_ptr(*stack_ptr));
+        stack_ptr--;
+    }
+
     inline vm_oop_t GetLocal(uint8_t index, uint8_t contextLevel) {
         VMFrame const* context = GetContextLevel(contextLevel);
         return load_ptr(context->locals[index]);

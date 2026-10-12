@@ -846,6 +846,9 @@ std::vector<uint8_t> VMMethod::ResizeWords(
  * arguments, which it used to, to keep the hashes the primitives have.
  */
 size_t VMMethod::GetBytecodeHash() const {
+    if (bytecodeHash != 0) {
+        return bytecodeHash;
+    }
     std::vector<void*> words;
     std::vector<uint8_t> const bcs =
         ResizeWords(1, [&words](void* word, uint8_t* out) {
@@ -860,5 +863,134 @@ size_t VMMethod::GetBytecodeHash() const {
         },
         true);
     return murmur3_32(bcs.data(), bcs.size(), 0x00000000);
+}
+#endif
+
+#ifndef FRUCTUS
+VMMethod* VMMethod::MakeStackRelative() {
+    const uint8_t* bytecodes = GetBytecodes();
+    std::vector<int> const depths = ComputeStackDepths(bytecodes, bcLength);
+    size_t const numArgs = GetNumberOfArguments();
+
+    // The frame slot, counting the arguments and then the locals, of the
+    // argument or local in this context that the bytecode at i accesses, or
+    // -1.
+    auto slot = [&](size_t i) -> int {
+        switch (bytecodes[i]) {
+            case BC_PUSH_SELF:
+                return 0;
+            case BC_PUSH_ARG_1:
+                return 1;
+            case BC_PUSH_ARG_2:
+                return 2;
+            case BC_PUSH_LOCAL_0:
+            case BC_POP_LOCAL_0:
+                return (int)numArgs;
+            case BC_PUSH_LOCAL_1:
+            case BC_POP_LOCAL_1:
+                return (int)numArgs + 1;
+            case BC_PUSH_LOCAL_2:
+            case BC_POP_LOCAL_2:
+                return (int)numArgs + 2;
+            case BC_PUSH_ARGUMENT:
+            case BC_POP_ARGUMENT:
+                return bytecodes[i + 2] == 0 ? bytecodes[i + 1] : -1;
+            case BC_PUSH_LOCAL:
+            case BC_POP_LOCAL:
+                return bytecodes[i + 2] == 0 ? (int)numArgs + bytecodes[i + 1]
+                                             : -1;
+            default:
+                return -1;
+        }
+    };
+    auto isPop = [](uint8_t bc) {
+        return bc == BC_POP_LOCAL || bc == BC_POP_LOCAL_0 ||
+               bc == BC_POP_LOCAL_1 || bc == BC_POP_LOCAL_2 ||
+               bc == BC_POP_ARGUMENT;
+    };
+    auto newLength = [&](size_t i) -> size_t {
+        return slot(i) == -1 ? Bytecode::GetBytecodeLength(bytecodes[i])
+                             : Bytecode::GetBytecodeLength(BC_PUSH_STACK);
+    };
+
+    // where each bytecode goes
+    std::vector<size_t> newIndex(bcLength + 1);
+    size_t n = 0;
+    for (size_t i = 0; i < bcLength;
+         i += Bytecode::GetBytecodeLength(bytecodes[i])) {
+        newIndex[i] = n;
+        n += newLength(i);
+    }
+    newIndex[bcLength] = n;
+
+    std::vector<uint8_t> result(n);
+    std::vector<uint16_t> newLines(n);
+    for (size_t i = 0; i < bcLength;
+         i += Bytecode::GetBytecodeLength(bytecodes[i])) {
+        uint8_t const bc = bytecodes[i];
+        uint8_t* out = &result[newIndex[i]];
+        for (size_t j = newIndex[i]; j < newIndex[i] + newLength(i); j++) {
+            newLines[j] = GetLine(i);
+        }
+
+        int const s = slot(i);
+        if (s != -1) {
+            // The stack starts right after the last local, and an
+            // unreachable bytecode has no depth, and doesn't matter.
+            int const depth = depths[i] == -1 ? 0 : depths[i];
+            int const offset = (int)(numArgs + numberOfLocals) - 1 + depth - s;
+            assert(offset >= 0);
+            if (offset > 0xFF) {
+                ErrorExit("A method has too many locals and stack elements");
+            }
+            out[0] = isPop(bc) ? BC_POP_STACK : BC_PUSH_STACK;
+            out[1] = offset;
+            continue;
+        }
+
+        memcpy(out, &bytecodes[i], Bytecode::GetBytecodeLength(bc));
+
+        if (bc == BC_PUSH_BLOCK) {
+            auto* block = (VMInvokable*)GetConstant(i);
+            if (IsVMMethod((vm_oop_t)block)) {
+                block = static_cast<VMMethod*>(block)->MakeStackRelative();
+            }
+            StoreWord(out + 1, block);
+            continue;
+        }
+
+        if (!IsJumpBytecode(bc)) {
+            continue;
+        }
+        bool const isLong = bc >= FIRST_DOUBLE_BYTE_JUMP_BYTECODE;
+        bool const isBackward =
+            bc == BC_JUMP_BACKWARD || bc == BC_JUMP2_BACKWARD;
+        size_t const offset =
+            isLong ? ComputeOffset(bytecodes[i + 1], bytecodes[i + 2])
+                   : bytecodes[i + 1];
+        size_t const target = isBackward ? i - offset : i + offset;
+        size_t const newOffset = isBackward ? newIndex[i] - newIndex[target]
+                                            : newIndex[target] - newIndex[i];
+        if (newOffset > 0xFFFF) {
+            ErrorExit("A jump is too long");
+        }
+        uint8_t const shortBc =
+            isLong ? bc - NUM_SINGLE_BYTE_JUMP_BYTECODES : bc;
+        out[0] = newOffset <= 0xFF ? shortBc
+                                   : shortBc + NUM_SINGLE_BYTE_JUMP_BYTECODES;
+        out[1] = newOffset & 0xFFU;
+        out[2] = newOffset >> 8U;
+    }
+
+    std::vector<BackJump> noLoops;
+    VMMethod* lowered = Universe::NewMethod(GetSignature(), n, numberOfLocals,
+                                            maximumNumberOfStackElements,
+                                            lexicalScope, noLoops);
+    memcpy(lowered->GetBytecodes(), result.data(), n);
+    lowered->SetLines(newLines);
+    lowered->bytecodeHash = GetBytecodeHash();
+    // the lowered method owns them now
+    lexicalScope = nullptr;
+    return lowered;
 }
 #endif

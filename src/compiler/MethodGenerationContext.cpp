@@ -93,6 +93,11 @@ VMInvokable* MethodGenerationContext::Assemble() {
     assert(lines.size() == bytecode.size());
     meth->SetLines(lines);
 
+    // the blocks can't be inlined any more once the method is done
+    if (!IsBlockMethod()) {
+        meth = meth->MakeStackRelative();
+    }
+
     // return the method - the holder field is to be set later on!
     return meth;
 }

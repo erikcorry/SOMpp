@@ -145,7 +145,6 @@ private:
 
     void doDup();
     void doPushLocal(uint8_t bc1, uint8_t bc2);
-    void doPushLocalWithIndex(uint8_t localIndex);
     void doReturnFieldWithIndex(uint8_t fieldIndex);
     void doPushArgument(uint8_t argIndex, uint8_t contextLevel);
     void doPushField(uint8_t fieldIndex);
@@ -154,7 +153,6 @@ private:
     bool doPushGlobal(VMSymbol* globalName);
     void doPop();
     void doPopLocal(uint8_t bc1, uint8_t bc2);
-    void doPopLocalWithIndex(uint8_t localIndex);
     void doPopArgument(uint8_t bc1, uint8_t bc2);
     void doPopField(uint8_t fieldIndex);
     void doPopFieldWithIndex(uint8_t fieldIndex);
