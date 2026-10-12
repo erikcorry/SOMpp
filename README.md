@@ -1,5 +1,5 @@
-SOM++ - The Simple Object Machine implemented in C++
-====================================================
+Fructus SOM++ - The Simple Object Machine implemented in C++ for a 16 bit soft core
+===================================================================================
 
 Introduction
 ------------
@@ -8,7 +8,27 @@ SOM is a minimal Smalltalk dialect used to teach VM construction at the [Hasso
 Plattner Institute][SOM]. It was originally built at Aarhus University
 (Denmark) where it was also used for teaching.
 
-Implementations exist for instance for Java (SOM), C (CSOM), C++ (SOM++), Python & RPython
+This fork of SOM is optimized for very small devices. The primary platform
+is [https://github.com/erikcorry/fructus](Fructus), a CPU that can be
+implemented on very small FPGAs. On such small devices, the reflective
+features are not available. The Smalltalk compiler stays on the host.
+
+The GC is a two generation sliding compactor with a card marking write
+barrier. This GC is not available in upstream SOM++. On this fork it
+is available on the host for testing purposes. Because it uses a sliding
+compactor in a linear space it is immune to fragmentation, and it never
+allocates during GC. All data structures needed for GC (marking stack,
+forwarding tables, promotion space) are pre-allocated. This means GC
+can be postponed until allocation fails because memory is 100% full,
+another difference to upstream.
+
+Dispatch uses inline caches that do not allocate space. This area is
+under development.
+
+Upstream README from the SOM++ repository
+-----------------------------------------
+
+Implementations of SOM exist for instance for Java (SOM), C (CSOM), C++ (SOM++), Python & RPython
 (PySOM), the Truffle framework (TruffleSOM), and Squeak/Pharo Smalltalk (AweSOM).
 
 A simple SOM Hello World looks like:
@@ -21,9 +41,10 @@ Hello = (
 )
 ```
 
-This repository contains the C++ implementation of SOM. The implementation of
-the SOM standard library and a number of examples are included as a git submodule.
-Please see the [main project page][SOMst] for links to other VM implementations.
+This repository contains the Fructus fork of the C++ implementation of SOM. The
+implementation of the SOM standard library and a number of examples are
+included as a git submodule.  Please see the [main project page][SOMst] for
+links to other VM implementations.
 
 
 Prerequisites
