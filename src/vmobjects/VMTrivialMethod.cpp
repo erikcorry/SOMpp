@@ -81,14 +81,14 @@ VMFrame* VMLiteralReturn::Invoke(VMFrame* frame) {
     for (int i = 0; i < numberOfArguments; i += 1) {
         frame->Pop();
     }
-    frame->Push(load_ptr(literal));
+    frame->PushIntoCurrent(load_ptr(literal));
     return nullptr;
 }
 
 VMFrame* VMLiteralReturn::Invoke1(VMFrame* frame) {
     assert(numberOfArguments == 1);
     frame->Pop();
-    frame->Push(load_ptr(literal));
+    frame->PushIntoCurrent(load_ptr(literal));
     return nullptr;
 }
 
@@ -127,7 +127,7 @@ VMFrame* VMGlobalReturn::Invoke(VMFrame* frame) {
     for (int i = 0; i < numberOfArguments; i += 1) {
         frame->Pop();
     }
-    frame->Push(value);
+    frame->PushIntoCurrent(value);
     return nullptr;
 }
 
@@ -141,7 +141,7 @@ VMFrame* VMGlobalReturn::Invoke1(VMFrame* frame) {
     }
 
     frame->Pop();
-    frame->Push(value);
+    frame->PushIntoCurrent(value);
     return nullptr;
 }
 
@@ -206,7 +206,7 @@ VMFrame* VMGetter::Invoke(VMFrame* frame) {
         result = ((VMObject*)self)->GetField(fieldIndex);
     }
 
-    frame->Push(result);
+    frame->PushIntoCurrent(result);
 
     return nullptr;
 }
@@ -225,7 +225,7 @@ VMFrame* VMGetter::Invoke1(VMFrame* frame) {
         result = ((VMObject*)self)->GetField(fieldIndex);
     }
 
-    frame->Push(result);
+    frame->PushIntoCurrent(result);
 
     return nullptr;
 }

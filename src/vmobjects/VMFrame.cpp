@@ -215,13 +215,13 @@ void VMFrame::PrintStackTrace() const {
 #endif
 
 void VMFrame::CopyArgumentsFrom(VMFrame* frame) {
+    // this is the current frame, see VMMethod::Invoke()
     // copy arguments from frame:
     // - arguments are at the top of the stack of frame.
     // - copy them into the argument area of the current frame
     size_t const num_args = GetMethod()->GetNumberOfArguments();
     for (size_t i = 0; i < num_args; ++i) {
-        vm_oop_t stackElem = frame->GetStackElement(num_args - 1 - i);
-        store_ptr(arguments()[i], stackElem);
+        SetArgumentOfCurrent(i, frame->GetStackElement(num_args - 1 - i));
     }
 }
 

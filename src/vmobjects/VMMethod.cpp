@@ -169,7 +169,7 @@ VMFrame* VMMethod::Invoke(VMFrame* frame) {
 VMFrame* VMMethod::Invoke1(VMFrame* frame) {
     VMFrame* frm = GetInterpreter()->PushNewFrame(this);
     if (frm != nullptr) {
-        frm->SetArgument(0, frame->Top());
+        frm->SetArgumentOfCurrent(0, frame->Top());
     }
     return frm;
 }

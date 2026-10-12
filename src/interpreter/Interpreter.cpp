@@ -1221,6 +1221,10 @@ void Interpreter::WalkGlobals(walk_heap_fn walk) {
     frame = load_ptr(static_cast<GCFrame*>(walk(tmp_ptr(frame))));
 }
 
+bool VMFrame::IsCurrent() const {
+    return this == GetInterpreter()->GetFrame();
+}
+
 void Interpreter::startGC() {
     // see SetFrame()
     remember_object(GetFrame());

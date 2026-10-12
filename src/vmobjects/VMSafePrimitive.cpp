@@ -31,7 +31,7 @@ static inline bool succeeded(vm_oop_t result) {
 VMFrame* VMSafeUnaryPrimitive::Invoke(VMFrame* frame) {
     vm_oop_t result = prim.pointer(frame->Top());
     if (succeeded(result)) {
-        frame->SetTop(result);
+        frame->SetTopOfCurrent(result);
     }
     return nullptr;
 }
@@ -39,7 +39,7 @@ VMFrame* VMSafeUnaryPrimitive::Invoke(VMFrame* frame) {
 VMFrame* VMSafeUnaryPrimitive::Invoke1(VMFrame* frame) {
     vm_oop_t result = prim.pointer(frame->Top());
     if (succeeded(result)) {
-        frame->SetTop(result);
+        frame->SetTopOfCurrent(result);
     }
     return nullptr;
 }
@@ -56,7 +56,7 @@ VMFrame* VMSafeBinaryPrimitive::Invoke(VMFrame* frame) {
     vm_oop_t result = prim.pointer(leftObj, rightObj);
     if (succeeded(result)) {
         frame->PopVoid();
-        frame->SetTop(result);
+        frame->SetTopOfCurrent(result);
     }
     return nullptr;
 }
@@ -79,7 +79,7 @@ VMFrame* VMSafeTernaryPrimitive::Invoke(VMFrame* frame) {
     if (succeeded(result)) {
         frame->PopVoid();
         frame->PopVoid();
-        frame->SetTop(result);
+        frame->SetTopOfCurrent(result);
     }
     return nullptr;
 }

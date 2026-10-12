@@ -154,6 +154,29 @@ public:
         SetTopNoBarrier(obj);
     }
 
+    /* Stores into the current frame, which need no write barrier: the
+     * interpreter remembers the frame when it stops being the current one,
+     * and before a collection, see Interpreter::SetFrame(). */
+    inline void PushIntoCurrent(vm_oop_t obj) {
+        assert(IsCurrent());
+        assert(RemainingStackSize() > 0);
+        ++stack_ptr;
+        *stack_ptr = store_with_separate_barrier(obj);
+    }
+
+    inline void SetTopOfCurrent(vm_oop_t val) {
+        assert(IsCurrent());
+        *stack_ptr = store_with_separate_barrier(val);
+    }
+
+    inline void SetArgumentOfCurrent(size_t argIdx, vm_oop_t value) {
+        assert(IsCurrent());
+        arguments()[argIdx] = store_with_separate_barrier(value);
+    }
+
+    /** Whether this is the interpreter's current frame. */
+    [[nodiscard]] bool IsCurrent() const;
+
     [[nodiscard]] inline size_t GetBytecodeIndex() const {
         return bytecodeIndex;
     }
