@@ -1,0 +1,15 @@
+Analysis of hello on SOM++ on fructus:
+
+1,192 bytes of read-only data sit in a section named after triggerDoesNotUnderstand.
+
+This is probably debug info and should be handled like stack overflows: Print
+the addresses and make host-side tools that you can paste the output into for
+symbol lookup.
+
+Other ideas to save:
+
+Everything in the program is immortal and does not need a gc field.  Revamp
+class hierarchy on fructus so it goes away.  Use a symbol from the linker to
+determine in the GC whether a pointer is above the immortality line.  Somehow
+verify that objects from the program don't have mutable fields and make them
+roots if they do.
