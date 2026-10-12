@@ -25,6 +25,24 @@ another difference to upstream.
 Dispatch uses inline caches that do not allocate space. This area is
 under development.
 
+Benchmark progress
+------------------
+
+Cycles on Fructus to run cut-down versions of the [Are We Fast Yet][AWFY]
+DeltaBlue and Richards, after each commit that changed them. Lower is better.
+They are smaller than the AWFY sizes, to fit in Fructus's memory, so they are
+not comparable with AWFY results.
+
+<p>
+<img src="doc/deltablue-cycles.svg" alt="Cycles of the cut-down DeltaBlue per commit" width="49%">
+<img src="doc/richards-cycles.svg" alt="Cycles of the cut-down Richards per commit" width="49%">
+</p>
+
+The counts are in [ideas/deltablue-profile-fructus.md](ideas/deltablue-profile-fructus.md),
+and `tools/cycle-graphs.mjs doc` redraws the charts.
+
+[AWFY]: https://github.com/smarr/are-we-fast-yet
+
 Upstream README from the SOM++ repository
 -----------------------------------------
 
