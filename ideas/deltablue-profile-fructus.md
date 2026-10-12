@@ -20,6 +20,8 @@ agrees exactly with `~/fructus/tools/profile.mjs <build>/SOM++`.
 |---|---:|---:|---:|---:|---|
 | a73b63d6 | 5,089,608 | 1,671,744 | | | Before classIds |
 | ad04a24d | 4,478,235 | 1,487,094 | 136,266,060 | 44,611,969 | Dispatch by classId ranges and rings |
+| 26793a87 | 4,477,951 | 1,487,043 | 136,266,059 | 44,611,968 | Rebuilt with the new fructus gcc and assembler |
+| 0442f246 | 4,481,226 | 1,487,137 | 136,772,794 | 44,726,494 | Arguments and locals relative to the stack top |
 
 ## Setup
 
