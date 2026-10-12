@@ -22,6 +22,7 @@ agrees exactly with `~/fructus/tools/profile.mjs <build>/SOM++`.
 | ad04a24d | 4,478,235 | 1,487,094 | 136,266,060 | 44,611,969 | Dispatch by classId ranges and rings |
 | 26793a87 | 4,477,951 | 1,487,043 | 136,266,059 | 44,611,968 | Rebuilt with the new fructus gcc and assembler |
 | 0442f246 | 4,481,226 | 1,487,137 | 136,772,794 | 44,726,494 | Arguments and locals relative to the stack top |
+| 77938552 | 4,339,089 | 1,455,568 | 131,045,100 | 43,328,009 | Stack pointer in a register |
 
 ## Setup
 
