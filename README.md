@@ -9,7 +9,7 @@ Plattner Institute][SOM]. It was originally built at Aarhus University
 (Denmark) where it was also used for teaching.
 
 This fork of SOM is optimized for very small devices. The primary platform
-is [https://github.com/erikcorry/fructus](Fructus), a CPU that can be
+is [Fructus](https://github.com/erikcorry/fructus), a CPU that can be
 implemented on very small FPGAs. On such small devices, the reflective
 features are not available. The Smalltalk compiler stays on the host.
 
