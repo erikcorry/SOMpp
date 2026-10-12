@@ -29,6 +29,8 @@ public:
     static bool MakeRoomFor(size_t /*size*/) { return true; }
     [[nodiscard]] size_t GetMaxNurseryObjectSize() const;
     void writeBarrier(VMObjectBase* holder, vm_oop_t referencedObject);
+    /** Remembers `holder` whatever it points to, see remember_object(). */
+    void rememberObject(VMObjectBase* holder);
     inline bool isObjectInNursery(vm_oop_t obj);
 #ifdef UNITTESTS
     std::set<pair<vm_oop_t, vm_oop_t>, VMObjectCompare> writeBarrierCalledOn;

@@ -135,6 +135,20 @@ public:
         if (IS_TAGGED(value)) {
             return;
         }
+#else
+        (void)value;
+#endif
+        rememberObject(holder);
+    }
+
+    /**
+     * Remembers `holder` whatever it points to, as the write barrier does
+     * for a value that may be young. The interpreter stores into the current
+     * frame without the barrier, and remembers the frame instead, see
+     * remember_object().
+     */
+    void rememberObject(const void* holder) {
+#ifdef FRUCTUS
         // The cards cover the low 32K, where every holder is. Their address
         // is the zero page base, and its low byte is 0, so the base register
         // is all the barrier needs.
@@ -148,7 +162,6 @@ public:
             (uint8_t)(uintptr_t)zpCards;
   #pragma GCC diagnostic pop
 #else
-        (void)value;
         // the GC field follows the vtable, as GenerationalHeap's barrier has
         // it, since VMObjectBase.h can't be included here
         auto* const gcField = (size_t*)holder + 1;

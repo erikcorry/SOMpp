@@ -89,6 +89,8 @@ class GenerationalHeap;
 typedef GenerationalHeap HEAP_CLS;
   #define write_barrier(obj, value_ptr) \
       ((GetHeap<GenerationalHeap>())->writeBarrier(obj, value_ptr))
+  #define remember_object(obj) \
+      ((GetHeap<GenerationalHeap>())->rememberObject(obj))
   #define ALLOC_MATURE , true
   #define ALLOC_OUTSIDE_NURSERY(X) , (X)
   #define ALLOC_OUTSIDE_NURSERY_DECL , bool outsideNursery = false
@@ -96,6 +98,7 @@ typedef GenerationalHeap HEAP_CLS;
 class CopyingHeap;
 typedef CopyingHeap HEAP_CLS;
   #define write_barrier(obj, value_ptr)
+  #define remember_object(obj)
   #define ALLOC_MATURE
   #define ALLOC_OUTSIDE_NURSERY(X)
   #define ALLOC_OUTSIDE_NURSERY_DECL
@@ -103,6 +106,7 @@ typedef CopyingHeap HEAP_CLS;
 class MarkSweepHeap;
 typedef MarkSweepHeap HEAP_CLS;
   #define write_barrier(obj, value_ptr)
+  #define remember_object(obj)
   #define ALLOC_MATURE
   #define ALLOC_OUTSIDE_NURSERY(X)
   #define ALLOC_OUTSIDE_NURSERY_DECL
@@ -110,6 +114,7 @@ typedef MarkSweepHeap HEAP_CLS;
 class DebugMarkSweepHeap;
 typedef DebugMarkSweepHeap HEAP_CLS;
   #define write_barrier(obj, value_ptr)
+  #define remember_object(obj)
   #define ALLOC_MATURE
   #define ALLOC_OUTSIDE_NURSERY(X)
   #define ALLOC_OUTSIDE_NURSERY_DECL
@@ -117,6 +122,7 @@ typedef DebugMarkSweepHeap HEAP_CLS;
 class DebugCopyingHeap;
 typedef DebugCopyingHeap HEAP_CLS;
   #define write_barrier(obj, value_ptr)
+  #define remember_object(obj)
   #define ALLOC_MATURE
   #define ALLOC_OUTSIDE_NURSERY(X)
   #define ALLOC_OUTSIDE_NURSERY_DECL
@@ -125,6 +131,7 @@ class SlidingHeap;
 typedef SlidingHeap HEAP_CLS;
   #define write_barrier(obj, value_ptr) \
       ((GetHeap<SlidingHeap>())->writeBarrier(obj, value_ptr))
+  #define remember_object(obj) ((GetHeap<SlidingHeap>())->rememberObject(obj))
   #define ALLOC_MATURE
   #define ALLOC_OUTSIDE_NURSERY(X)
   #define ALLOC_OUTSIDE_NURSERY_DECL
@@ -132,6 +139,7 @@ typedef SlidingHeap HEAP_CLS;
 class PagedMarkSweepHeap;
 typedef PagedMarkSweepHeap HEAP_CLS;
   #define write_barrier(obj, value_ptr)
+  #define remember_object(obj)
   #define ALLOC_MATURE
   #define ALLOC_OUTSIDE_NURSERY(X)
   #define ALLOC_OUTSIDE_NURSERY_DECL

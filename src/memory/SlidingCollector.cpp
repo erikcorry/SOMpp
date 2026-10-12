@@ -474,8 +474,9 @@ static gc_oop_t check_pointer(gc_oop_t oop) {
 
 /**
  * Checks that every old object that points into young space is in a dirty
- * card, so a missing write barrier fails where the pointer is, not when the
- * object it points to has been collected.
+ * card, and on the host that it is SEEN, so a missing write barrier, or a
+ * frame the interpreter didn't remember, fails where the pointer is, not
+ * when the object it points to has been collected.
  */
 static char* checkedHolder;
 
@@ -488,6 +489,13 @@ static gc_oop_t check_remembered(gc_oop_t oop) {
                         (void*)checkedHolder, (void*)oop);
             assert(false);
         }
+  #ifndef FRUCTUS
+        if ((((AbstractVMObject*)checkedHolder)->GetGCField() & SEEN) == 0) {
+            ErrorPrintf("old object %p points to young %p, isn't SEEN\n",
+                        (void*)checkedHolder, (void*)oop);
+            assert(false);
+        }
+  #endif
     }
     return oop;
 }

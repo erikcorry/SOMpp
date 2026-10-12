@@ -67,23 +67,15 @@
 Interpreter theInterpreter ZP;
 
 // Start() works on the stack of the current frame through its local sp, see
-// SAVE_PC(). The stores need the frame for the write barrier.
-static inline void push(gc_oop_t*& sp, VMFrame* frame, vm_oop_t val) {
-    *++sp = store_with_separate_barrier(val);
-    write_barrier(frame, val);
-}
-
-/* Only valid for tagged integers, nil, true, and false, see
- * VMFrame::SetTopNoBarrier(). */
-static inline void pushNoBarrier(gc_oop_t*& sp, vm_oop_t val) {
-    assert(IS_TAGGED(val) || val == load_ptr(nilObject) ||
-           val == load_ptr(trueObject) || val == load_ptr(falseObject));
+// SAVE_PC(). The stores into the current frame need no write barrier, since
+// the frame is remembered when it stops being the current one, and before a
+// collection, see SetFrame().
+static inline void push(gc_oop_t*& sp, vm_oop_t val) {
     *++sp = store_with_separate_barrier(val);
 }
 
-static inline void setTop(gc_oop_t* sp, VMFrame* frame, vm_oop_t val) {
+static inline void setTop(gc_oop_t* sp, vm_oop_t val) {
     *sp = store_with_separate_barrier(val);
-    write_barrier(frame, val);
 }
 
 static inline vm_oop_t stackElement(gc_oop_t* sp, size_t index) {
@@ -187,25 +179,25 @@ LABEL_BC_HALT:
 
 LABEL_BC_DUP:
     PROLOGUE();
-    push(sp, frame, load_ptr(*sp));
+    push(sp, load_ptr(*sp));
     NEXT_NOGC(1);
 
 LABEL_BC_DUP_SECOND:
     PROLOGUE();
-    push(sp, frame, stackElement(sp, 1));
+    push(sp, stackElement(sp, 1));
     NEXT_NOGC(1);
 
     // the variables of an outer context, see MakeStackRelative()
 LABEL_BC_PUSH_LOCAL:
     PROLOGUE();
     assert(pc[2] != 0 && "should have been BC_PUSH_STACK");
-    push(sp, frame, frame->GetLocal(pc[1], pc[2]));
+    push(sp, frame->GetLocal(pc[1], pc[2]));
     NEXT_NOGC(3);
 
 LABEL_BC_PUSH_ARGUMENT:
     PROLOGUE();
     assert(pc[2] != 0 && "should have been BC_PUSH_STACK");
-    push(sp, frame, frame->GetArgument(pc[1], pc[2]));
+    push(sp, frame->GetArgument(pc[1], pc[2]));
     NEXT_NOGC(3);
 
     // The compiler makes the arguments and locals of the current context
@@ -216,29 +208,29 @@ LABEL_NOT_STACK_RELATIVE:
 
 LABEL_BC_PUSH_STACK:
     PROLOGUE();
-    push(sp, frame, stackElement(sp, pc[1]));
+    push(sp, stackElement(sp, pc[1]));
     NEXT_NOGC(2);
 
 LABEL_BC_POP_STACK:
     PROLOGUE();
-    setTop(sp - pc[1], frame, load_ptr(*sp));
+    setTop(sp - pc[1], load_ptr(*sp));
     sp--;
     NEXT_NOGC(2);
 
 LABEL_BC_PUSH_FIELD:
     PROLOGUE();
     assert(pc[1] != 0 && pc[1] != 1 && "should have been BC_PUSH_FIELD_0|1");
-    push(sp, frame, getField(pc[1]));
+    push(sp, getField(pc[1]));
     NEXT_NOGC(2);
 
 LABEL_BC_PUSH_FIELD_0:
     PROLOGUE();
-    push(sp, frame, getField(0));
+    push(sp, getField(0));
     NEXT_NOGC(1);
 
 LABEL_BC_PUSH_FIELD_1:
     PROLOGUE();
-    push(sp, frame, getField(1));
+    push(sp, getField(1));
     NEXT_NOGC(1);
 
 LABEL_BC_PUSH_BLOCK:
@@ -248,46 +240,34 @@ LABEL_BC_PUSH_BLOCK:
         VMBlock* block = Universe::NewBlock(
             blockMethod, frame, blockMethod->GetNumberOfArguments());
         if (block != nullptr) {
-            push(sp, frame, block);
+            push(sp, block);
         }
     }
     NEXT_GC(1 + sizeof(void*));
 
 LABEL_BC_PUSH_CONSTANT:
     PROLOGUE();
-    push(sp, frame, (vm_oop_t)LoadWord(pc + 1));
+    push(sp, (vm_oop_t)LoadWord(pc + 1));
     NEXT_NOGC(1 + sizeof(void*));
 
 LABEL_BC_PUSH_0:
     PROLOGUE();
-    if (USE_TAGGING) {
-        pushNoBarrier(sp, NEW_INT(0));
-    } else {
-        push(sp, frame, NEW_INT(0));
-    }
+    push(sp, NEW_INT(0));
     NEXT_NOGC(1);
 
 LABEL_BC_PUSH_1:
     PROLOGUE();
-    if (USE_TAGGING) {
-        pushNoBarrier(sp, NEW_INT(1));
-    } else {
-        push(sp, frame, NEW_INT(1));
-    }
+    push(sp, NEW_INT(1));
     NEXT_NOGC(1);
 
 LABEL_BC_PUSH_SMALL_INT:
     PROLOGUE();
-#if USE_TAGGING
-    pushNoBarrier(sp, NEW_INT((int8_t)pc[1]));
-#else
-    push(sp, frame, NEW_INT((int8_t)pc[1]));
-#endif
+    push(sp, NEW_INT((int8_t)pc[1]));
     NEXT_NOGC(2);
 
 LABEL_BC_PUSH_NIL:
     PROLOGUE();
-    pushNoBarrier(sp, load_ptr(nilObject));
+    push(sp, load_ptr(nilObject));
     NEXT_NOGC(1);
 
 LABEL_BC_PUSH_GLOBAL:
@@ -297,7 +277,7 @@ LABEL_BC_PUSH_GLOBAL:
         pc += 1 + sizeof(void*);
         vm_oop_t global = Universe::GetGlobal(globalName);
         if (global != nullptr) {
-            push(sp, frame, global);
+            push(sp, global);
         } else {
             // sends #unknownGlobal:, which pushes a new frame
             SAVE_PC();
@@ -473,7 +453,7 @@ LABEL_BC_INC_FIELD_PUSH:
         if (val == nullptr) {
             goto RETRY;
         }
-        push(sp, frame, val);
+        push(sp, val);
     }
     NEXT_NOGC(2);
 
@@ -512,7 +492,7 @@ LABEL_BC_JUMP_ON_FALSE_TOP_NIL: {
     if (val == load_ptr(falseObject)) {
         uint8_t const offset = pc[1];
         pc += offset;
-        setTop(sp, frame, load_ptr(nilObject));
+        setTop(sp, load_ptr(nilObject));
     } else {
         sp--;
         pc += 3;
@@ -525,7 +505,7 @@ LABEL_BC_JUMP_ON_TRUE_TOP_NIL: {
     if (val == load_ptr(trueObject)) {
         uint8_t const offset = pc[1];
         pc += offset;
-        setTop(sp, frame, load_ptr(nilObject));
+        setTop(sp, load_ptr(nilObject));
     } else {
         sp--;
         pc += 3;
@@ -642,7 +622,7 @@ LABEL_BC_JUMP2_ON_FALSE_TOP_NIL: {
             ComputeOffset(pc[1],
                           pc[2]);
         pc += offset;
-        setTop(sp, frame, load_ptr(nilObject));
+        setTop(sp, load_ptr(nilObject));
     } else {
         sp--;
         pc += 3;
@@ -657,7 +637,7 @@ LABEL_BC_JUMP2_ON_TRUE_TOP_NIL: {
             ComputeOffset(pc[1],
                           pc[2]);
         pc += offset;
-        setTop(sp, frame, load_ptr(nilObject));
+        setTop(sp, load_ptr(nilObject));
     } else {
         sp--;
         pc += 3;
@@ -755,7 +735,7 @@ LABEL_BC_SEND_EQEQ: {
     if (receiver == load_ptr(nilObject) || IS_TAGGED(receiver) ||
         CLASS_OF(receiver) == load_ptr(symbolClass)) {
         sp--;
-        setTop(sp, frame, load_ptr(receiver == arg ? trueObject : falseObject));
+        setTop(sp, load_ptr(receiver == arg ? trueObject : falseObject));
         NEXT_NOGC(SendSite::Length(BC_SEND_EQEQ));
     }
 }
@@ -786,7 +766,17 @@ VMFrame* Interpreter::PushNewFrame(VMMethod* method) {
 
 // Doesn't save or restore the bytecode index: Start() saves it before
 // anything that can switch frames, and reloads it afterwards.
+//
+// Start() stores into the current frame without the write barrier, so the
+// frame is remembered, as if it pointed into young space, when it stops being
+// the current frame, here, and before a collection, in startGC(). A frame
+// that returns is remembered too, since a block may still have it as its
+// context. Stores into other frames, like a block's into its outer contexts,
+// still have the barrier.
 void Interpreter::SetFrame(VMFrame* frm) {
+    if (frame != nullptr) {
+        remember_object(frame);
+    }
     frame = frm;
     method = frm->GetMethod();
 }
@@ -815,11 +805,10 @@ void Interpreter::popFrameAndPushResult(vm_oop_t result) {
     VMMethod const* const method = prevFrame->GetMethod();
     uint8_t const numberOfArgs = method->GetNumberOfArguments();
 
-    for (uint8_t i = 0; i < numberOfArgs; ++i) {
-        GetFrame()->Pop();
-    }
-
-    GetFrame()->Push(result);
+    // the frame is the current one again, which needs no write barrier, see
+    // SetFrame()
+    GetFrame()->stack_ptr -= numberOfArgs;
+    *++GetFrame()->stack_ptr = store_with_separate_barrier(result);
 }
 
 #ifdef FRUCTUS
@@ -1182,11 +1171,9 @@ bool Interpreter::incTop(gc_oop_t* sp, som_int_t delta) {
         return false;
     }
 
-    // the top is in the current frame, see Start()
+    // the top is in the current frame, which needs no write barrier, see
+    // SetFrame()
     *sp = store_with_separate_barrier(val);
-    if (!IS_TAGGED(val)) {
-        write_barrier(GetFrame(), val);
-    }
     return true;
 }
 
@@ -1235,6 +1222,8 @@ void Interpreter::WalkGlobals(walk_heap_fn walk) {
 }
 
 void Interpreter::startGC() {
+    // see SetFrame()
+    remember_object(GetFrame());
     GetHeap<HEAP_CLS>()->SafePoint();
     method = GetFrame()->GetMethod();
 }

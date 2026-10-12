@@ -58,6 +58,17 @@ void* GenerationalHeap::AllocateMatureObject(size_t size) {
     return newObject;
 }
 
+void GenerationalHeap::rememberObject(VMObjectBase* holder) {
+    assert(IsValidObject(holder));
+
+    size_t const gcField = holder->GetGCField();
+    if ((gcField & (MASK_OBJECT_IS_OLD | MASK_SEEN_BY_WRITE_BARRIER)) ==
+        MASK_OBJECT_IS_OLD) {
+        oldObjsWithRefToYoungObjs.push_back((size_t)holder);
+        holder->SetGCField(gcField | MASK_SEEN_BY_WRITE_BARRIER);
+    }
+}
+
 void GenerationalHeap::writeBarrier_OldHolder(VMObjectBase* holder,
                                               vm_oop_t referencedObject) {
     if (isObjectInNursery(referencedObject)) {
