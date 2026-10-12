@@ -24,6 +24,7 @@ agrees exactly with `~/fructus/tools/profile.mjs <build>/SOM++`.
 | 0442f246 | 4,481,226 | 1,487,137 | 136,772,794 | 44,726,494 | Arguments and locals relative to the stack top |
 | 77938552 | 4,339,089 | 1,455,568 | 131,045,100 | 43,328,009 | Stack pointer in a register |
 | 9180e1de | 4,021,821 | 1,330,370 | 122,015,474 | 39,605,666 | Remember the current frame, no barrier on its stack |
+| e62e7f7d | 3,875,198 | 1,270,388 | 115,499,358 | 37,199,502 | No barrier on arguments and primitive results |
 
 ## Setup
 
