@@ -34,17 +34,24 @@
 #include "../vmobjects/VMMethod.h"
 
 // The program counter, pc, is a local of Start() pointing into the bytecodes
-// of the running method, so that it can stay in a register. The frame's
-// bytecode index is only up to date after SAVE_PC(): it must be saved before
-// anything that may look at the frame, switch frames or move the method,
-// and reloaded after anything that may have switched frames or moved it.
-#define SAVE_PC() frame->SetBytecodeIndex(pc - method->GetBytecodes())
+// of the running method, and so is the stack pointer, sp, pointing at the top
+// of the current frame's stack, so that they can stay in registers. The
+// frame's bytecode index and stack_ptr are only up to date after SAVE_PC():
+// it must be saved before anything that may look at the frame, switch frames
+// or move the method, and reloaded after anything that may have switched
+// frames or moved them.
+#define SAVE_PC()           \
+    (frame->stack_ptr = sp, \
+     frame->SetBytecodeIndex(pc - method->GetBytecodes()))
 
 // Saves the index of the next bytecode, for a bytecode `bcCount` long.
 #define SAVE_NEXT_PC(bcCount) \
-    frame->SetBytecodeIndex(pc + (bcCount) - method->GetBytecodes())
+    (frame->stack_ptr = sp,   \
+     frame->SetBytecodeIndex(pc + (bcCount) - method->GetBytecodes()))
 
-#define RELOAD_PC() pc = method->GetBytecodes() + frame->GetBytecodeIndex()
+#define RELOAD_PC()                                           \
+    (pc = method->GetBytecodes() + frame->GetBytecodeIndex(), \
+     sp = frame->stack_ptr)
 
 #define DISPATCH_NOGC()         \
     {                           \
@@ -143,34 +150,21 @@ private:
     void triggerDoesNotUnderstand(VMSymbol* signature);
 #endif
 
-    void doDup();
-    void doPushLocal(uint8_t bc1, uint8_t bc2);
     void doReturnFieldWithIndex(uint8_t fieldIndex);
-    void doPushArgument(uint8_t argIndex, uint8_t contextLevel);
-    void doPushField(uint8_t fieldIndex);
-    void doPushFieldWithIndex(uint8_t fieldIndex);
-    void doPushBlock(VMInvokable* blockMethod);
-    bool doPushGlobal(VMSymbol* globalName);
-    void doPop();
-    void doPopLocal(uint8_t bc1, uint8_t bc2);
-    void doPopArgument(uint8_t bc1, uint8_t bc2);
-    void doPopField(uint8_t fieldIndex);
-    void doPopFieldWithIndex(uint8_t fieldIndex);
+    vm_oop_t getField(uint8_t fieldIndex);
+    void setField(uint8_t fieldIndex, vm_oop_t o);
     void doSend(uint8_t* site);
     void doUnarySend(uint8_t* site);
 #ifndef FRUCTUS
     void doSuperSend(uint8_t* site);
 #endif
-    void doReturnLocal();
     bool doReturnNonLocal();
 #ifndef FRUCTUS
     bool sendEscapedBlock(vm_oop_t result);
 #endif
-    bool doInc();
-    bool doDec();
-    bool doIncField(uint8_t fieldIndex);
-    bool doIncFieldPush(uint8_t fieldIndex);
-    bool checkIsGreater();
+    bool incTop(gc_oop_t* sp, som_int_t delta);
+    vm_oop_t incField(uint8_t fieldIndex);
+    static bool checkIsGreater(vm_oop_t top, vm_oop_t top2);
 };
 
 /** There is one interpreter. It has no constructor, so it needs no static

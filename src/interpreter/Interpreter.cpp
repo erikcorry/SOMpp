@@ -66,6 +66,30 @@
 
 Interpreter theInterpreter ZP;
 
+// Start() works on the stack of the current frame through its local sp, see
+// SAVE_PC(). The stores need the frame for the write barrier.
+static inline void push(gc_oop_t*& sp, VMFrame* frame, vm_oop_t val) {
+    *++sp = store_with_separate_barrier(val);
+    write_barrier(frame, val);
+}
+
+/* Only valid for tagged integers, nil, true, and false, see
+ * VMFrame::SetTopNoBarrier(). */
+static inline void pushNoBarrier(gc_oop_t*& sp, vm_oop_t val) {
+    assert(IS_TAGGED(val) || val == load_ptr(nilObject) ||
+           val == load_ptr(trueObject) || val == load_ptr(falseObject));
+    *++sp = store_with_separate_barrier(val);
+}
+
+static inline void setTop(gc_oop_t* sp, VMFrame* frame, vm_oop_t val) {
+    *sp = store_with_separate_barrier(val);
+    write_barrier(frame, val);
+}
+
+static inline vm_oop_t stackElement(gc_oop_t* sp, size_t index) {
+    return load_ptr(sp[-std::make_signed_t<som_int_t>(index)]);
+}
+
 vm_oop_t Interpreter::Start() {
 #ifdef BYTECODE_HEATMAP
   #define HEATMAP_INC() method->heatmap[pc - method->GetBytecodes()]++
@@ -77,6 +101,7 @@ vm_oop_t Interpreter::Start() {
     // initialization
     method = GetMethod();
     uint8_t* pc = nullptr;
+    gc_oop_t* sp = nullptr;
     RELOAD_PC();
 
     void const* const loopTargets[] = {&&LABEL_BC_HALT,
@@ -158,29 +183,29 @@ vm_oop_t Interpreter::Start() {
 LABEL_BC_HALT:
     PROLOGUE();
     SAVE_NEXT_PC(1);
-    return GetFrame()->GetStackElement(0);  // handle the halt bytecode
+    return load_ptr(*sp);  // handle the halt bytecode
 
 LABEL_BC_DUP:
     PROLOGUE();
-    doDup();
+    push(sp, frame, load_ptr(*sp));
     NEXT_NOGC(1);
 
 LABEL_BC_DUP_SECOND:
     PROLOGUE();
-    {
-        vm_oop_t elem = GetFrame()->GetStackElement(1);
-        GetFrame()->Push(elem);
-    }
+    push(sp, frame, stackElement(sp, 1));
     NEXT_NOGC(1);
 
+    // the variables of an outer context, see MakeStackRelative()
 LABEL_BC_PUSH_LOCAL:
     PROLOGUE();
-    doPushLocal(pc[1], pc[2]);
+    assert(pc[2] != 0 && "should have been BC_PUSH_STACK");
+    push(sp, frame, frame->GetLocal(pc[1], pc[2]));
     NEXT_NOGC(3);
 
 LABEL_BC_PUSH_ARGUMENT:
     PROLOGUE();
-    doPushArgument(pc[1], pc[2]);
+    assert(pc[2] != 0 && "should have been BC_PUSH_STACK");
+    push(sp, frame, frame->GetArgument(pc[1], pc[2]));
     NEXT_NOGC(3);
 
     // The compiler makes the arguments and locals of the current context
@@ -191,69 +216,78 @@ LABEL_NOT_STACK_RELATIVE:
 
 LABEL_BC_PUSH_STACK:
     PROLOGUE();
-    GetFrame()->Push(GetFrame()->GetStackElement(pc[1]));
+    push(sp, frame, stackElement(sp, pc[1]));
     NEXT_NOGC(2);
 
 LABEL_BC_POP_STACK:
     PROLOGUE();
-    GetFrame()->PopIntoStackElement(pc[1]);
+    setTop(sp - pc[1], frame, load_ptr(*sp));
+    sp--;
     NEXT_NOGC(2);
 
 LABEL_BC_PUSH_FIELD:
     PROLOGUE();
-    doPushField(pc[1]);
+    assert(pc[1] != 0 && pc[1] != 1 && "should have been BC_PUSH_FIELD_0|1");
+    push(sp, frame, getField(pc[1]));
     NEXT_NOGC(2);
 
 LABEL_BC_PUSH_FIELD_0:
     PROLOGUE();
-    doPushFieldWithIndex(0);
+    push(sp, frame, getField(0));
     NEXT_NOGC(1);
 
 LABEL_BC_PUSH_FIELD_1:
     PROLOGUE();
-    doPushFieldWithIndex(1);
+    push(sp, frame, getField(1));
     NEXT_NOGC(1);
 
 LABEL_BC_PUSH_BLOCK:
     PROLOGUE();
-    doPushBlock((VMInvokable*)LoadWord(pc + 1));
+    {
+        auto* blockMethod = (VMInvokable*)LoadWord(pc + 1);
+        VMBlock* block = Universe::NewBlock(
+            blockMethod, frame, blockMethod->GetNumberOfArguments());
+        if (block != nullptr) {
+            push(sp, frame, block);
+        }
+    }
     NEXT_GC(1 + sizeof(void*));
 
 LABEL_BC_PUSH_CONSTANT:
     PROLOGUE();
-    GetFrame()->Push((vm_oop_t)LoadWord(pc + 1));
+    push(sp, frame, (vm_oop_t)LoadWord(pc + 1));
     NEXT_NOGC(1 + sizeof(void*));
 
 LABEL_BC_PUSH_0:
     PROLOGUE();
     if (USE_TAGGING) {
-        GetFrame()->PushNoBarrier(NEW_INT(0));
+        pushNoBarrier(sp, NEW_INT(0));
     } else {
-        GetFrame()->Push(NEW_INT(0));
+        push(sp, frame, NEW_INT(0));
     }
     NEXT_NOGC(1);
 
 LABEL_BC_PUSH_1:
     PROLOGUE();
     if (USE_TAGGING) {
-        GetFrame()->PushNoBarrier(NEW_INT(1));
+        pushNoBarrier(sp, NEW_INT(1));
     } else {
-        GetFrame()->Push(NEW_INT(1));
+        push(sp, frame, NEW_INT(1));
     }
     NEXT_NOGC(1);
 
 LABEL_BC_PUSH_SMALL_INT:
     PROLOGUE();
 #if USE_TAGGING
-    GetFrame()->PushNoBarrier(NEW_INT((int8_t)pc[1]));
+    pushNoBarrier(sp, NEW_INT((int8_t)pc[1]));
 #else
-    GetFrame()->Push(NEW_INT((int8_t)pc[1]));
+    push(sp, frame, NEW_INT((int8_t)pc[1]));
 #endif
     NEXT_NOGC(2);
 
 LABEL_BC_PUSH_NIL:
     PROLOGUE();
-    GetFrame()->PushNoBarrier(load_ptr(nilObject));
+    pushNoBarrier(sp, load_ptr(nilObject));
     NEXT_NOGC(1);
 
 LABEL_BC_PUSH_GLOBAL:
@@ -261,7 +295,10 @@ LABEL_BC_PUSH_GLOBAL:
     {
         auto* globalName = (VMSymbol*)LoadWord(pc + 1);
         pc += 1 + sizeof(void*);
-        if (!doPushGlobal(globalName)) {
+        vm_oop_t global = Universe::GetGlobal(globalName);
+        if (global != nullptr) {
+            push(sp, frame, global);
+        } else {
             // sends #unknownGlobal:, which pushes a new frame
             SAVE_PC();
             SendUnknownGlobal(globalName);
@@ -272,32 +309,32 @@ LABEL_BC_PUSH_GLOBAL:
 
 LABEL_BC_POP:
     PROLOGUE();
-    doPop();
+    sp--;
     NEXT_NOGC(1);
 
 LABEL_BC_POP_LOCAL:
     PROLOGUE();
-    doPopLocal(pc[1], pc[2]);
+    frame->SetLocal(pc[1], pc[2], load_ptr(*sp--));
     NEXT_NOGC(3);
 
 LABEL_BC_POP_ARGUMENT:
     PROLOGUE();
-    doPopArgument(pc[1], pc[2]);
+    frame->SetArgument(pc[1], pc[2], load_ptr(*sp--));
     NEXT_NOGC(3);
 
 LABEL_BC_POP_FIELD:
     PROLOGUE();
-    doPopField(pc[1]);
+    setField(pc[1], load_ptr(*sp--));
     NEXT_NOGC(2);
 
 LABEL_BC_POP_FIELD_0:
     PROLOGUE();
-    doPopFieldWithIndex(0);
+    setField(0, load_ptr(*sp--));
     NEXT_NOGC(1);
 
 LABEL_BC_POP_FIELD_1:
     PROLOGUE();
-    doPopFieldWithIndex(1);
+    setField(1, load_ptr(*sp--));
     NEXT_NOGC(1);
 
 LABEL_BC_SEND:
@@ -348,8 +385,7 @@ LABEL_BC_NOT_UNDERSTOOD:
     SAVE_NEXT_PC(SendSite::notUnderstoodLength);
     triggerDoesNotUnderstand(
         (VMSymbol*)LoadWord(pc + SendSite::notUnderstoodSelector),
-        CLASS_OF(
-            GetFrame()->GetStackElement(pc[SendSite::numberOfArguments] - 1)));
+        CLASS_OF(stackElement(sp, pc[SendSite::numberOfArguments] - 1)));
 #else
     // only the fructus image writer makes them
     __builtin_unreachable();
@@ -357,12 +393,14 @@ LABEL_BC_NOT_UNDERSTOOD:
 
 LABEL_BC_RETURN_LOCAL:
     PROLOGUE();
-    doReturnLocal();
+    // the returning frame's stack_ptr doesn't matter any more
+    popFrameAndPushResult(load_ptr(*sp));
     RELOAD_PC();
     DISPATCH_NOGC();
 
 LABEL_BC_RETURN_NON_LOCAL:
     PROLOGUE();
+    SAVE_PC();
 #ifdef FRUCTUS
     doReturnNonLocal();  // an escaped block is an error, so it can't fail
 #else
@@ -402,13 +440,13 @@ LABEL_BC_RETURN_FIELD_2:
 
 LABEL_BC_INC:
     PROLOGUE();
-    if (!doInc()) {
+    if (!incTop(sp, 1)) {
         goto RETRY;
     }
     if (USE_TAGGING) {
         NEXT_NOGC(1);
     } else {
-        // without integer tagging doInc() allocates memory and the IfNil
+        // without integer tagging incTop() allocates memory and the IfNil
         // benchmark will allocate, but not reach a GC point, and run out of
         // memory
         NEXT_GC(1);
@@ -416,22 +454,26 @@ LABEL_BC_INC:
 
 LABEL_BC_DEC:
     PROLOGUE();
-    if (!doDec()) {
+    if (!incTop(sp, -1)) {
         goto RETRY;
     }
     NEXT_NOGC(1);
 
 LABEL_BC_INC_FIELD:
     PROLOGUE();
-    if (!doIncField(pc[1])) {
+    if (incField(pc[1]) == nullptr) {
         goto RETRY;
     }
     NEXT_NOGC(2);
 
 LABEL_BC_INC_FIELD_PUSH:
     PROLOGUE();
-    if (!doIncFieldPush(pc[1])) {
-        goto RETRY;
+    {
+        vm_oop_t const val = incField(pc[1]);
+        if (val == nullptr) {
+            goto RETRY;
+        }
+        push(sp, frame, val);
     }
     NEXT_NOGC(2);
 
@@ -442,110 +484,109 @@ LABEL_BC_JUMP: {
     DISPATCH_NOGC();
 
 LABEL_BC_JUMP_ON_FALSE_POP: {
-    vm_oop_t val = GetFrame()->Top();
+    vm_oop_t val = load_ptr(*sp);
     if (val == load_ptr(falseObject)) {
         uint8_t const offset = pc[1];
         pc += offset;
     } else {
         pc += 3;
     }
-    GetFrame()->PopVoid();
+    sp--;
 }
     DISPATCH_NOGC();
 
 LABEL_BC_JUMP_ON_TRUE_POP: {
-    vm_oop_t val = GetFrame()->Top();
+    vm_oop_t val = load_ptr(*sp);
     if (val == load_ptr(trueObject)) {
         uint8_t const offset = pc[1];
         pc += offset;
     } else {
         pc += 3;
     }
-    GetFrame()->PopVoid();
+    sp--;
 }
     DISPATCH_NOGC();
 
 LABEL_BC_JUMP_ON_FALSE_TOP_NIL: {
-    vm_oop_t val = GetFrame()->Top();
+    vm_oop_t val = load_ptr(*sp);
     if (val == load_ptr(falseObject)) {
         uint8_t const offset = pc[1];
         pc += offset;
-        GetFrame()->SetTopNoBarrier(load_ptr(nilObject));
+        setTop(sp, frame, load_ptr(nilObject));
     } else {
-        GetFrame()->PopVoid();
+        sp--;
         pc += 3;
     }
 }
     DISPATCH_NOGC();
 
 LABEL_BC_JUMP_ON_TRUE_TOP_NIL: {
-    vm_oop_t val = GetFrame()->Top();
+    vm_oop_t val = load_ptr(*sp);
     if (val == load_ptr(trueObject)) {
         uint8_t const offset = pc[1];
         pc += offset;
-        GetFrame()->SetTopNoBarrier(load_ptr(nilObject));
+        setTop(sp, frame, load_ptr(nilObject));
     } else {
-        GetFrame()->PopVoid();
+        sp--;
         pc += 3;
     }
 }
     DISPATCH_NOGC();
 
 LABEL_BC_JUMP_ON_NOT_NIL_POP: {
-    vm_oop_t val = GetFrame()->Top();
+    vm_oop_t val = load_ptr(*sp);
     if (val != load_ptr(nilObject)) {
         uint8_t const offset = pc[1];
         pc += offset;
     } else {
         pc += 3;
     }
-    GetFrame()->PopVoid();
+    sp--;
 }
     DISPATCH_NOGC();
 
 LABEL_BC_JUMP_ON_NIL_POP: {
-    vm_oop_t val = GetFrame()->Top();
+    vm_oop_t val = load_ptr(*sp);
     if (val == load_ptr(nilObject)) {
         uint8_t const offset = pc[1];
         pc += offset;
     } else {
         pc += 3;
     }
-    GetFrame()->PopVoid();
+    sp--;
 }
     DISPATCH_NOGC();
 
 LABEL_BC_JUMP_ON_NOT_NIL_TOP_TOP: {
-    vm_oop_t val = GetFrame()->Top();
+    vm_oop_t val = load_ptr(*sp);
     if (val != load_ptr(nilObject)) {
         uint8_t const offset = pc[1];
         pc += offset;
         // GetFrame()->SetTop(val);
     } else {
-        GetFrame()->PopVoid();
+        sp--;
         pc += 3;
     }
 }
     DISPATCH_NOGC();
 
 LABEL_BC_JUMP_ON_NIL_TOP_TOP: {
-    vm_oop_t val = GetFrame()->Top();
+    vm_oop_t val = load_ptr(*sp);
     if (val == load_ptr(nilObject)) {
         uint8_t const offset = pc[1];
         pc += offset;
         // GetFrame()->SetTop(val);
     } else {
-        GetFrame()->PopVoid();
+        sp--;
         pc += 3;
     }
 }
     DISPATCH_NOGC();
 
 LABEL_BC_JUMP_IF_GREATER: {
-    if (checkIsGreater()) {
+    if (checkIsGreater(load_ptr(sp[0]), load_ptr(sp[-1]))) {
         pc += pc[1];
-        GetFrame()->Pop();
-        GetFrame()->Pop();
+        sp -= 2;
     } else {
         pc += 3;
     }
@@ -567,7 +608,7 @@ LABEL_BC_JUMP2: {
     DISPATCH_NOGC();
 
 LABEL_BC_JUMP2_ON_FALSE_POP: {
-    vm_oop_t val = GetFrame()->Top();
+    vm_oop_t val = load_ptr(*sp);
     if (val == load_ptr(falseObject)) {
         uint16_t const offset =
             ComputeOffset(pc[1],
@@ -576,12 +617,12 @@ LABEL_BC_JUMP2_ON_FALSE_POP: {
     } else {
         pc += 3;
     }
-    GetFrame()->PopVoid();
+    sp--;
 }
     DISPATCH_NOGC();
 
 LABEL_BC_JUMP2_ON_TRUE_POP: {
-    vm_oop_t val = GetFrame()->Top();
+    vm_oop_t val = load_ptr(*sp);
     if (val == load_ptr(trueObject)) {
         uint16_t const offset =
             ComputeOffset(pc[1],
@@ -590,42 +631,42 @@ LABEL_BC_JUMP2_ON_TRUE_POP: {
     } else {
         pc += 3;
     }
-    GetFrame()->PopVoid();
+    sp--;
 }
     DISPATCH_NOGC();
 
 LABEL_BC_JUMP2_ON_FALSE_TOP_NIL: {
-    vm_oop_t val = GetFrame()->Top();
+    vm_oop_t val = load_ptr(*sp);
     if (val == load_ptr(falseObject)) {
         uint16_t const offset =
             ComputeOffset(pc[1],
                           pc[2]);
         pc += offset;
-        GetFrame()->SetTopNoBarrier(load_ptr(nilObject));
+        setTop(sp, frame, load_ptr(nilObject));
     } else {
-        GetFrame()->PopVoid();
+        sp--;
         pc += 3;
     }
 }
     DISPATCH_NOGC();
 
 LABEL_BC_JUMP2_ON_TRUE_TOP_NIL: {
-    vm_oop_t val = GetFrame()->Top();
+    vm_oop_t val = load_ptr(*sp);
     if (val == load_ptr(trueObject)) {
         uint16_t const offset =
             ComputeOffset(pc[1],
                           pc[2]);
         pc += offset;
-        GetFrame()->SetTopNoBarrier(load_ptr(nilObject));
+        setTop(sp, frame, load_ptr(nilObject));
     } else {
-        GetFrame()->PopVoid();
+        sp--;
         pc += 3;
     }
 }
     DISPATCH_NOGC();
 
 LABEL_BC_JUMP2_ON_NOT_NIL_POP: {
-    vm_oop_t val = GetFrame()->Top();
+    vm_oop_t val = load_ptr(*sp);
     if (val != load_ptr(nilObject)) {
         uint16_t const offset =
             ComputeOffset(pc[1],
@@ -634,12 +675,12 @@ LABEL_BC_JUMP2_ON_NOT_NIL_POP: {
     } else {
         pc += 3;
     }
-    GetFrame()->PopVoid();
+    sp--;
 }
     DISPATCH_NOGC();
 
 LABEL_BC_JUMP2_ON_NIL_POP: {
-    vm_oop_t val = GetFrame()->Top();
+    vm_oop_t val = load_ptr(*sp);
     if (val == load_ptr(nilObject)) {
         uint16_t const offset =
             ComputeOffset(pc[1],
@@ -648,12 +689,12 @@ LABEL_BC_JUMP2_ON_NIL_POP: {
     } else {
         pc += 3;
     }
-    GetFrame()->PopVoid();
+    sp--;
 }
     DISPATCH_NOGC();
 
 LABEL_BC_JUMP2_ON_NOT_NIL_TOP_TOP: {
-    vm_oop_t val = GetFrame()->Top();
+    vm_oop_t val = load_ptr(*sp);
     if (val != load_ptr(nilObject)) {
         uint16_t const offset =
             ComputeOffset(pc[1],
@@ -661,14 +702,14 @@ LABEL_BC_JUMP2_ON_NOT_NIL_TOP_TOP: {
         pc += offset;
         // GetFrame()->SetTop(val);
     } else {
-        GetFrame()->PopVoid();
+        sp--;
         pc += 3;
     }
 }
     DISPATCH_NOGC();
 
 LABEL_BC_JUMP2_ON_NIL_TOP_TOP: {
-    vm_oop_t val = GetFrame()->Top();
+    vm_oop_t val = load_ptr(*sp);
     if (val == load_ptr(nilObject)) {
         uint16_t const offset =
             ComputeOffset(pc[1],
@@ -676,19 +717,18 @@ LABEL_BC_JUMP2_ON_NIL_TOP_TOP: {
         pc += offset;
         // GetFrame()->SetTop(val);
     } else {
-        GetFrame()->PopVoid();
+        sp--;
         pc += 3;
     }
 }
     DISPATCH_NOGC();
 
 LABEL_BC_JUMP2_IF_GREATER: {
-    if (checkIsGreater()) {
+    if (checkIsGreater(load_ptr(sp[0]), load_ptr(sp[-1]))) {
         pc +=
             ComputeOffset(pc[1],
                           pc[2]);
-        GetFrame()->Pop();
-        GetFrame()->Pop();
+        sp -= 2;
     } else {
         pc += 3;
     }
@@ -710,13 +750,12 @@ LABEL_BC_JUMP2_BACKWARD: {
     // double of the same value. Anything else is a send.
 LABEL_BC_SEND_EQEQ: {
     PROLOGUE();
-    vm_oop_t const arg = GetFrame()->Top();
-    vm_oop_t const receiver = GetFrame()->Top2();
+    vm_oop_t const arg = load_ptr(sp[0]);
+    vm_oop_t const receiver = load_ptr(sp[-1]);
     if (receiver == load_ptr(nilObject) || IS_TAGGED(receiver) ||
         CLASS_OF(receiver) == load_ptr(symbolClass)) {
-        GetFrame()->PopVoid();
-        GetFrame()->SetTopNoBarrier(
-            load_ptr(receiver == arg ? trueObject : falseObject));
+        sp--;
+        setTop(sp, frame, load_ptr(receiver == arg ? trueObject : falseObject));
         NEXT_NOGC(SendSite::Length(BC_SEND_EQEQ));
     }
 }
@@ -896,46 +935,13 @@ void Interpreter::triggerDoesNotUnderstand(VMSymbol* signature) {
 }
 #endif
 
-void Interpreter::doDup() {
-    vm_oop_t elem = GetFrame()->GetStackElement(0);
-    GetFrame()->Push(elem);
-}
-
-void Interpreter::doPushLocal(uint8_t bc1, uint8_t bc2) {
-    assert(bc2 != 0 && "should have been BC_PUSH_STACK");
-
-    vm_oop_t local = GetFrame()->GetLocal(bc1, bc2);
-
-    GetFrame()->Push(local);
-}
-
-void Interpreter::doPushArgument(uint8_t argIndex, uint8_t contextLevel) {
-    assert(contextLevel != 0 && "should have been BC_PUSH_STACK");
-
-    vm_oop_t argument = GetFrame()->GetArgument(argIndex, contextLevel);
-
-    GetFrame()->Push(argument);
-}
-
-void Interpreter::doPushField(uint8_t fieldIndex) {
-    assert(fieldIndex != 0 && fieldIndex != 1 &&
-           "should have been BC_PUSH_FIELD_0|1");
-
-    doPushFieldWithIndex(fieldIndex);
-}
-
-void Interpreter::doPushFieldWithIndex(uint8_t fieldIndex) {
+vm_oop_t Interpreter::getField(uint8_t fieldIndex) {
     vm_oop_t self = GetSelf();
-    vm_oop_t o = nullptr;
 
     if (unlikely(IS_TAGGED(self))) {
-        o = nullptr;
         ErrorExit("Integers do not have fields!");
-    } else {
-        o = ((VMObject*)self)->GetField(fieldIndex);
     }
-
-    GetFrame()->Push(o);
+    return ((VMObject*)self)->GetField(fieldIndex);
 }
 
 void Interpreter::doReturnFieldWithIndex(uint8_t fieldIndex) {
@@ -950,27 +956,6 @@ void Interpreter::doReturnFieldWithIndex(uint8_t fieldIndex) {
     }
 
     popFrameAndPushResult(o);
-}
-
-void Interpreter::doPushBlock(VMInvokable* blockMethod) {
-    uint8_t const numOfArgs = blockMethod->GetNumberOfArguments();
-
-    VMBlock* block = Universe::NewBlock(blockMethod, GetFrame(), numOfArgs);
-    if (block != nullptr) {
-        GetFrame()->Push(block);
-    }
-}
-
-// Returns false if the global is unknown, and Start() has to send
-// #unknownGlobal:.
-bool Interpreter::doPushGlobal(VMSymbol* globalName) {
-    vm_oop_t global = Universe::GetGlobal(globalName);
-
-    if (global == nullptr) {
-        return false;
-    }
-    GetFrame()->Push(global);
-    return true;
 }
 
 #ifdef FRUCTUS
@@ -997,28 +982,8 @@ bool Interpreter::SendUnknownGlobal(VMSymbol* globalName) {
 }
 #endif
 
-void Interpreter::doPop() {
-    GetFrame()->Pop();
-}
-
-void Interpreter::doPopLocal(uint8_t bc1, uint8_t bc2) {
-    vm_oop_t o = GetFrame()->Pop();
-
-    GetFrame()->SetLocal(bc1, bc2, o);
-}
-
-void Interpreter::doPopArgument(uint8_t bc1, uint8_t bc2) {
-    vm_oop_t o = GetFrame()->Pop();
-    GetFrame()->SetArgument(bc1, bc2, o);
-}
-
-void Interpreter::doPopField(uint8_t fieldIndex) {
-    doPopFieldWithIndex(fieldIndex);
-}
-
-void Interpreter::doPopFieldWithIndex(uint8_t fieldIndex) {
+void Interpreter::setField(uint8_t fieldIndex, vm_oop_t o) {
     vm_oop_t self = GetSelf();
-    vm_oop_t o = GetFrame()->Pop();
 
     if (unlikely(IS_TAGGED(self))) {
         ErrorExit("Integers do not have fields that can be set");
@@ -1099,11 +1064,6 @@ void Interpreter::doSuperSend(uint8_t* site) {
     }
 }
 #endif
-
-void Interpreter::doReturnLocal() {
-    vm_oop_t result = GetFrame()->Pop();
-    popFrameAndPushResult(result);
-}
 
 // Answers false, and changes nothing, if the block has escaped and the send
 // of #escapedBlock: failed.
@@ -1213,39 +1173,24 @@ static inline bool integerAdd(vm_oop_t& val, som_int_t delta) {
 }
 #endif
 
-// The increments answer false, and change nothing, if the result couldn't be
-// allocated.
-bool Interpreter::doInc() {
-    vm_oop_t val = GetFrame()->Top();
+// The increments answer false, or nullptr, and change nothing, if the result
+// couldn't be allocated.
+bool Interpreter::incTop(gc_oop_t* sp, som_int_t delta) {
+    vm_oop_t val = load_ptr(*sp);
 
-    if (!integerAdd(val, 1)) {
+    if (!integerAdd(val, delta)) {
         return false;
     }
 
-    if (IS_TAGGED(val)) {
-        GetFrame()->SetTopNoBarrier(val);
-    } else {
-        GetFrame()->SetTop(val);
+    // the top is in the current frame, see Start()
+    *sp = store_with_separate_barrier(val);
+    if (!IS_TAGGED(val)) {
+        write_barrier(GetFrame(), val);
     }
     return true;
 }
 
-bool Interpreter::doDec() {
-    vm_oop_t val = GetFrame()->Top();
-
-    if (!integerAdd(val, -1)) {
-        return false;
-    }
-
-    if (IS_TAGGED(val)) {
-        GetFrame()->SetTopNoBarrier(val);
-    } else {
-        GetFrame()->SetTop(val);
-    }
-    return true;
-}
-
-bool Interpreter::doIncField(uint8_t fieldIndex) {
+vm_oop_t Interpreter::incField(uint8_t fieldIndex) {
     vm_oop_t self = GetSelf();
 
     if (unlikely(IS_TAGGED(self))) {
@@ -1257,41 +1202,14 @@ bool Interpreter::doIncField(uint8_t fieldIndex) {
     vm_oop_t val = selfObj->GetField(fieldIndex);
 
     if (!integerAdd(val, 1)) {
-        return false;
+        return nullptr;
     }
 
     selfObj->SetField(fieldIndex, val);
-    return true;
+    return val;
 }
 
-bool Interpreter::doIncFieldPush(uint8_t fieldIndex) {
-    vm_oop_t self = GetSelf();
-
-    if (unlikely(IS_TAGGED(self))) {
-        ErrorExit("Integers do not have fields!");
-    }
-
-    auto* selfObj = (VMObject*)self;
-
-    vm_oop_t val = selfObj->GetField(fieldIndex);
-
-    if (!integerAdd(val, 1)) {
-        return false;
-    }
-
-    selfObj->SetField(fieldIndex, val);
-    if (IS_TAGGED(val)) {
-        GetFrame()->PushNoBarrier(val);
-    } else {
-        GetFrame()->Push(val);
-    }
-    return true;
-}
-
-bool Interpreter::checkIsGreater() {
-    vm_oop_t top = GetFrame()->Top();
-    vm_oop_t top2 = GetFrame()->Top2();
-
+bool Interpreter::checkIsGreater(vm_oop_t top, vm_oop_t top2) {
     if (IS_SMALL_INT(top) && IS_SMALL_INT(top2)) {
         return SMALL_INT_VAL(top) > SMALL_INT_VAL(top2);
     }
