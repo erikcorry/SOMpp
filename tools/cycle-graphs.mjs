@@ -61,6 +61,7 @@ const SHORT = {
   '77938552': 'SP in a register',
   '9180e1de': 'Remember the frame',
   'e62e7f7d': 'Barrier-free args',
+  'cde6bc72': 'New fructus CPU',
 };
 
 function readTable() {
