@@ -62,6 +62,7 @@ const SHORT = {
   '9180e1de': 'Remember the frame',
   'e62e7f7d': 'Barrier-free args',
   'cde6bc72': 'New fructus CPU',
+  '347beb0f': 'One-byte opcodes',
 };
 
 function readTable() {

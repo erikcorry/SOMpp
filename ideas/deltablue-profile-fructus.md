@@ -26,6 +26,7 @@ agrees exactly with `~/fructus/tools/profile.mjs <build>/SOM++`.
 | 9180e1de | 4,021,821 | 1,330,370 | 122,015,474 | 39,605,666 | Remember the current frame, no barrier on its stack |
 | e62e7f7d | 3,875,198 | 1,270,388 | 115,499,358 | 37,199,502 | No barrier on arguments and primitive results |
 | cde6bc72 | 3,422,459 | 1,270,388 | 106,614,706 | 37,199,484 | fructus 0331767: instruction buffer and fetcher, deeper pipeline |
+| 347beb0f | 3,415,091 | 1,270,388 | 107,094,827 | 37,199,484 | fructus 9e49ec9: 32 one-byte opcodes; code 3.0% smaller, same instructions, cycles move with alignment |
 
 ## Setup
 
