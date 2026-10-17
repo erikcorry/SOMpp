@@ -64,7 +64,12 @@ SECTIONS
     __bss_end = .;
   }
   __rw_end = .;
-  __heap_end = __rw_start;
+  /* The SOM heap is everything up to the writable part, unless the link
+     names its size: then it is that, whatever the program's size, and the
+     program must fit above it. */
+  __heap_end = DEFINED(__heap_size) ? __heap_start + __heap_size : __rw_start;
+  ASSERT(!DEFINED(__rw_at) || __heap_end <= __rw_start,
+         "the SOM heap runs into the writable part")
 
   /* the read-only part */
   .text (DEFINED(__ro_at) ? __ro_at : ALIGN(2)) : {
