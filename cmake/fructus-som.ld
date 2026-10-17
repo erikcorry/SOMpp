@@ -38,6 +38,7 @@ __shadow_sp  = 0x0410;
 __shadow_lr  = 0x0412;
 __shadow_isp = 0x0414;
 __console    = 0x0420;
+__uart_status  = 0x0422;    /* putchar waits on its busy bit; 0 on the simulator */
 __stack_top  = 0x0700;
 __heap_start = __stack_top;
 
