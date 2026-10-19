@@ -63,6 +63,15 @@ const SHORT = {
   'e62e7f7d': 'Barrier-free args',
   'cde6bc72': 'New fructus CPU',
   '347beb0f': 'One-byte opcodes',
+  // The rows after them are named by the fructus commit their note starts with.
+  '6b4c7f0': 'ishi',
+  'ebd3f71': 'Compiler, opcodes',
+  'c51921e': 'Jumps at dispatch',
+  '76d6d4f': 'Smaller call',
+  '3893847': 'Backward taken',
+  'd170fdf': 'Dynamic predictor',
+  'ae14399': 'Path history',
+  'af28add': 'jmp ra predictor',
 };
 
 function readTable() {
@@ -85,14 +94,17 @@ function readTable() {
 
 function bars(benchmark, table) {
   const list = MINED[benchmark].map((b) => ({ ...b }));
+  const mined = [...list];
   for (const row of table) {
     const cycles = row[benchmark];
     if (cycles == null) continue;
-    const mined = list.find((b) => b.commit === row.commit);
-    if (mined) {
-      mined.cycles = cycles;
+    const bar = mined.find((b) => b.commit === row.commit);
+    if (bar) {
+      bar.cycles = cycles;
     } else {
-      list.push({ commit: row.commit, label: SHORT[row.commit] ?? row.note, cycles });
+      const fructus = row.note.match(/^fructus ([0-9a-f]{7})/)?.[1];
+      list.push({ commit: row.commit, label: SHORT[row.commit] ?? SHORT[fructus] ?? row.note,
+                  cycles });
     }
   }
   for (let changed = true; changed; ) {

@@ -16,6 +16,12 @@ Richards one has the same settings as the DeltaBlue one except
 `node ~/fructus/tools/fcc-run.mjs <build>/SOM++.bin --stats --max 2e9`, which
 agrees exactly with `~/fructus/tools/profile.mjs <build>/SOM++`.
 
+The 25d7053b rows are one binary, built with fructus af28add's toolchain,
+run on the `tools/sim.js` of each fructus commit with af28add's
+`isa/fructus.toml`: the simulator takes its opcodes from the spec, so an
+older timing model runs today's encoding. The first of them is the code
+change alone, on the timing of ebd3f71; each after it is one CPU change.
+
 | commit | DeltaBlue cycles | DeltaBlue insns | Richards cycles | Richards insns | note |
 |---|---:|---:|---:|---:|---|
 | a73b63d6 | 5,089,608 | 1,671,744 | | | Before classIds |
@@ -28,6 +34,13 @@ agrees exactly with `~/fructus/tools/profile.mjs <build>/SOM++`.
 | cde6bc72 | 3,422,459 | 1,270,388 | 106,614,706 | 37,199,484 | fructus 0331767: instruction buffer and fetcher, deeper pipeline |
 | 347beb0f | 3,415,091 | 1,270,388 | 107,094,827 | 37,199,484 | fructus 9e49ec9: 32 one-byte opcodes; code 3.0% smaller, same instructions, cycles move with alignment |
 | f2571497 | 3,415,058 | 1,270,363 | 107,094,298 | 37,199,211 | fructus 6b4c7f0: ishi, branchless carry; 60 uses, a few hundred cycles |
+| 25d7053b | 3,391,808 | 1,262,443 | 106,085,921 | 36,873,606 | fructus ebd3f71's timing, af28add's code: no jmpr, push order, gcc's xor-less inverted compares, the opcode moves; core-lib e362972 |
+| 25d7053b | 3,276,532 | 1,262,443 | 101,546,269 | 36,873,606 | fructus c51921e: jmp and call to an absolute address redirect as they dispatch |
+| 25d7053b | 3,302,689 | 1,262,443 | 102,143,400 | 36,873,606 | fructus 76d6d4f: predicted call 3 cycles, not 2, for 94 fewer LUT4 |
+| 25d7053b | 3,333,844 | 1,262,443 | 102,984,371 | 36,873,606 | fructus 3893847: backward branches predicted taken; DeltaBlue's are taken 36% |
+| 25d7053b | 3,243,003 | 1,262,443 | 97,185,166 | 36,873,606 | fructus d170fdf: dynamic branch predictor, 11 bits of history |
+| 25d7053b | 3,229,571 | 1,262,443 | 96,772,017 | 36,873,606 | fructus ae14399: every jump puts a bit of its address in the history |
+| 25d7053b | 3,146,423 | 1,262,443 | 93,871,036 | 36,873,606 | fructus af28add: jmp ra and call ra guessed from a table of where they went |
 
 ## Setup
 
