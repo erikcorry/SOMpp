@@ -62,9 +62,7 @@ const SHORT = {
   '9180e1de': 'Remember the frame',
   'e62e7f7d': 'Barrier-free args',
   'cde6bc72': 'New fructus CPU',
-  '347beb0f': 'One-byte opcodes',
   // The rows after them are named by the fructus commit their note starts with.
-  '6b4c7f0': 'ishi',
   'c51921e': 'Faster absolute jump/call',
   'd170fdf': 'Dynamic branch predictor',
   'af28add': 'Indirect jump target predictor',
@@ -73,7 +71,7 @@ const SHORT = {
 // Rows the charts leave out, to keep the bars few; the table keeps them.  A
 // left-out row's change shows in the next bar, whose count includes it, or,
 // if FOLD, in the bar before, which takes the row's count.
-const SKIP = new Set(['ebd3f71', '76d6d4f', '3893847']);
+const SKIP = new Set(['9e49ec9', '6b4c7f0', 'ebd3f71', '76d6d4f', '3893847']);
 const FOLD = new Set(['ae14399']);
 
 function readTable() {
