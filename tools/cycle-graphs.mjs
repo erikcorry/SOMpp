@@ -66,6 +66,7 @@ const SHORT = {
   'c51921e': 'Faster absolute jump/call',
   'd170fdf': 'Dynamic branch predictor',
   'af28add': 'Indirect jump target predictor',
+  'ec0304c': 'Return address predictor',
 };
 
 // Rows the charts leave out, to keep the bars few; the table keeps them.  A

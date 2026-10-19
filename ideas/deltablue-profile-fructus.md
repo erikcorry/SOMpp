@@ -41,6 +41,7 @@ change alone, on the timing of ebd3f71; each after it is one CPU change.
 | 25d7053b | 3,243,003 | 1,262,443 | 97,185,166 | 36,873,606 | fructus d170fdf: dynamic branch predictor, 11 bits of history |
 | 25d7053b | 3,229,571 | 1,262,443 | 96,772,017 | 36,873,606 | fructus ae14399: every jump puts a bit of its address in the history |
 | 25d7053b | 3,146,423 | 1,262,443 | 93,871,036 | 36,873,606 | fructus af28add: jmp ra and call ra guessed from a table of where they went |
+| 25d7053b | 3,059,012 | 1,262,443 | 91,729,387 | 36,873,606 | fructus ec0304c: ret guessed from a return stack |
 
 ## Setup
 
