@@ -65,14 +65,16 @@ const SHORT = {
   '347beb0f': 'One-byte opcodes',
   // The rows after them are named by the fructus commit their note starts with.
   '6b4c7f0': 'ishi',
-  'ebd3f71': 'Compiler, opcodes',
-  'c51921e': 'Jumps at dispatch',
-  '76d6d4f': 'Smaller call',
-  '3893847': 'Backward taken',
-  'd170fdf': 'Dynamic predictor',
-  'ae14399': 'Path history',
-  'af28add': 'jmp ra predictor',
+  'c51921e': 'Faster absolute jump/call',
+  'd170fdf': 'Dynamic branch predictor',
+  'af28add': 'Indirect jump target predictor',
 };
+
+// Rows the charts leave out, to keep the bars few; the table keeps them.  A
+// left-out row's change shows in the next bar, whose count includes it, or,
+// if FOLD, in the bar before, which takes the row's count.
+const SKIP = new Set(['ebd3f71', '76d6d4f', '3893847']);
+const FOLD = new Set(['ae14399']);
 
 function readTable() {
   const text = readFileSync(join(root, 'ideas/deltablue-profile-fructus.md'), 'utf8');
@@ -103,6 +105,11 @@ function bars(benchmark, table) {
       bar.cycles = cycles;
     } else {
       const fructus = row.note.match(/^fructus ([0-9a-f]{7})/)?.[1];
+      if (SKIP.has(fructus)) continue;
+      if (FOLD.has(fructus)) {
+        list[list.length - 1].cycles = cycles;
+        continue;
+      }
       list.push({ commit: row.commit, label: SHORT[row.commit] ?? SHORT[fructus] ?? row.note,
                   cycles });
     }
@@ -157,12 +164,20 @@ function svg(benchmark, list) {
 
   const left = 32, right = SIZE - 24, base = 730, top = 250;
   const valueRoom = 78;  // for the vertical counts above the tallest bar
-  const scale = (base - top - valueRoom) / max;
   const slot = (right - left) / list.length;
   const gap = Math.max(2, slot * 0.18);
   const width = slot - gap;
   const labelSize = Math.min(15, width * 0.55);
   const valueSize = Math.min(14, width * 0.5);
+  // The labels go in the bars, at 10px or more, and the counts above them;
+  // if a label doesn't fit, they swap, the labels above, as high as below the
+  // headline, and the counts inside.
+  let scale = (base - top - valueRoom) / max;
+  const swap = list.some((b) => b.label && textWidth(b.label, 10) > b.cycles * scale - 16);
+  if (swap) {
+    scale = Math.min(...list.map((b) =>
+      (base - 200 - 6 - (b.label ? textWidth(b.label, labelSize) : 0)) / b.cycles));
+  }
 
   const out = [];
   out.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" ` +
@@ -189,6 +204,16 @@ function svg(benchmark, list) {
              `H${x + width - r} Q${x + width},${y} ${x + width},${y + r} V${base} Z" ` +
              `fill="${fill}"><title>${esc(b.commit)}</title></path>`);
     const cx = x + width / 2;
+    if (swap) {
+      out.push(`<text transform="translate(${cx + valueSize * 0.36},${base - 8}) rotate(-90)" ` +
+               `font-size="${valueSize}" fill="${b.label ? COLOR.barText : COLOR.text}">` +
+               `${formatCycles(b.cycles, max)}</text>`);
+      if (b.label) {
+        out.push(`<text transform="translate(${cx + labelSize * 0.36},${y - 6}) rotate(-90)" ` +
+                 `font-size="${labelSize.toFixed(1)}" fill="${COLOR.text}">${esc(b.label)}</text>`);
+      }
+      return;
+    }
     out.push(`<text transform="translate(${cx + valueSize * 0.36},${y - 6}) rotate(-90)" ` +
              `font-size="${valueSize}" fill="${COLOR.text}">${formatCycles(b.cycles, max)}</text>`);
     if (b.label) {
