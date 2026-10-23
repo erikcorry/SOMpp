@@ -24,7 +24,10 @@ change alone, on the timing of ebd3f71; each after it is one CPU change.
 From the 5b70889 row on, the binary is rebuilt with fructus 5b70889's
 toolchain and run with today's `isa/fructus.toml` (b23ac26 moved the
 offset-0 loads); that row is the new code on 9f7d80e's timing, the
-compiler's change alone.
+compiler's change alone. The f840fa3 row is that binary on f840fa3's
+`tools/sim.js` and `isa/fructus.toml`, the last spec with `recip`, which
+its libgcc still runs. From the 0aa5f42 row on, the binary is rebuilt with
+fructus 354eb00's toolchain, whose libgcc makes the reciprocal itself.
 
 | commit | DeltaBlue cycles | DeltaBlue insns | Richards cycles | Richards insns | note |
 |---|---:|---:|---:|---:|---|
@@ -51,6 +54,8 @@ compiler's change alone.
 | 25d7053b | 2,746,797 | 1,239,431 | 80,378,320 | 35,710,882 | fructus 5b70889's gcc on 9f7d80e's timing: -Os rotates loops, copies short returns, skips the high word of a 32-bit x++ |
 | 25d7053b | 2,745,087 | 1,239,431 | 80,273,318 | 35,710,882 | fructus 6c667ac: ret, jmp ra and call ra guessed once their own bytes are in |
 | 25d7053b | 2,484,106 | 1,239,431 | 72,704,462 | 35,710,882 | fructus 68fad41: ld and ld8 take two cycles, written as their word arrives |
+| 25d7053b | 2,547,460 | 1,239,431 | 74,898,440 | 35,710,882 | fructus f840fa3: no jmp ra table, only ret guessed - 354 cells the system with UART and USB needed |
+| 25d7053b | 2,548,788 | 1,240,092 | 74,860,004 | 35,691,432 | fructus 0aa5f42: no recip, libgcc's __recip_mul instead; rebuilt with 354eb00's toolchain, putchar reading the UART through the late bit's window |
 
 ## Setup
 

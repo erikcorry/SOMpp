@@ -71,13 +71,14 @@ const SHORT = {
   '9f7d80e': 'Stores keep dispatching',
   '5b70889': 'Newer gcc',
   '68fad41': 'Two-cycle loads',
+  'f840fa3': 'No indirect jump predictor',
 };
 
 // Rows the charts leave out, to keep the bars few; the table keeps them.  A
 // left-out row's change shows in the next bar, whose count includes it, or,
 // if FOLD, in the bar before, which takes the row's count.
 const SKIP = new Set(['9e49ec9', '6b4c7f0', 'ebd3f71', '76d6d4f', '3893847', '6c667ac']);
-const FOLD = new Set(['ae14399']);
+const FOLD = new Set(['ae14399', '0aa5f42']);
 
 function readTable() {
   const text = readFileSync(join(root, 'ideas/deltablue-profile-fructus.md'), 'utf8');
