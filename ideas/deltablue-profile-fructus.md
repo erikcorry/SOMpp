@@ -21,6 +21,10 @@ run on the `tools/sim.js` of each fructus commit with af28add's
 `isa/fructus.toml`: the simulator takes its opcodes from the spec, so an
 older timing model runs today's encoding. The first of them is the code
 change alone, on the timing of ebd3f71; each after it is one CPU change.
+From the 5b70889 row on, the binary is rebuilt with fructus 5b70889's
+toolchain and run with today's `isa/fructus.toml` (b23ac26 moved the
+offset-0 loads); that row is the new code on 9f7d80e's timing, the
+compiler's change alone.
 
 | commit | DeltaBlue cycles | DeltaBlue insns | Richards cycles | Richards insns | note |
 |---|---:|---:|---:|---:|---|
@@ -42,6 +46,11 @@ change alone, on the timing of ebd3f71; each after it is one CPU change.
 | 25d7053b | 3,229,571 | 1,262,443 | 96,772,017 | 36,873,606 | fructus ae14399: every jump puts a bit of its address in the history |
 | 25d7053b | 3,146,423 | 1,262,443 | 93,871,036 | 36,873,606 | fructus af28add: jmp ra and call ra guessed from a table of where they went |
 | 25d7053b | 3,059,012 | 1,262,443 | 91,729,387 | 36,873,606 | fructus ec0304c: ret guessed from a return stack |
+| 25d7053b | 2,988,520 | 1,262,443 | 88,092,692 | 36,873,606 | fructus 5f0f2af: a branch guessed taken reads its target as it dispatches, two cycles |
+| 25d7053b | 2,820,542 | 1,262,443 | 84,199,414 | 36,873,606 | fructus 9f7d80e: a store of one register does not stop dispatch, N + 1 cycles |
+| 25d7053b | 2,746,797 | 1,239,431 | 80,378,320 | 35,710,882 | fructus 5b70889's gcc on 9f7d80e's timing: -Os rotates loops, copies short returns, skips the high word of a 32-bit x++ |
+| 25d7053b | 2,745,087 | 1,239,431 | 80,273,318 | 35,710,882 | fructus 6c667ac: ret, jmp ra and call ra guessed once their own bytes are in |
+| 25d7053b | 2,484,106 | 1,239,431 | 72,704,462 | 35,710,882 | fructus 68fad41: ld and ld8 take two cycles, written as their word arrives |
 
 ## Setup
 
