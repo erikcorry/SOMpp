@@ -62,6 +62,7 @@ const SHORT = {
   '9180e1de': 'Remember the frame',
   'e62e7f7d': 'Barrier-free args',
   'cde6bc72': 'New fructus CPU',
+  '6bfa2245': 'Frame stack',
   // The rows after them are named by the fructus commit their note starts with.
   'c51921e': 'Faster absolute jump/call',
   'd170fdf': 'Dynamic branch predictor',

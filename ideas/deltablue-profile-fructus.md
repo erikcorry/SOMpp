@@ -56,6 +56,7 @@ fructus 354eb00's toolchain, whose libgcc makes the reciprocal itself.
 | 25d7053b | 2,484,106 | 1,239,431 | 72,704,462 | 35,710,882 | fructus 68fad41: ld and ld8 take two cycles, written as their word arrives |
 | 25d7053b | 2,547,460 | 1,239,431 | 74,898,440 | 35,710,882 | fructus f840fa3: no jmp ra table, only ret guessed - 354 cells the system with UART and USB needed |
 | 25d7053b | 2,548,788 | 1,240,092 | 74,860,004 | 35,691,432 | fructus 0aa5f42: no recip, libgcc's __recip_mul instead; rebuilt with 354eb00's toolchain, putchar reading the UART through the late bit's window |
+| 6bfa2245 | 2,258,073 | 1,065,566 | 66,074,258 | 31,019,914 | Frames of methods without blocks on a frame stack; DeltaBlue no longer collects |
 
 ## Setup
 
