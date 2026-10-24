@@ -32,6 +32,14 @@
  * On the host it reserves the address space for its largest size with mmap,
  * and makes the part below its top that it uses accessible with mprotect, so
  * it grows downwards, without moving anything.
+ *
+ * The frames of the methods that make no blocks are on the frame stack, see
+ * ideas/frame-stack.md. It grows up, from stackBase to stackEnd, which is
+ * bumped when a frame needs more room, and never shrinks. On fructus it's at
+ * the bottom of the heap's memory, and its end is the heap's bottom, so the
+ * bump allocator stops at it. The host has a reservation of its own for it.
+ * The collector never moves or frees anything in it, since it's below low,
+ * see SlidingCollector.cpp; the interpreter walks the live part as a root.
  */
 
 #include <assert.h>
@@ -116,6 +124,26 @@ public:
 
     [[nodiscard]] bool Contains(const void* p) const {
         return p >= (const void*)base && p < (const void*)top;
+    }
+
+    /**
+     * Bumps the frame stack's end to `end` or past it. If there's no room,
+     * it asks for a retry, as AllocateObject() does, and answers false. The
+     * interpreter keeps the end, and the top, see Interpreter.h.
+     */
+    bool GrowStack(char* end);
+
+    [[nodiscard]] char* GetStackBase() const { return stackBase; }
+    [[nodiscard]] char* GetStackEnd() const { return stackEnd; }
+
+    /** Whether `p` is in the frame stack. */
+    [[nodiscard]] bool InFrameStack(const void* p) const {
+#ifdef FRUCTUS
+        // everything below the stack's end is the stack or isn't a frame
+        return p < (const void*)stackEnd;
+#else
+        return p >= (const void*)stackBase && p < (const void*)stackEnd;
+#endif
     }
 
     /**
@@ -204,6 +232,13 @@ public:
     char* allocation;
     // the lowest old object, or top if there are none
     char* oldBottom;
+
+    // the frame stack, see above
+    char* stackBase;
+    char* stackEnd;
+#ifndef FRUCTUS
+    size_t stackReservedSize;
+#endif
 
     uint8_t* objectStarts;
     SlidingLayout::MarkWord* markBits;

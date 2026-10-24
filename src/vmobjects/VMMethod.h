@@ -143,10 +143,10 @@ public:
 
 #ifdef FRUCTUS
     /**
-     * The bytecodes come right after numberOfArguments, an odd offset, since
-     * the bytecodes don't need aligning. ImageFructus.cpp checks it.
+     * The bytecodes come right after stackFrameWords, since the bytecodes
+     * don't need aligning. ImageFructus.cpp checks it.
      */
-    static constexpr size_t headerSize = 9;
+    static constexpr size_t headerSize = 10;
 
     [[nodiscard]] inline size_t GetObjectSize() const override {
         return PADDED_SIZE(headerSize + bcLength);
@@ -159,6 +159,21 @@ public:
 
     [[nodiscard]] size_t GetMaximumNumberOfStackElements() const {
         return maximumNumberOfStackElements;
+    }
+
+    /**
+     * The bytes a frame of the method takes on the frame stack, or 0 if its
+     * frames go in the heap, see ideas/frame-stack.md. A method that makes
+     * no blocks can't have its frame referenced once it returns, so its
+     * frames can be on the stack. The compiler sets it in
+     * MakeStackRelative(), so a method made any other way has heap frames.
+     */
+    [[nodiscard]] size_t GetStackFrameSize() const {
+#ifdef FRUCTUS
+        return (size_t)stackFrameWords * sizeof(void*);
+#else
+        return stackFrameSize;
+#endif
     }
 
     [[nodiscard]] inline uint8_t GetNumberOfArguments() const final {
@@ -178,6 +193,13 @@ public:
      * variables. Takes the lexical scope and the lines.
      */
     [[nodiscard]] VMMethod* MakeStackRelative();
+
+    /** Whether the method makes blocks, which capture its frame. */
+    [[nodiscard]] bool MakesBlocks() const {
+        return HasBytecode(BC_PUSH_BLOCK);
+    }
+
+    [[nodiscard]] bool HasBytecode(uint8_t bytecode) const;
 
     /**
      * The bytecodes with each word `wordSize` long, and the jumps adjusted.
@@ -292,6 +314,8 @@ private:
     const uint8_t numberOfLocals;
     const uint8_t maximumNumberOfStackElements;
     const uint8_t numberOfArguments;
+    // the words of GetStackFrameSize(), which the image writer sets
+    uint8_t stackFrameWords{0};
 #else
     const size_t numberOfLocals;
     const size_t maximumNumberOfStackElements;
@@ -306,6 +330,8 @@ private:
     std::vector<uint16_t>* lines{nullptr};
     // the hash of the bytecodes before MakeStackRelative(), or 0
     size_t bytecodeHash{0};
+    // see GetStackFrameSize()
+    size_t stackFrameSize{0};
 #endif
 
 #ifdef UNSAFE_FRAME_OPTIMIZATION

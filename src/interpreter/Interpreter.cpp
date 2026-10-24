@@ -36,6 +36,9 @@
 #include "../interpreter/SendSite.h"
 #include "../interpreter/bytecodes.h"  // NOLINT(misc-include-cleaner) it's required for InterpreterLoop.h
 #include "../memory/Heap.h"
+#if USE_FRAME_STACK
+  #include "../memory/SlidingHeap.h"
+#endif
 #include "../misc/defs.h"
 #include "../vm/Globals.h"
 #include "../vm/IsValidObject.h"
@@ -773,13 +776,52 @@ VMFrame* Interpreter::PushNewFrame(VMMethod* method) {
 // that returns is remembered too, since a block may still have it as its
 // context. Stores into other frames, like a block's into its outer contexts,
 // still have the barrier.
+//
+// A frame on the frame stack isn't remembered, since the stack is a root at
+// every collection, see WalkGlobals(). When a frame on the stack stops being
+// the current frame for one in the heap, stackTop says where the next frame
+// on the stack goes: above the stack frame's stack if it called the heap
+// frame, and where the stack frame was if it returned, or otherwise left.
 void Interpreter::SetFrame(VMFrame* frm) {
     if (frame != nullptr) {
+#if USE_FRAME_STACK
+        if (!OnFrameStack(frame)) {
+            remember_object(frame);
+        } else if (!OnFrameStack(frm)) {
+            stackTop = frm->GetPreviousFrame() == frame ? frame->stack_ptr + 1
+                                                        : (gc_oop_t*)frame;
+        }
+#else
         remember_object(frame);
+#endif
     }
     frame = frm;
     method = frm->GetMethod();
 }
+
+void Interpreter::ClearFrames() {
+    frame = nullptr;
+    method = nullptr;
+#if USE_FRAME_STACK
+    SlidingHeap const* const heap = GetHeap<SlidingHeap>();
+    stackTop = (gc_oop_t*)heap->GetStackBase();
+    stackEnd = heap->GetStackEnd();
+  #ifndef FRUCTUS
+    stackBase = heap->GetStackBase();
+  #endif
+#endif
+}
+
+#if USE_FRAME_STACK
+bool Interpreter::growFrameStack(char* end) {
+    SlidingHeap* const heap = GetHeap<SlidingHeap>();
+    if (!heap->GrowStack(end)) {
+        return false;
+    }
+    stackEnd = heap->GetStackEnd();
+    return true;
+}
+#endif
 
 vm_oop_t Interpreter::GetSelf() {
     VMFrame const* const context = GetFrame()->GetOuterContext();
@@ -1214,6 +1256,20 @@ bool Interpreter::checkIsGreater(vm_oop_t top, vm_oop_t top2) {
 
 void Interpreter::WalkGlobals(walk_heap_fn walk) {
     method = load_ptr(static_cast<GCMethod*>(walk(tmp_ptr(method))));
+
+#if USE_FRAME_STACK
+    // The live part of the frame stack is a root, word by word, from the
+    // most recent frame down. Its frames follow each other with no gaps, and
+    // the words of their headers that aren't oops are nullptr, or point
+    // outside what's collected, see ideas/frame-stack.md.
+    auto* const bottom = (gc_oop_t*)GetHeap<SlidingHeap>()->GetStackBase();
+    for (gc_oop_t* p = FrameStackTop(); p > bottom;) {
+        p--;
+        if (*p != nullptr) {
+            *p = walk(*p);
+        }
+    }
+#endif
 
     // Get the current frame and mark it.
     // Since marking is done recursively, this automatically

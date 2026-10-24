@@ -135,6 +135,9 @@ typedef SlidingHeap HEAP_CLS;
   #define ALLOC_MATURE
   #define ALLOC_OUTSIDE_NURSERY(X)
   #define ALLOC_OUTSIDE_NURSERY_DECL
+  // the frames of methods that make no blocks are on a stack below the heap,
+  // see ideas/frame-stack.md
+  #define USE_FRAME_STACK 1
 #elif GC_TYPE == PAGED_MARK_SWEEP
 class PagedMarkSweepHeap;
 typedef PagedMarkSweepHeap HEAP_CLS;
@@ -143,6 +146,10 @@ typedef PagedMarkSweepHeap HEAP_CLS;
   #define ALLOC_MATURE
   #define ALLOC_OUTSIDE_NURSERY(X)
   #define ALLOC_OUTSIDE_NURSERY_DECL
+#endif
+
+#ifndef USE_FRAME_STACK
+  #define USE_FRAME_STACK 0
 #endif
 
 //

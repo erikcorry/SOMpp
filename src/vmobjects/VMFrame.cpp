@@ -142,26 +142,14 @@ void VMFrame::PrintStack() const {
         local_offset++;
     }
 
-    size_t const max = GetMethod()->GetMaximumNumberOfStackElements();
-    for (size_t i = 0; i < max; i++) {
+    // above stack_ptr the slots aren't initialized
+    for (size_t i = 0; &locals[local_offset + i] <= stack_ptr; i++) {
         if (stack_ptr == &locals[local_offset + i]) {
             Print("-> stk " + to_string(i) + ": ");
         } else {
             Print("   stk " + to_string(i) + ": ");
         }
         print_oop(locals[local_offset + i]);
-    }
-
-    auto* end = (gc_oop_t*)SHIFTED_PTR(this, totalObjectSize);
-    size_t i = 0;
-    while (&locals[local_offset + max + i] < end) {
-        if (stack_ptr == &locals[local_offset + max + i]) {
-            Print("->estk " + to_string(i) + ": ");
-        } else {
-            Print("  estk " + to_string(i) + ": ");
-        }
-        print_oop(locals[local_offset + max + i]);
-        i++;
     }
 }
 #endif
@@ -184,8 +172,7 @@ void VMFrame::PrintStackTrace() const {
     Print("pcs:");
     for (VMFrame const* frame = this; frame != nullptr;
          frame = load_ptr(frame->previousFrame)) {
-        auto pc = (uintptr_t)(frame->GetMethod()->GetBytecodes() +
-                              frame->GetBytecodeIndex());
+        auto pc = (uintptr_t)frame->GetBytecodePointer();
         char hex[] = " 0000";
         for (size_t i = 4; i > 0; i--, pc >>= 4U) {
             hex[i] = "0123456789abcdef"[pc & 0xfU];
@@ -232,5 +219,5 @@ std::string VMFrame::AsDebugString() const {
 #endif
 
 void VMFrame::ResetBytecodeIndex() {
-    bytecodeIndex = 0;
+    SetBytecodeIndex(0);
 }

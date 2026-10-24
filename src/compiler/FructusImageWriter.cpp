@@ -973,6 +973,20 @@ void FructusImage::AsmFile::writeMethod(VMMethod* method, const std::string& lab
            "maximumNumberOfStackElements");
     w.Byte(L::VMMethod_numberOfArguments, method->numberOfArguments,
            "numberOfArguments");
+    // Fructus's frames are smaller, and it has no EXTRA_STACK_SLOTS. A block
+    // with a non-local return can have its frame on the stack too, since
+    // fructus never sends #escapedBlock:.
+    size_t stackFrameWords = 0;
+    if (!method->MakesBlocks()) {
+        stackFrameWords = L::VMFrame_size / L::word +
+                          method->numberOfArguments + method->numberOfLocals +
+                          method->maximumNumberOfStackElements;
+        if (stackFrameWords > UINT8_MAX) {
+            Fail(describe(method) + " has too big a frame for the stack");
+        }
+    }
+    w.Byte(L::VMMethod_stackFrameWords, (uint8_t)stackFrameWords,
+           "stackFrameWords");
     Lines lines = writeBytecodes(w, L::VMMethod_size, method, fructusBytecodes);
     w.End(L::PaddedSize(L::VMMethod_size + bcLength));
 

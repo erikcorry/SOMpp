@@ -463,7 +463,9 @@ static char* verifiedObject;
 static char* verifiedObjectEnd;
 
 static gc_oop_t check_pointer(gc_oop_t oop) {
-    if (!IS_TAGGED(oop) && theHeap->Contains(oop)) {
+    // a heap frame's previousFrame may be a frame on the stack
+    if (!IS_TAGGED(oop) && theHeap->Contains(oop) &&
+        !theHeap->InFrameStack(oop)) {
         assert((char*)oop >= theHeap->allocation);
         if ((char*)oop < verifiedObject || (char*)oop >= verifiedObjectEnd) {
             assert(IsValidObject((vm_oop_t)oop));

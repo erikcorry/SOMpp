@@ -61,18 +61,18 @@ public:
 
     explicit VMFrame(size_t additionalBytes, VMMethod* method,
                      VMFrame* previousFrame)
-        : totalObjectSize(additionalBytes + sizeof(VMFrame)),
+        :
+#ifdef FRUCTUS
+          bytecodePointer(method->GetBytecodes()),
+#endif
+          totalObjectSize(additionalBytes + sizeof(VMFrame)),
           previousFrame(store_root(previousFrame)), method(store_root(method)),
           locals(arguments() + method->GetNumberOfArguments()),
           stack_ptr(locals + method->GetNumberOfLocals() - 1) {
-        // initialize all other fields. Don't need to initialize arguments,
-        // because they will be copied in still
-        // --> until end of Frame
-        auto* end = (gc_oop_t*)SHIFTED_PTR(this, totalObjectSize);
-        size_t i = 0;
-        while (locals + i < end) {
-            locals[i] = nilObject;
-            i++;
+        // The arguments are copied in still, and the stack needs nothing,
+        // since nothing above stack_ptr is a root, see WalkObjects().
+        for (gc_oop_t* local = locals; local <= stack_ptr; local++) {
+            *local = nilObject;
         }
     }
 
@@ -177,9 +177,21 @@ public:
     /** Whether this is the interpreter's current frame. */
     [[nodiscard]] bool IsCurrent() const;
 
+#ifdef FRUCTUS
+    [[nodiscard]] inline size_t GetBytecodeIndex() const {
+        return (size_t)(bytecodePointer - GetMethod()->GetBytecodes());
+    }
+
+    [[nodiscard]] inline uint8_t* GetBytecodePointer() const {
+        return bytecodePointer;
+    }
+
+    inline void SetBytecodePointer(uint8_t* pc) { bytecodePointer = pc; }
+#else
     [[nodiscard]] inline size_t GetBytecodeIndex() const {
         return bytecodeIndex;
     }
+#endif
 
     [[nodiscard]] inline vm_oop_t GetStackElement(size_t index) const {
         return load_ptr(stack_ptr[-std::make_signed_t<som_int_t>(index)]);
@@ -242,7 +254,15 @@ public:
 
     make_testable(public);
 
+#ifdef FRUCTUS
+    // A pointer, where the host has an index, since the methods are in the
+    // image and don't move. It's above 32K, so the frame stack's scan takes
+    // it for a small integer or for a pointer out of the heap, see
+    // Interpreter::WalkGlobals().
+    uint8_t* bytecodePointer;
+#else
     size_t bytecodeIndex{0};
+#endif
     size_t totalObjectSize;
 
     void ResetStackPointer() {
@@ -277,7 +297,13 @@ private:
 
     static const size_t VMFrameNumberOfFields;
 
+#ifdef FRUCTUS
+    inline void SetBytecodeIndex(size_t index) {
+        bytecodePointer = GetMethod()->GetBytecodes() + index;
+    }
+#else
     inline void SetBytecodeIndex(size_t index) { bytecodeIndex = index; }
+#endif
 };
 
 bool VMFrame::HasContext() const {

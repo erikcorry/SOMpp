@@ -1,5 +1,8 @@
 # Allocate most frames on a stack instead of the heap
 
+The design that was chosen is in "Chosen design: a stack below the heap"
+at the end. The sections before it are the exploration that led there.
+
 ## Background
 
 Every send to a method or block allocates a `VMFrame` in the heap
@@ -209,6 +212,145 @@ there up. For a deep stack in a short-running loop, that's most of it.
   problem as with the moving GC; growing only from within `NewFrame` in the
   send path, where the interpreter reloads its state afterwards, keeps it to
   one place.
+
+## Chosen design: a stack below the heap
+
+Decided 2026-10-24, for the sliding heap, on fructus and on the host.
+
+### Which functions use the stack
+
+- The compiler marks every method and block method as a stack function or
+  a frame function, with a flag in the method object (not a vtable of its
+  own). A stack function has no `PUSH_BLOCK` in its bytecodes; inlined
+  blocks don't count. So a block can be a stack function too, if it has no
+  blocks in it.
+- The method also records the stack space its frame needs at most, the
+  high-water mark: the frame header, the arguments, the locals and the
+  maximum stack depth. Every function's requirement includes
+  `EXTRA_STACK_SLOTS`, the slots for the sends the VM makes that the
+  compiler doesn't count (#doesNotUnderstand:arguments:, #escapedBlock:,
+  #unknownGlobal:, the Vector primitives' #error:). Those are 0 on fructus,
+  which makes none of them, and frames never grow on either.
+
+### The stack
+
+- It grows up from the bottom of the heap's memory, and the heap allocates
+  down from its top towards it. The stack is like one huge frame object,
+  with an end that is bumped when it needs more room, and never shrunk (for
+  now).
+- The bump allocator checks against the stack's end instead of the bottom
+  of memory. On fructus the stack's end is the heap's `bottom`. On the host
+  the stack is at the base of the reservation, the heap's accessible part
+  grows down towards it, and the stack's pages are made accessible as its
+  end moves up.
+- On entry to a stack function, the interpreter reads the function's
+  high-water mark, and checks that it fits between the stack top and the
+  stack's end. If it doesn't, the end is bumped into the free space, if
+  there's enough; otherwise it's GC time. The send fails without pushing a
+  frame and is retried after the collection, like a failed allocation. If
+  there's still no room after that, it's out of memory.
+- The high-water mark is only the check. On an actual call, the new frame
+  goes wherever the stack top is, which is right above the caller's
+  `stack_ptr` if the caller is a stack frame, not above the caller's
+  high-water mark. So the live frames are contiguous, with no gaps.
+- **The stack top while a heap frame is current.** When the current frame
+  is a stack frame, the top is its `stack_ptr + 1`. When it's a heap frame,
+  the top is the interpreter's `stackTop` field. It's set to the caller's
+  `stack_ptr + 1` when a stack frame calls a frame function, and to the
+  returning frame's start when a stack frame returns into a heap frame.
+  That covers stack → heap → stack chains: a stack method sends to a
+  method with blocks, which sends to a stack method.
+- Whether a frame is a stack frame is an address compare against the
+  stack's end. `popFrame()` uses it to move the top back, and `SetFrame()`
+  uses it to skip `remember_object` for stack frames.
+
+### The frames on the stack
+
+- A stack frame keeps a header with the links that returns need. The GC's
+  scan doesn't need frame boundaries, but unwinding does, and the flat
+  stack has no other structure to find them by. An ordinary return needs
+  `previousFrame` to know which frame becomes current, and a stack frame's
+  caller can be a heap frame, so it can't be found from the stack's layout.
+  A non-local return (`doReturnNonLocal()`) follows the same chain with
+  `popFrame()` until it reaches the home, which is always a heap frame,
+  since it makes blocks. Popping a stack frame on the way only moves the
+  stack top back. Popping a heap frame clears its `previousFrame`, as now,
+  which is what makes the blocks whose home has returned escaped. For
+  example, in `H (heap) → S2 (stack) → B`, `B` is popped, `S2` returns into
+  `H` and sets `stackTop` to its own start, and the final
+  `popFrameAndPushResult()` returns from `H` as usual. The least a stack
+  frame needs is `previousFrame`, the method and the bytecode pointer to
+  resume it, `locals`, and `stack_ptr` for its top while it isn't current.
+  Block frames also need `context`.
+- No frame has `totalObjectSize` any more, so heap and stack frames keep
+  one layout. A stack frame doesn't need it: `GetObjectSize()` doesn't
+  apply to it, since the heap never walks it, and its extent ends at its
+  `stack_ptr`, where the next frame starts. A heap frame's
+  `GetObjectSize()` computes its size from its method instead: the
+  arguments, the locals, the maximum stack depth and `EXTRA_STACK_SLOTS`,
+  the same sum `Universe::NewFrame` makes.
+- Only the locals are filled with nil. Nothing beyond the stack pointer is
+  a root, so the operand stack area needs no filling. Heap frames can do the
+  same, since `VMFrame::WalkObjects()` stops at `stack_ptr` too.
+- On fructus, `bytecodeIndex` becomes a bytecode pointer. It's above
+  0x8000, so it looks either like a negative Smi or like a pointer out of
+  the heap, both of which the GC skips. It also saves the index-to-pc
+  conversion when the pc is saved and reloaded.
+
+### GC
+
+- The stack is always a root, and every collection, minor or major, scans
+  the whole live stack, from the most recent end to the least recent. There
+  is no watermark (for now).
+- The scan doesn't distinguish the frames. It treats every word from the
+  top down to the base as an oop. That works because there are no dead
+  words below the top (each frame starts at its caller's `stack_ptr + 1`,
+  and its header, locals and arguments are all written when it's made), and
+  because every word is either a real root, a tagged value, nullptr, or an
+  address outside the collected range `[low, high)`, which `mark_object` and
+  `update_pointer` already ignore:
+  - the vtable and the method are in the image, above the heap;
+  - the bytecode pointer is above 0x8000 on fructus, as above;
+  - `locals`, `stack_ptr` and a `previousFrame` that is a stack frame point
+    into the stack, below `low`;
+  - on the host, the GC field and `bytecodeIndex` are small integers, far
+    from the mmapped heap;
+  - `context` (always a heap frame, since only frame functions make
+    blocks) and a `previousFrame` that is a heap frame are real roots, and
+    are marked and updated as they should be.
+- The scan has to skip nullptr. It comes up for a method's `context`, the
+  bootstrap frame's `previousFrame`, and on the host a `bytecodeIndex` or GC
+  field of 0. `mark_object` and `update_pointer` assert against it today.
+- The stack never moves, so pointers into it stay valid across a slide.
+- Stores into stack frames need no write barrier and no remembering, since
+  the stack is scanned at every collection. No store through an outer
+  context can reach a stack frame, since stack functions make no blocks.
+  Heap frames keep today's scheme: they're remembered when they stop being
+  the current frame, and before a collection.
+
+### As implemented
+
+- The stack is only in the sliding heap (`USE_FRAME_STACK` in `defs.h`).
+  The host's other collectors keep every frame in the heap.
+- On the host, a block with a non-local return keeps its frames in the
+  heap. When it has escaped, `Interpreter::sendEscapedBlock()` makes the
+  block's frame not current and sends #escapedBlock: from the frame below
+  it, so the new frame, and the pushes of the receiver and argument, would
+  go where the block's frame is, and the send must leave that frame as it
+  was if it fails. Fructus never sends #escapedBlock:, so the image writer
+  puts those blocks on the stack too.
+- The method has the size of its stack frame, 0 for a heap frame: in
+  bytes on the host, set in `MakeStackRelative()`, so that any method made
+  another way has heap frames, and in words in a byte after
+  `numberOfArguments` on fructus, written by the image writer.
+- The heap owns the stack (`SlidingHeap::GrowStack()`), and the interpreter
+  keeps copies of its end (and base on the host) with `stackTop`, for the
+  frame switches. On the host the stack has a reservation of its own, made
+  accessible a page at a time, and on fructus it grows a pagelet at a time.
+- Bumping fails like an allocation, so the send is retried after a
+  collection, and gc-stress-retry mode makes it fail too.
+- Frames keep `totalObjectSize` and `locals` for now. On fructus the size is
+  a small integer below the heap, so the scan skips it.
 
 ## Related
 

@@ -158,8 +158,14 @@ constexpr size_t VMMethod_bcLength = 4;
 constexpr size_t VMMethod_numberOfLocals = 6;
 constexpr size_t VMMethod_maximumNumberOfStackElements = 7;
 constexpr size_t VMMethod_numberOfArguments = 8;
+/** The words of a frame of the method on the frame stack, or 0, see
+ * VMMethod::GetStackFrameSize(). */
+constexpr size_t VMMethod_stackFrameWords = 9;
 /** The bytecodes come right after the header, unaligned. */
-constexpr size_t VMMethod_size = 9;
+constexpr size_t VMMethod_size = 10;
+
+/** The header of a frame, before its arguments, see VMFrame.h. */
+constexpr size_t VMFrame_size = 16;
 
 constexpr size_t VMLiteralReturn_literal = 4;
 constexpr size_t VMLiteralReturn_numberOfArguments = 6;

@@ -867,6 +867,16 @@ size_t VMMethod::GetBytecodeHash() const {
 #endif
 
 #ifndef FRUCTUS
+bool VMMethod::HasBytecode(uint8_t bytecode) const {
+    for (size_t i = 0; i < bcLength;
+         i += Bytecode::GetBytecodeLength(GetBytecode(i))) {
+        if (GetBytecode(i) == bytecode) {
+            return true;
+        }
+    }
+    return false;
+}
+
 VMMethod* VMMethod::MakeStackRelative() {
     const uint8_t* bytecodes = GetBytecodes();
     std::vector<int> const depths = ComputeStackDepths(bytecodes, bcLength);
@@ -989,6 +999,17 @@ VMMethod* VMMethod::MakeStackRelative() {
     memcpy(lowered->GetBytecodes(), result.data(), n);
     lowered->SetLines(newLines);
     lowered->bytecodeHash = GetBytecodeHash();
+    // On the host a block's frame stays below its sender's stack when the
+    // block's non-local return sends #escapedBlock:, see
+    // Interpreter::sendEscapedBlock(), so that block's frames go in the heap.
+    // Fructus never sends it, see FructusImage::AsmFile::writeMethod().
+    if (!lowered->MakesBlocks() && !lowered->HasBytecode(BC_RETURN_NON_LOCAL)) {
+        lowered->stackFrameSize =
+            sizeof(VMFrame) +
+            (numArgs + numberOfLocals + maximumNumberOfStackElements +
+             VMFrame::EXTRA_STACK_SLOTS) *
+                sizeof(VMObject*);
+    }
     // the lowered method owns them now
     lexicalScope = nullptr;
     return lowered;

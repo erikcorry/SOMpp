@@ -36,22 +36,33 @@
 // The program counter, pc, is a local of Start() pointing into the bytecodes
 // of the running method, and so is the stack pointer, sp, pointing at the top
 // of the current frame's stack, so that they can stay in registers. The
-// frame's bytecode index and stack_ptr are only up to date after SAVE_PC():
-// it must be saved before anything that may look at the frame, switch frames
-// or move the method, and reloaded after anything that may have switched
-// frames or moved them.
-#define SAVE_PC()           \
-    (frame->stack_ptr = sp, \
-     frame->SetBytecodeIndex(pc - method->GetBytecodes()))
+// frame's bytecode index (the pc itself on fructus) and stack_ptr are only up
+// to date after SAVE_PC(): it must be saved before anything that may look at
+// the frame, switch frames or move the method, and reloaded after anything
+// that may have switched frames or moved them.
+#ifdef FRUCTUS
+// the frames have the pc itself, since the methods don't move, see VMFrame.h
+  #define SAVE_PC() (frame->stack_ptr = sp, frame->SetBytecodePointer(pc))
 
-// Saves the index of the next bytecode, for a bytecode `bcCount` long.
-#define SAVE_NEXT_PC(bcCount) \
-    (frame->stack_ptr = sp,   \
-     frame->SetBytecodeIndex(pc + (bcCount) - method->GetBytecodes()))
+  // Saves the pc of the next bytecode, for a bytecode `bcCount` long.
+  #define SAVE_NEXT_PC(bcCount) \
+      (frame->stack_ptr = sp, frame->SetBytecodePointer(pc + (bcCount)))
 
-#define RELOAD_PC()                                           \
-    (pc = method->GetBytecodes() + frame->GetBytecodeIndex(), \
-     sp = frame->stack_ptr)
+  #define RELOAD_PC() (pc = frame->GetBytecodePointer(), sp = frame->stack_ptr)
+#else
+  #define SAVE_PC()           \
+      (frame->stack_ptr = sp, \
+       frame->SetBytecodeIndex(pc - method->GetBytecodes()))
+
+  // Saves the index of the next bytecode, for a bytecode `bcCount` long.
+  #define SAVE_NEXT_PC(bcCount) \
+      (frame->stack_ptr = sp,   \
+       frame->SetBytecodeIndex(pc + (bcCount) - method->GetBytecodes()))
+
+  #define RELOAD_PC()                                           \
+      (pc = method->GetBytecodes() + frame->GetBytecodeIndex(), \
+       sp = frame->stack_ptr)
+#endif
 
 #define DISPATCH_NOGC()         \
     {                           \
@@ -95,6 +106,18 @@ class Interpreter {
     // encodings for the offsets 0, 2, 4, 6, and 8.
     VMFrame* frame;
     VMMethod* method;
+#if USE_FRAME_STACK
+    // The top of the frame stack while the current frame is in the heap,
+    // where the next frame on the stack goes. While the current frame is on
+    // the stack, the top is its stack_ptr + 1, see FrameStackTop().
+    gc_oop_t* stackTop;
+    // The frame stack's end, and its base on the host, copied from the heap
+    // for the frame switches, see SlidingHeap.h.
+    char* stackEnd;
+  #ifndef FRUCTUS
+    char* stackBase;
+  #endif
+#endif
 
 public:
     vm_oop_t Start();
@@ -102,11 +125,43 @@ public:
     VMFrame* PushNewFrame(VMMethod* method);
     void SetFrame(VMFrame* frm);
 
-    /** Drop the frames, after Start() returned from the last one. */
-    void ClearFrames() {
-        frame = nullptr;
-        method = nullptr;
+    /**
+     * Drop the frames, after Start() returned from the last one, or before
+     * the first.
+     */
+    void ClearFrames();
+
+#if USE_FRAME_STACK
+    /** Whether `p` is on the frame stack, see ideas/frame-stack.md. */
+    [[nodiscard]] bool OnFrameStack(const void* p) const {
+  #ifdef FRUCTUS
+        // below the stack's end are the stack and things that aren't frames
+        return p < (const void*)stackEnd;
+  #else
+        return p >= (const void*)stackBase && p < (const void*)stackEnd;
+  #endif
     }
+
+    /** Where the next frame on the frame stack goes. */
+    [[nodiscard]] gc_oop_t* FrameStackTop() const {
+        if (frame != nullptr && OnFrameStack(frame)) {
+            return frame->stack_ptr + 1;
+        }
+        return stackTop;
+    }
+
+    /**
+     * Room for a frame of `size` bytes at the top of the frame stack, or
+     * nullptr after asking for a retry, as a failed allocation does.
+     */
+    void* AllocateStackFrame(size_t size) {
+        gc_oop_t* const at = FrameStackTop();
+        if ((char*)at + size > stackEnd && !growFrameStack((char*)at + size)) {
+            return nullptr;
+        }
+        return at;
+    }
+#endif
 
     inline VMFrame* GetFrame() { return frame; }
 
@@ -137,6 +192,9 @@ private:
     static constexpr const char* escapedBlock = "escapedBlock:";
 
     void startGC();
+#if USE_FRAME_STACK
+    bool growFrameStack(char* end);
+#endif
 
     VMFrame* popFrame();
     void popFrameAndPushResult(vm_oop_t result);

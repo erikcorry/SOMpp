@@ -78,6 +78,8 @@ SlidingHeap::SlidingHeap(size_t /*objectSpaceSize*/)
     bottom = base;
     allocation = top;
     oldBottom = top;
+    stackBase = base;
+    stackEnd = base;
 
     size_t const pagelets = size / PAGELET;
     size_t const markWords = markWordsFor(size);
@@ -104,9 +106,25 @@ SlidingHeap::~SlidingHeap() = default;
 bool SlidingHeap::grow() {
     return false;
 }
+
+// Each bump takes room from the heap for good, so the stack grows a pagelet
+// at a time.
+bool SlidingHeap::GrowStack(char* end) {
+    char* const newEnd =
+        stackBase + roundUp((size_t)(end - stackBase), PAGELET);
+    if (newEnd > allocation) {
+        allocationFailed((size_t)(newEnd - stackEnd));
+        return false;
+    }
+    stackEnd = newEnd;
+    bottom = newEnd;
+    return true;
+}
 #else
 // the smallest reservation, so the heap can grow
 static constexpr size_t MIN_RESERVED_SIZE = (size_t)512 * 1024 * 1024;
+// the frame stack's reservation, which is made accessible as it grows
+static constexpr size_t STACK_RESERVED_SIZE = (size_t)256 * 1024 * 1024;
 
 static void* reserve(size_t size) {
     void* const p = mmap(nullptr, size, PROT_NONE,
@@ -156,6 +174,10 @@ SlidingHeap::SlidingHeap(size_t objectSpaceSize)
     if (mprotect(bottom, size, PROT_READ | PROT_WRITE) != 0) {
         ErrorExit("unable to allocate heap memory");
     }
+
+    stackReservedSize = STACK_RESERVED_SIZE;
+    stackBase = static_cast<char*>(reserve(stackReservedSize));
+    stackEnd = stackBase;
 }
 
 SlidingHeap::~SlidingHeap() {
@@ -167,6 +189,7 @@ SlidingHeap::~SlidingHeap() {
     munmap(liveCounts, liveCountEntries(markWords) * sizeof(size_t));
     munmap(grayBits, roundUp(pagelets, 8) / 8);
     munmap(cards, pagelets);
+    munmap(stackBase, stackReservedSize);
 }
 
 bool SlidingHeap::grow() {
@@ -181,6 +204,20 @@ bool SlidingHeap::grow() {
         return false;
     }
     bottom = newBottom;
+    return true;
+}
+
+bool SlidingHeap::GrowStack(char* end) {
+    auto const pageSize = (size_t)sysconf(_SC_PAGESIZE);
+    char* const newEnd =
+        stackBase + roundUp((size_t)(end - stackBase), pageSize);
+    if (newEnd > stackBase + stackReservedSize ||
+        mprotect(stackEnd, (size_t)(newEnd - stackEnd),
+                 PROT_READ | PROT_WRITE) != 0) {
+        allocationFailed((size_t)(newEnd - stackEnd));
+        return false;
+    }
+    stackEnd = newEnd;
     return true;
 }
 #endif

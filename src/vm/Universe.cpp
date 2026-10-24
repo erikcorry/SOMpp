@@ -46,6 +46,7 @@
 #include "../lib/InfInt.h"
 #endif
 #include "../memory/Heap.h"
+#include "../misc/PlacementNew.h"
 #include "../misc/defs.h"
 #include "../vm/Statistics.h"
 #include "../vmobjects/IntegerBox.h"
@@ -394,6 +395,7 @@ vm_oop_t Universe::interpretMethod(VMObject* receiver, VMInvokable* initialize,
 void Universe::initialize(int32_t /*argc*/, char** /*argv*/) {
     // the heap is what the linker leaves below the program, see SlidingHeap
     Heap<HEAP_CLS>::InitializeHeap(0);
+    GetInterpreter()->ClearFrames();
 
     InitializeGlobals();
 
@@ -422,6 +424,7 @@ void Universe::initialize(int32_t _argc, char** _argv) {
     }
 
     Heap<HEAP_CLS>::InitializeHeap(heapSize);
+    GetInterpreter()->ClearFrames();
 
 #if CACHE_INTEGER
     // create prebuilt integers
@@ -941,6 +944,10 @@ VMDouble* Universe::NewDouble(double value) {
 }
 #endif
 
+#if USE_FRAME_STACK && defined(UNSAFE_FRAME_OPTIMIZATION)
+  #error "the frame stack reuses its frames already"
+#endif
+
 VMFrame* Universe::NewFrame(VMFrame* previousFrame, VMMethod* method) {
     VMFrame* result = nullptr;
 #ifdef UNSAFE_FRAME_OPTIMIZATION
@@ -951,20 +958,35 @@ VMFrame* Universe::NewFrame(VMFrame* previousFrame, VMMethod* method) {
         return result;
     }
 #endif
-    size_t const length = method->GetNumberOfArguments() +
-                          method->GetNumberOfLocals() +
-                          method->GetMaximumNumberOfStackElements() +
-                          VMFrame::EXTRA_STACK_SLOTS;
-
-    size_t const additionalBytes = length * sizeof(VMObject*);
-    result = new (GetHeap<HEAP_CLS>(), additionalBytes)
-        VMFrame(additionalBytes, method, previousFrame);
-    if (result == nullptr) {
+    size_t additionalBytes = 0;
+    void* place = nullptr;
+#if USE_FRAME_STACK
+    // A method that makes no blocks has its frame on the frame stack, right
+    // above the stack of the frame below it there, see ideas/frame-stack.md.
+    size_t const stackFrameSize = method->GetStackFrameSize();
+    if (stackFrameSize != 0) {
+        additionalBytes = stackFrameSize - sizeof(VMFrame);
+        if (!gcStressRetryMode ||
+            !GetHeap<HEAP_CLS>()->StressFailsAllocation(stackFrameSize)) {
+            place = GetInterpreter()->AllocateStackFrame(stackFrameSize);
+        }
+    } else
+#endif
+    {
+        size_t const length = method->GetNumberOfArguments() +
+                              method->GetNumberOfLocals() +
+                              method->GetMaximumNumberOfStackElements() +
+                              VMFrame::EXTRA_STACK_SLOTS;
+        additionalBytes = length * sizeof(VMObject*);
+        place = VMFrame::operator new(sizeof(VMFrame), GetHeap<HEAP_CLS>(),
+                                      additionalBytes);
+        recordStat(Allocation, "VMFrame", sizeof(VMFrame) + additionalBytes);
+    }
+    if (place == nullptr) {
         AbandonIfCompiling();
         return nullptr;
     }
-
-    recordStat(Allocation, "VMFrame", result->GetObjectSize());
+    result = ::new (place) VMFrame(additionalBytes, method, previousFrame);
     return result;
 }
 
