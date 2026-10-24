@@ -2,98 +2,104 @@
 <rect width="800" height="800" fill="#fcfcfb"/>
 <text x="32" y="64" font-size="34" font-weight="bold" fill="#0b0b0b">DeltaBlue on fructus</text>
 <text x="32" y="98" font-size="18" fill="#52514e">Cycles to run the cut-down benchmark, per commit. Lower is better.</text>
-<text x="32" y="170" font-size="52" font-weight="bold" fill="#0b0b0b">−69%</text>
-<text x="222" y="152" font-size="18" fill="#52514e">7.360M → 2.258M cycles</text>
+<text x="32" y="170" font-size="52" font-weight="bold" fill="#0b0b0b">−70%</text>
+<text x="222" y="152" font-size="18" fill="#52514e">7.360M → 2.243M cycles</text>
 <text x="222" y="176" font-size="18" fill="#52514e">on a 16-bit CPU with no floats</text>
-<path d="M34.232,730 V416.4992807207208 Q34.232,412.4992807207208 38.232,412.4992807207208 H50.568 Q54.568,412.4992807207208 54.568,416.4992807207208 V730 Z" fill="#2a78d6"><title>9670ac48</title></path>
-<text transform="translate(48.06048,722) rotate(-90)" font-size="10.168000000000001" fill="#ffffff">7.360M</text>
-<text transform="translate(48.426528,406.4992807207208) rotate(-90)" font-size="11.2" fill="#0b0b0b">Starting point</text>
-<path d="M59.032,730 V350.92848000000004 Q59.032,346.92848000000004 63.032,346.92848000000004 H75.368 Q79.368,346.92848000000004 79.368,350.92848000000004 V730 Z" fill="#2a78d6"><title>c69ba1c3</title></path>
-<text transform="translate(72.86048000000001,722) rotate(-90)" font-size="10.168000000000001" fill="#ffffff">8.880M</text>
-<text transform="translate(73.226528,340.92848000000004) rotate(-90)" font-size="11.2" fill="#0b0b0b">Box big ints, 8K heap</text>
-<path d="M83.832,730 V413.35015673873875 Q83.832,409.35015673873875 87.832,409.35015673873875 H100.16799999999999 Q104.16799999999999,409.35015673873875 104.16799999999999,413.35015673873875 V730 Z" fill="#2a78d6"><title>7ab4c86c</title></path>
-<text transform="translate(97.66048,722) rotate(-90)" font-size="10.168000000000001" fill="#ffffff">7.433M</text>
-<text transform="translate(98.026528,403.35015673873875) rotate(-90)" font-size="11.2" fill="#0b0b0b">Heap back to 16K</text>
-<path d="M108.632,730 V415.4208136036036 Q108.632,411.4208136036036 112.632,411.4208136036036 H124.96800000000002 Q128.96800000000002,411.4208136036036 128.96800000000002,415.4208136036036 V730 Z" fill="#2a78d6"><title>f0b6c1cf</title></path>
-<text transform="translate(122.46048000000002,722) rotate(-90)" font-size="10.168000000000001" fill="#ffffff">7.385M</text>
-<text transform="translate(122.82652800000001,405.4208136036036) rotate(-90)" font-size="11.2" fill="#0b0b0b">Share int slow path</text>
-<path d="M133.432,730 V415.46395228828834 Q133.432,411.46395228828834 137.432,411.46395228828834 H149.768 Q153.768,411.46395228828834 153.768,415.46395228828834 V730 Z" fill="#2a78d6"><title>d625e4e2</title></path>
-<text transform="translate(147.26048,722) rotate(-90)" font-size="10.168000000000001" fill="#ffffff">7.384M</text>
-<text transform="translate(147.626528,405.46395228828834) rotate(-90)" font-size="11.2" fill="#0b0b0b">Faster + - *</text>
-<path d="M158.232,730 V414.98054018771177 Q158.232,410.98054018771177 162.232,410.98054018771177 H174.568 Q178.568,410.98054018771177 178.568,414.98054018771177 V730 Z" fill="#2a78d6"><title>371fccf9</title></path>
-<text transform="translate(172.06048,722) rotate(-90)" font-size="10.168000000000001" fill="#ffffff">7.395M</text>
-<text transform="translate(172.42652800000002,404.98054018771177) rotate(-90)" font-size="11.2" fill="#0b0b0b">Retry failed sends</text>
-<path d="M183.032,730 V415.00167814320724 Q183.032,411.00167814320724 187.032,411.00167814320724 H199.36800000000002 Q203.36800000000002,411.00167814320724 203.36800000000002,415.00167814320724 V730 Z" fill="#2a78d6"><title>04331856</title></path>
-<text transform="translate(196.86048000000002,722) rotate(-90)" font-size="10.168000000000001" fill="#ffffff">7.395M</text>
-<text transform="translate(197.22652800000003,405.00167814320724) rotate(-90)" font-size="11.2" fill="#0b0b0b">Retry increments</text>
-<path d="M207.832,730 V514.4410053193513 Q207.832,510.44100531935135 211.832,510.44100531935135 H224.168 Q228.168,510.44100531935135 228.168,514.4410053193513 V730 Z" fill="#2a78d6"><title>a73b63d6</title></path>
-<text transform="translate(221.66048,722) rotate(-90)" font-size="10.168000000000001" fill="#ffffff">5.090M</text>
-<text transform="translate(222.026528,504.44100531935135) rotate(-90)" font-size="11.2" fill="#0b0b0b">New GC, bigger heap</text>
-<path d="M232.632,730 V512.997332814103 Q232.632,508.9973328141029 236.632,508.9973328141029 H248.96800000000002 Q252.96800000000002,508.9973328141029 252.96800000000002,512.997332814103 V730 Z" fill="#2a78d6"><title>2487d5cb</title></path>
-<text transform="translate(246.46048000000002,722) rotate(-90)" font-size="10.168000000000001" fill="#ffffff">5.123M</text>
-<text transform="translate(246.82652800000002,502.9973328141029) rotate(-90)" font-size="11.2" fill="#0b0b0b">SEND_EQEQ</text>
-<path d="M257.432,730 V513.1299344144145 Q257.432,509.12993441441444 261.432,509.12993441441444 H273.76800000000003 Q277.76800000000003,509.12993441441444 277.76800000000003,513.1299344144145 V730 Z" fill="#2a78d6"><title>10f97a4d</title></path>
-<text transform="translate(271.26048000000003,722) rotate(-90)" font-size="10.168000000000001" fill="#ffffff">5.120M</text>
-<text transform="translate(271.626528,503.12993441441444) rotate(-90)" font-size="11.2" fill="#0b0b0b">Small int identity</text>
-<path d="M282.232,730 V522.620445045045 Q282.232,518.620445045045 286.232,518.620445045045 H298.56800000000004 Q302.56800000000004,518.620445045045 302.56800000000004,522.620445045045 V730 Z" fill="#2a78d6"><title>13aeca1e</title></path>
-<text transform="translate(296.06048000000004,722) rotate(-90)" font-size="10.168000000000001" fill="#ffffff">4.900M</text>
-<text transform="translate(296.426528,512.620445045045) rotate(-90)" font-size="11.2" fill="#0b0b0b">STATIC_SEND</text>
-<path d="M307.03200000000004,730 V523.1277559769369 Q307.03200000000004,519.1277559769369 311.03200000000004,519.1277559769369 H323.36800000000005 Q327.36800000000005,519.1277559769369 327.36800000000005,523.1277559769369 V730 Z" fill="#2a78d6"><title>15e27e5a</title></path>
-<text transform="translate(320.86048000000005,722) rotate(-90)" font-size="10.168000000000001" fill="#ffffff">4.888M</text>
-<text transform="translate(321.22652800000003,513.1277559769369) rotate(-90)" font-size="11.2" fill="#0b0b0b">Class IDs</text>
-<path d="M331.83200000000005,730 V540.5052407763233 Q331.83200000000005,536.5052407763233 335.83200000000005,536.5052407763233 H348.16800000000006 Q352.16800000000006,536.5052407763233 352.16800000000006,540.5052407763233 V730 Z" fill="#2a78d6"><title>9ab5c8a4</title></path>
-<text transform="translate(345.66048000000006,722) rotate(-90)" font-size="10.168000000000001" fill="#ffffff">4.485M</text>
-<text transform="translate(346.02652800000004,530.5052407763233) rotate(-90)" font-size="11.2" fill="#0b0b0b">ID range dispatch</text>
-<path d="M356.63200000000006,730 V540.8148323910812 Q356.63200000000006,536.8148323910812 360.63200000000006,536.8148323910812 H372.9680000000001 Q376.9680000000001,536.8148323910812 376.9680000000001,540.8148323910812 V730 Z" fill="#2a78d6"><title>ad04a24d</title></path>
-<text transform="translate(370.4604800000001,722) rotate(-90)" font-size="10.168000000000001" fill="#ffffff">4.478M</text>
-<text transform="translate(370.82652800000005,530.8148323910812) rotate(-90)" font-size="11.2" fill="#0b0b0b">Unsigned classId</text>
-<path d="M381.432,730 V540.8270837775316 Q381.432,536.8270837775316 385.432,536.8270837775316 H397.76800000000003 Q401.76800000000003,536.8270837775316 401.76800000000003,540.8270837775316 V730 Z" fill="#2a78d6"><title>26793a87</title></path>
-<text transform="translate(395.26048000000003,722) rotate(-90)" font-size="10.168000000000001" fill="#ffffff">4.478M</text>
-<text transform="translate(395.626528,530.8270837775316) rotate(-90)" font-size="11.2" fill="#0b0b0b">New fructus gcc</text>
-<path d="M406.232,730 V540.6858045851892 Q406.232,536.6858045851892 410.232,536.6858045851892 H422.56800000000004 Q426.56800000000004,536.6858045851892 426.56800000000004,540.6858045851892 V730 Z" fill="#2a78d6"><title>0442f246</title></path>
-<text transform="translate(420.06048000000004,722) rotate(-90)" font-size="10.168000000000001" fill="#ffffff">4.481M</text>
-<text transform="translate(420.426528,530.6858045851892) rotate(-90)" font-size="11.2" fill="#0b0b0b">Stack-relative vars</text>
-<path d="M431.03200000000004,730 V546.8174078102162 Q431.03200000000004,542.8174078102162 435.03200000000004,542.8174078102162 H447.36800000000005 Q451.36800000000005,542.8174078102162 451.36800000000005,546.8174078102162 V730 Z" fill="#2a78d6"><title>77938552</title></path>
-<text transform="translate(444.86048000000005,722) rotate(-90)" font-size="10.168000000000001" fill="#ffffff">4.339M</text>
-<text transform="translate(445.22652800000003,536.8174078102162) rotate(-90)" font-size="11.2" fill="#0b0b0b">SP in a register</text>
-<path d="M455.83200000000005,730 V560.5039320227568 Q455.83200000000005,556.5039320227568 459.83200000000005,556.5039320227568 H472.16800000000006 Q476.16800000000006,556.5039320227568 476.16800000000006,560.5039320227568 V730 Z" fill="#2a78d6"><title>9180e1de</title></path>
-<text transform="translate(469.66048000000006,722) rotate(-90)" font-size="10.168000000000001" fill="#ffffff">4.022M</text>
-<text transform="translate(470.02652800000004,550.5039320227568) rotate(-90)" font-size="11.2" fill="#0b0b0b">Remember the frame</text>
-<path d="M480.63200000000006,730 V566.8290553872793 Q480.63200000000006,562.8290553872793 484.63200000000006,562.8290553872793 H496.9680000000001 Q500.9680000000001,562.8290553872793 500.9680000000001,566.8290553872793 V730 Z" fill="#2a78d6"><title>e62e7f7d</title></path>
-<text transform="translate(494.4604800000001,722) rotate(-90)" font-size="10.168000000000001" fill="#ffffff">3.875M</text>
-<text transform="translate(494.82652800000005,556.8290553872793) rotate(-90)" font-size="11.2" fill="#0b0b0b">Barrier-free args</text>
-<path d="M505.432,730 V586.3596203527387 Q505.432,582.3596203527387 509.432,582.3596203527387 H521.768 Q525.768,582.3596203527387 525.768,586.3596203527387 V730 Z" fill="#2a78d6"><title>cde6bc72</title></path>
-<text transform="translate(519.26048,722) rotate(-90)" font-size="10.168000000000001" fill="#ffffff">3.422M</text>
-<text transform="translate(519.626528,576.3596203527387) rotate(-90)" font-size="11.2" fill="#0b0b0b">New fructus CPU</text>
-<path d="M530.232,730 V592.6547191927207 Q530.232,588.6547191927207 534.232,588.6547191927207 H546.568 Q550.568,588.6547191927207 550.568,592.6547191927207 V730 Z" fill="#2a78d6"><title>25d7053b</title></path>
-<text transform="translate(544.06048,722) rotate(-90)" font-size="10.168000000000001" fill="#ffffff">3.277M</text>
-<text transform="translate(544.426528,582.6547191927207) rotate(-90)" font-size="11.2" fill="#0b0b0b">Faster absolute jump/call</text>
-<path d="M555.032,730 V594.6805549641982 Q555.032,590.6805549641982 559.032,590.6805549641982 H571.368 Q575.368,590.6805549641982 575.368,594.6805549641982 V730 Z" fill="#2a78d6"><title>25d7053b</title></path>
-<text transform="translate(568.86048,722) rotate(-90)" font-size="10.168000000000001" fill="#ffffff">3.230M</text>
-<text transform="translate(569.226528,584.6805549641982) rotate(-90)" font-size="11.2" fill="#0b0b0b">Dynamic branch predictor</text>
-<path d="M579.832,730 V598.2674503183604 Q579.832,594.2674503183604 583.832,594.2674503183604 H596.168 Q600.168,594.2674503183604 600.168,598.2674503183604 V730 Z" fill="#2a78d6"><title>25d7053b</title></path>
-<text transform="translate(593.66048,722) rotate(-90)" font-size="10.168000000000001" fill="#ffffff">3.146M</text>
-<text transform="translate(594.026528,588.2674503183604) rotate(-90)" font-size="11.2" fill="#0b0b0b">Indirect jump target predictor</text>
-<path d="M604.632,730 V602.0382458853334 Q604.632,598.0382458853334 608.632,598.0382458853334 H620.968 Q624.968,598.0382458853334 624.968,602.0382458853334 V730 Z" fill="#2a78d6"><title>25d7053b</title></path>
-<text transform="translate(618.46048,722) rotate(-90)" font-size="10.168000000000001" fill="#ffffff">3.059M</text>
-<text transform="translate(618.8265279999999,592.0382458853334) rotate(-90)" font-size="11.2" fill="#0b0b0b">Return address predictor</text>
-<path d="M629.432,730 V605.0791780461261 Q629.432,601.0791780461261 633.432,601.0791780461261 H645.768 Q649.768,601.0791780461261 649.768,605.0791780461261 V730 Z" fill="#2a78d6"><title>25d7053b</title></path>
-<text transform="translate(643.26048,722) rotate(-90)" font-size="10.168000000000001" fill="#ffffff">2.989M</text>
-<text transform="translate(643.626528,595.0791780461261) rotate(-90)" font-size="11.2" fill="#0b0b0b">Early branch target</text>
-<path d="M654.232,730 V612.3255280220901 Q654.232,608.3255280220901 658.232,608.3255280220901 H670.568 Q674.568,608.3255280220901 674.568,612.3255280220901 V730 Z" fill="#2a78d6"><title>25d7053b</title></path>
-<text transform="translate(668.06048,722) rotate(-90)" font-size="10.168000000000001" fill="#ffffff">2.821M</text>
-<text transform="translate(668.426528,602.3255280220901) rotate(-90)" font-size="11.2" fill="#0b0b0b">Stores keep dispatching</text>
-<path d="M679.032,730 V615.5067903241621 Q679.032,611.5067903241621 683.032,611.5067903241621 H695.368 Q699.368,611.5067903241621 699.368,615.5067903241621 V730 Z" fill="#2a78d6"><title>25d7053b</title></path>
-<text transform="translate(692.86048,722) rotate(-90)" font-size="10.168000000000001" fill="#ffffff">2.747M</text>
-<text transform="translate(693.226528,605.5067903241621) rotate(-90)" font-size="11.2" fill="#0b0b0b">Newer gcc</text>
-<path d="M703.832,730 V626.8389345426667 Q703.832,622.8389345426667 707.832,622.8389345426667 H720.168 Q724.168,622.8389345426667 724.168,626.8389345426667 V730 Z" fill="#2a78d6"><title>25d7053b</title></path>
-<text transform="translate(717.66048,722) rotate(-90)" font-size="10.168000000000001" fill="#ffffff">2.484M</text>
-<text transform="translate(718.026528,616.8389345426667) rotate(-90)" font-size="11.2" fill="#0b0b0b">Two-cycle loads</text>
-<path d="M728.632,730 V624.0486381398919 Q728.632,620.0486381398919 732.632,620.0486381398919 H744.968 Q748.968,620.0486381398919 748.968,624.0486381398919 V730 Z" fill="#2a78d6"><title>25d7053b</title></path>
-<text transform="translate(742.46048,722) rotate(-90)" font-size="10.168000000000001" fill="#ffffff">2.549M</text>
-<text transform="translate(742.8265279999999,614.0486381398919) rotate(-90)" font-size="11.2" fill="#0b0b0b">No indirect jump predictor</text>
-<path d="M753.432,730 V636.589700858 Q753.432,632.589700858 757.432,632.589700858 H769.768 Q773.768,632.589700858 773.768,636.589700858 V730 Z" fill="#2a78d6"><title>6bfa2245</title></path>
-<text transform="translate(767.26048,722) rotate(-90)" font-size="10.168000000000001" fill="#ffffff">2.258M</text>
-<text transform="translate(767.626528,626.589700858) rotate(-90)" font-size="11.2" fill="#0b0b0b">Frame stack</text>
+<path d="M34.0925,730 V409.1989315315315 Q34.0925,405.1989315315315 38.0925,405.1989315315315 H49.1575 Q53.1575,405.1989315315315 53.1575,409.1989315315315 V730 Z" fill="#2a78d6"><title>9670ac48</title></path>
+<text transform="translate(47.0567,722) rotate(-90)" font-size="9.5325" fill="#ffffff">7.360M</text>
+<text transform="translate(47.39987,399.1989315315315) rotate(-90)" font-size="10.5" fill="#0b0b0b">Starting point</text>
+<path d="M57.3425,730 V342.12045 Q57.3425,338.12045 61.3425,338.12045 H72.4075 Q76.4075,338.12045 76.4075,342.12045 V730 Z" fill="#2a78d6"><title>c69ba1c3</title></path>
+<text transform="translate(70.3067,722) rotate(-90)" font-size="9.5325" fill="#ffffff">8.880M</text>
+<text transform="translate(70.64987,332.12045) rotate(-90)" font-size="10.5" fill="#0b0b0b">Box big ints, 8K heap</text>
+<path d="M80.5925,730 V405.9773991948198 Q80.5925,401.9773991948198 84.5925,401.9773991948198 H95.6575 Q99.6575,401.9773991948198 99.6575,405.9773991948198 V730 Z" fill="#2a78d6"><title>7ab4c86c</title></path>
+<text transform="translate(93.5567,722) rotate(-90)" font-size="9.5325" fill="#ffffff">7.433M</text>
+<text transform="translate(93.89987,395.9773991948198) rotate(-90)" font-size="10.5" fill="#0b0b0b">Heap back to 16K</text>
+<path d="M103.8425,730 V408.0956670326577 Q103.8425,404.0956670326577 107.8425,404.0956670326577 H118.9075 Q122.9075,404.0956670326577 122.9075,408.0956670326577 V730 Z" fill="#2a78d6"><title>f0b6c1cf</title></path>
+<text transform="translate(116.8067,722) rotate(-90)" font-size="9.5325" fill="#ffffff">7.385M</text>
+<text transform="translate(117.14987,398.0956670326577) rotate(-90)" font-size="10.5" fill="#0b0b0b">Share int slow path</text>
+<path d="M127.0925,730 V408.1397976126126 Q127.0925,404.1397976126126 131.0925,404.1397976126126 H142.1575 Q146.1575,404.1397976126126 146.1575,408.1397976126126 V730 Z" fill="#2a78d6"><title>d625e4e2</title></path>
+<text transform="translate(140.0567,722) rotate(-90)" font-size="9.5325" fill="#ffffff">7.384M</text>
+<text transform="translate(140.39987,398.1397976126126) rotate(-90)" font-size="10.5" fill="#0b0b0b">Faster + - *</text>
+<path d="M150.3425,730 V407.64527033363737 Q150.3425,403.64527033363737 154.3425,403.64527033363737 H165.4075 Q169.4075,403.64527033363737 169.4075,407.64527033363737 V730 Z" fill="#2a78d6"><title>371fccf9</title></path>
+<text transform="translate(163.3067,722) rotate(-90)" font-size="9.5325" fill="#ffffff">7.395M</text>
+<text transform="translate(163.64987,397.64527033363737) rotate(-90)" font-size="10.5" fill="#0b0b0b">Retry failed sends</text>
+<path d="M173.5925,730 V407.6668943178153 Q173.5925,403.6668943178153 177.5925,403.6668943178153 H188.6575 Q192.6575,403.6668943178153 192.6575,407.6668943178153 V730 Z" fill="#2a78d6"><title>04331856</title></path>
+<text transform="translate(186.5567,722) rotate(-90)" font-size="9.5325" fill="#ffffff">7.395M</text>
+<text transform="translate(186.89987,397.6668943178153) rotate(-90)" font-size="10.5" fill="#0b0b0b">Retry increments</text>
+<path d="M196.8425,730 V509.39264721662164 Q196.8425,505.39264721662164 200.8425,505.39264721662164 H211.9075 Q215.9075,505.39264721662164 215.9075,509.39264721662164 V730 Z" fill="#2a78d6"><title>a73b63d6</title></path>
+<text transform="translate(209.8067,722) rotate(-90)" font-size="9.5325" fill="#ffffff">5.090M</text>
+<text transform="translate(210.14987,499.39264721662164) rotate(-90)" font-size="10.5" fill="#0b0b0b">New GC, bigger heap</text>
+<path d="M220.0925,730 V507.9157800986898 Q220.0925,503.9157800986898 224.0925,503.9157800986898 H235.1575 Q239.1575,503.9157800986898 239.1575,507.9157800986898 V730 Z" fill="#2a78d6"><title>2487d5cb</title></path>
+<text transform="translate(233.0567,722) rotate(-90)" font-size="9.5325" fill="#ffffff">5.123M</text>
+<text transform="translate(233.39987,497.9157800986898) rotate(-90)" font-size="10.5" fill="#0b0b0b">SEND_EQEQ</text>
+<path d="M243.3425,730 V508.05143063063065 Q243.3425,504.05143063063065 247.3425,504.05143063063065 H258.4075 Q262.4075,504.05143063063065 262.4075,508.05143063063065 V730 Z" fill="#2a78d6"><title>10f97a4d</title></path>
+<text transform="translate(256.3067,722) rotate(-90)" font-size="9.5325" fill="#ffffff">5.120M</text>
+<text transform="translate(256.64987,498.05143063063065) rotate(-90)" font-size="10.5" fill="#0b0b0b">Small int identity</text>
+<path d="M266.5925,730 V517.7601582207208 Q266.5925,513.7601582207208 270.5925,513.7601582207208 H281.65749999999997 Q285.65749999999997,513.7601582207208 285.65749999999997,517.7601582207208 V730 Z" fill="#2a78d6"><title>13aeca1e</title></path>
+<text transform="translate(279.5567,722) rotate(-90)" font-size="9.5325" fill="#ffffff">4.900M</text>
+<text transform="translate(279.89987,507.76015822072077) rotate(-90)" font-size="10.5" fill="#0b0b0b">STATIC_SEND</text>
+<path d="M289.8425,730 V518.279133840991 Q289.8425,514.279133840991 293.8425,514.279133840991 H304.90749999999997 Q308.90749999999997,514.279133840991 308.90749999999997,518.279133840991 V730 Z" fill="#2a78d6"><title>15e27e5a</title></path>
+<text transform="translate(302.8067,722) rotate(-90)" font-size="9.5325" fill="#ffffff">4.888M</text>
+<text transform="translate(303.14987,508.279133840991) rotate(-90)" font-size="10.5" fill="#0b0b0b">Class IDs</text>
+<path d="M313.0925,730 V536.0561821668894 Q313.0925,532.0561821668894 317.0925,532.0561821668894 H328.15749999999997 Q332.15749999999997,532.0561821668894 332.15749999999997,536.0561821668894 V730 Z" fill="#2a78d6"><title>9ab5c8a4</title></path>
+<text transform="translate(326.0567,722) rotate(-90)" font-size="9.5325" fill="#ffffff">4.485M</text>
+<text transform="translate(326.39987,526.0561821668894) rotate(-90)" font-size="10.5" fill="#0b0b0b">ID range dispatch</text>
+<path d="M336.3425,730 V536.3728922754223 Q336.3425,532.3728922754223 340.3425,532.3728922754223 H351.40749999999997 Q355.40749999999997,532.3728922754223 355.40749999999997,536.3728922754223 V730 Z" fill="#2a78d6"><title>ad04a24d</title></path>
+<text transform="translate(349.3067,722) rotate(-90)" font-size="9.5325" fill="#ffffff">4.478M</text>
+<text transform="translate(349.64987,526.3728922754223) rotate(-90)" font-size="10.5" fill="#0b0b0b">Unsigned classId</text>
+<path d="M359.5925,730 V536.3854253601295 Q359.5925,532.3854253601295 363.5925,532.3854253601295 H374.65749999999997 Q378.65749999999997,532.3854253601295 378.65749999999997,536.3854253601295 V730 Z" fill="#2a78d6"><title>26793a87</title></path>
+<text transform="translate(372.5567,722) rotate(-90)" font-size="9.5325" fill="#ffffff">4.478M</text>
+<text transform="translate(372.89987,526.3854253601295) rotate(-90)" font-size="10.5" fill="#0b0b0b">New fructus gcc</text>
+<path d="M382.8425,730 V536.2408977107771 Q382.8425,532.2408977107771 386.8425,532.2408977107771 H397.90749999999997 Q401.90749999999997,532.2408977107771 401.90749999999997,536.2408977107771 V730 Z" fill="#2a78d6"><title>0442f246</title></path>
+<text transform="translate(395.8067,722) rotate(-90)" font-size="9.5325" fill="#ffffff">4.481M</text>
+<text transform="translate(396.14987,526.2408977107771) rotate(-90)" font-size="10.5" fill="#0b0b0b">Stack-relative vars</text>
+<path d="M406.0925,730 V542.5134859538344 Q406.0925,538.5134859538344 410.0925,538.5134859538344 H421.15749999999997 Q425.15749999999997,538.5134859538344 425.15749999999997,542.5134859538344 V730 Z" fill="#2a78d6"><title>77938552</title></path>
+<text transform="translate(419.0567,722) rotate(-90)" font-size="9.5325" fill="#ffffff">4.339M</text>
+<text transform="translate(419.39987,532.5134859538344) rotate(-90)" font-size="10.5" fill="#0b0b0b">SP in a register</text>
+<path d="M429.3425,730 V556.5147067949831 Q429.3425,552.5147067949831 433.3425,552.5147067949831 H444.40749999999997 Q448.40749999999997,552.5147067949831 448.40749999999997,556.5147067949831 V730 Z" fill="#2a78d6"><title>9180e1de</title></path>
+<text transform="translate(442.3067,722) rotate(-90)" font-size="9.5325" fill="#ffffff">4.022M</text>
+<text transform="translate(442.64987,546.5147067949831) rotate(-90)" font-size="10.5" fill="#0b0b0b">Remember the frame</text>
+<path d="M452.5925,730 V562.9852648197184 Q452.5925,558.9852648197184 456.5925,558.9852648197184 H467.65749999999997 Q471.65749999999997,558.9852648197184 471.65749999999997,562.9852648197184 V730 Z" fill="#2a78d6"><title>e62e7f7d</title></path>
+<text transform="translate(465.5567,722) rotate(-90)" font-size="9.5325" fill="#ffffff">3.875M</text>
+<text transform="translate(465.89987,552.9852648197184) rotate(-90)" font-size="10.5" fill="#0b0b0b">Barrier-free args</text>
+<path d="M475.8425,730 V582.9648994579449 Q475.8425,578.9648994579449 479.8425,578.9648994579449 H490.90749999999997 Q494.90749999999997,578.9648994579449 494.90749999999997,582.9648994579449 V730 Z" fill="#2a78d6"><title>cde6bc72</title></path>
+<text transform="translate(488.8067,722) rotate(-90)" font-size="9.5325" fill="#ffffff">3.422M</text>
+<text transform="translate(489.14987,572.9648994579449) rotate(-90)" font-size="10.5" fill="#0b0b0b">New fructus CPU</text>
+<path d="M499.0925,730 V589.4047425990316 Q499.0925,585.4047425990316 503.0925,585.4047425990316 H514.1575 Q518.1575,585.4047425990316 518.1575,589.4047425990316 V730 Z" fill="#2a78d6"><title>25d7053b</title></path>
+<text transform="translate(512.0567,722) rotate(-90)" font-size="9.5325" fill="#ffffff">3.277M</text>
+<text transform="translate(512.39987,579.4047425990316) rotate(-90)" font-size="10.5" fill="#0b0b0b">Faster absolute jump/call</text>
+<path d="M522.3425,730 V591.4771587642962 Q522.3425,587.4771587642962 526.3425,587.4771587642962 H537.4075 Q541.4075,587.4771587642962 541.4075,591.4771587642962 V730 Z" fill="#2a78d6"><title>25d7053b</title></path>
+<text transform="translate(535.3067,722) rotate(-90)" font-size="9.5325" fill="#ffffff">3.230M</text>
+<text transform="translate(535.64987,581.4771587642962) rotate(-90)" font-size="10.5" fill="#0b0b0b">Dynamic branch predictor</text>
+<path d="M545.5925,730 V595.1465282263907 Q545.5925,591.1465282263907 549.5925,591.1465282263907 H560.6575 Q564.6575,591.1465282263907 564.6575,595.1465282263907 V730 Z" fill="#2a78d6"><title>25d7053b</title></path>
+<text transform="translate(558.5567,722) rotate(-90)" font-size="9.5325" fill="#ffffff">3.146M</text>
+<text transform="translate(558.89987,585.1465282263907) rotate(-90)" font-size="10.5" fill="#0b0b0b">Indirect jump target predictor</text>
+<path d="M568.8425,730 V599.0040263508333 Q568.8425,595.0040263508333 572.8425,595.0040263508333 H583.9075 Q587.9075,595.0040263508333 587.9075,599.0040263508333 V730 Z" fill="#2a78d6"><title>25d7053b</title></path>
+<text transform="translate(581.8067,722) rotate(-90)" font-size="9.5325" fill="#ffffff">3.059M</text>
+<text transform="translate(582.14987,589.0040263508333) rotate(-90)" font-size="10.5" fill="#0b0b0b">Return address predictor</text>
+<path d="M592.0925,730 V602.114879193018 Q592.0925,598.114879193018 596.0925,598.114879193018 H607.1575 Q611.1575,598.114879193018 611.1575,602.114879193018 V730 Z" fill="#2a78d6"><title>25d7053b</title></path>
+<text transform="translate(605.0567,722) rotate(-90)" font-size="9.5325" fill="#ffffff">2.989M</text>
+<text transform="translate(605.39987,592.114879193018) rotate(-90)" font-size="10.5" fill="#0b0b0b">Early branch target</text>
+<path d="M615.3425,730 V609.5278457526914 Q615.3425,605.5278457526914 619.3425,605.5278457526914 H630.4075 Q634.4075,605.5278457526914 634.4075,609.5278457526914 V730 Z" fill="#2a78d6"><title>25d7053b</title></path>
+<text transform="translate(628.3067,722) rotate(-90)" font-size="9.5325" fill="#ffffff">2.821M</text>
+<text transform="translate(628.64987,599.5278457526914) rotate(-90)" font-size="10.5" fill="#0b0b0b">Stores keep dispatching</text>
+<path d="M638.5925,730 V612.7822553714695 Q638.5925,608.7822553714695 642.5925,608.7822553714695 H653.6575 Q657.6575,608.7822553714695 657.6575,612.7822553714695 V730 Z" fill="#2a78d6"><title>25d7053b</title></path>
+<text transform="translate(651.5567,722) rotate(-90)" font-size="9.5325" fill="#ffffff">2.747M</text>
+<text transform="translate(651.89987,602.7822553714695) rotate(-90)" font-size="10.5" fill="#0b0b0b">Newer gcc</text>
+<path d="M661.8425,730 V624.3749615504166 Q661.8425,620.3749615504166 665.8425,620.3749615504166 H676.9075 Q680.9075,620.3749615504166 680.9075,624.3749615504166 V730 Z" fill="#2a78d6"><title>25d7053b</title></path>
+<text transform="translate(674.8067,722) rotate(-90)" font-size="9.5325" fill="#ffffff">2.484M</text>
+<text transform="translate(675.14987,614.3749615504166) rotate(-90)" font-size="10.5" fill="#0b0b0b">Two-cycle loads</text>
+<path d="M685.0925,730 V621.5205073777703 Q685.0925,617.5205073777703 689.0925,617.5205073777703 H700.1575 Q704.1575,617.5205073777703 704.1575,621.5205073777703 V730 Z" fill="#2a78d6"><title>25d7053b</title></path>
+<text transform="translate(698.0567,722) rotate(-90)" font-size="9.5325" fill="#ffffff">2.549M</text>
+<text transform="translate(698.39987,611.5205073777703) rotate(-90)" font-size="10.5" fill="#0b0b0b">No indirect jump predictor</text>
+<path d="M708.3425,730 V634.349928929375 Q708.3425,630.349928929375 712.3425,630.349928929375 H723.4075 Q727.4075,630.349928929375 727.4075,634.349928929375 V730 Z" fill="#2a78d6"><title>6bfa2245</title></path>
+<text transform="translate(721.3067,722) rotate(-90)" font-size="9.5325" fill="#ffffff">2.258M</text>
+<text transform="translate(721.64987,624.349928929375) rotate(-90)" font-size="10.5" fill="#0b0b0b">Frame stack</text>
+<path d="M731.5925,730 V635.4614458467005 Q731.5925,631.4614458467005 735.5925,631.4614458467005 H746.6575 Q750.6575,631.4614458467005 750.6575,635.4614458467005 V730 Z" fill="#2a78d6"><title>67f69752</title></path>
+<text transform="translate(744.5567,722) rotate(-90)" font-size="9.5325" fill="#ffffff">2.233M</text>
+<text transform="translate(744.89987,625.4614458467005) rotate(-90)" font-size="10.5" fill="#0b0b0b">No barrier into current frame</text>
+<path d="M754.8425,730 V634.9962212728153 Q754.8425,630.9962212728153 758.8425,630.9962212728153 H769.9075 Q773.9075,630.9962212728153 773.9075,634.9962212728153 V730 Z" fill="#2a78d6"><title>f7672260</title></path>
+<text transform="translate(767.8067,722) rotate(-90)" font-size="9.5325" fill="#ffffff">2.243M</text>
+<text transform="translate(768.14987,624.9962212728153) rotate(-90)" font-size="10.5" fill="#0b0b0b">Stack and heap frames</text>
 <line x1="32" x2="776" y1="730" y2="730" stroke="#8a8984" stroke-width="1"/>
 </svg>
