@@ -121,7 +121,7 @@ void Shell::Start() {
         VMInvokable* initialize = runClass->LookupInvokable(SymbolFor("run:"));
 
         // Invoke the run method
-        initialize->Invoke(currentFrame);
+        initialize->InvokeFromVM(currentFrame);
 
         // Start the Interpreter, where an allocation that fails makes it run
         // the bytecode again after collecting

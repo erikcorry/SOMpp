@@ -56,8 +56,27 @@ public:
     [[nodiscard]] som_int_t GetHash() const override { return hash; }
 #endif
 
-    virtual VMFrame* Invoke(VMFrame*) = 0;
-    virtual VMFrame* Invoke1(VMFrame*) = 0;
+    /**
+     * Calls the invokable for a send from `frame`, the current frame, whose
+     * stack has its top at `sp`, with the receiver and the arguments on top.
+     * Invoke1() is for a send with no arguments. Answers the top of the
+     * current frame's stack afterwards: the caller's, with the result in
+     * place of the receiver and the arguments, or the new frame's, if it
+     * pushed one. If an allocation failed it changes nothing, and answers
+     * sp.
+     *
+     * The frame's stack_ptr isn't up to date: a method stores sp there when
+     * it pushes its frame, see VMMethod::Invoke(), and the rare invokables
+     * that work on the frame's stack store it first, see InvokeFromVM().
+     */
+    virtual gc_oop_t* Invoke(VMFrame* frame, gc_oop_t* sp) = 0;
+    virtual gc_oop_t* Invoke1(VMFrame* frame, gc_oop_t* sp) = 0;
+
+    /**
+     * Invoke() for C++ code outside the interpreter, which keeps the top of
+     * the current frame's stack in its stack_ptr, before and after.
+     */
+    void InvokeFromVM(VMFrame* frame);
 #ifndef FRUCTUS
     virtual void InlineInto(MethodGenerationContext& mgenc,
                             const Parser& parser, bool mergeScope = true) = 0;

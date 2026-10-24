@@ -249,8 +249,8 @@ public:
 
     [[nodiscard]] VMMethod* CloneForMovingGC() const override;
 
-    VMFrame* Invoke(VMFrame* frame) override;
-    VMFrame* Invoke1(VMFrame* frame) override;
+    gc_oop_t* Invoke(VMFrame* frame, gc_oop_t* sp) override;
+    gc_oop_t* Invoke1(VMFrame* frame, gc_oop_t* sp) override;
 
     [[nodiscard]] bool IsMarkedInvalid() const override {
         return isInvokableMarkedInvalid();

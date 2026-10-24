@@ -106,11 +106,6 @@ public:
 
     inline void PopVoid() { stack_ptr--; }
 
-    inline vm_oop_t Top() {
-        vm_oop_t result = load_ptr(*stack_ptr);
-        return result;
-    }
-
     inline vm_oop_t Top2() {
         vm_oop_t result = load_ptr(*(stack_ptr - 1));
         return result;
@@ -162,15 +157,18 @@ public:
         context = store_with_separate_barrier(frm);
     }
 
-    inline void SetTopOfCurrent(vm_oop_t val) {
-        assert(IsCurrent());
-        *stack_ptr = store_with_separate_barrier(val);
-    }
-
     inline void SetArgumentOfCurrent(size_t argIdx, vm_oop_t value) {
         assert(IsCurrent());
         arguments()[argIdx] = store_with_separate_barrier(value);
     }
+
+    /**
+     * The top of the stack, which the current frame's stack_ptr has only
+     * where the interpreter saved it, see SAVE_PC() and
+     * VMInvokable::Invoke().
+     */
+    [[nodiscard]] gc_oop_t* GetStackPointer() const { return stack_ptr; }
+    void SetStackPointer(gc_oop_t* sp) { stack_ptr = sp; }
 
     /** Whether this is the interpreter's current frame. */
     [[nodiscard]] bool IsCurrent() const;
@@ -223,7 +221,8 @@ public:
 
     void SetArgument(uint8_t index, uint8_t contextLevel, vm_oop_t value);
     void PrintStackTrace() const;
-    void CopyArgumentsFrom(VMFrame* frame);
+    /** Copies the arguments from the top of a stack, at `sp`. */
+    void CopyArgumentsFrom(const gc_oop_t* sp);
 
     inline void SetArgument(size_t argIdx, vm_oop_t value) {
         store_ptr(arguments()[argIdx], value);

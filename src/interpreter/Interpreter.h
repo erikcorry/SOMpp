@@ -64,6 +64,18 @@
        sp = frame->stack_ptr)
 #endif
 
+// A send saves and reloads only the pc: the invokable gets sp, and answers
+// the top of the current frame's stack, see VMInvokable::Invoke().
+#ifdef FRUCTUS
+  #define SAVE_NEXT_PC_ONLY(bcCount) frame->SetBytecodePointer(pc + (bcCount))
+  #define RELOAD_PC_ONLY() (pc = frame->GetBytecodePointer())
+#else
+  #define SAVE_NEXT_PC_ONLY(bcCount) \
+      frame->SetBytecodeIndex(pc + (bcCount) - method->GetBytecodes())
+  #define RELOAD_PC_ONLY() \
+      (pc = method->GetBytecodes() + frame->GetBytecodeIndex())
+#endif
+
 #define DISPATCH_NOGC()         \
     {                           \
         goto* loopTargets[*pc]; \
@@ -217,7 +229,7 @@ private:
     VMFrame* popFrame();
     void popFrameAndPushResult(vm_oop_t result);
 
-    void sendMiss(uint8_t* site, VMClass* receiverClass);
+    gc_oop_t* sendMiss(uint8_t* site, VMClass* receiverClass, gc_oop_t* sp);
 
 #ifdef FRUCTUS
     [[noreturn]] void triggerDoesNotUnderstand(VMSymbol* signature,
@@ -229,10 +241,10 @@ private:
     void doReturnFieldWithIndex(uint8_t fieldIndex);
     vm_oop_t getField(uint8_t fieldIndex);
     void setField(uint8_t fieldIndex, vm_oop_t o);
-    void doSend(uint8_t* site);
-    void doUnarySend(uint8_t* site);
+    gc_oop_t* doSend(uint8_t* site, gc_oop_t* sp);
+    gc_oop_t* doUnarySend(uint8_t* site, gc_oop_t* sp);
 #ifndef FRUCTUS
-    void doSuperSend(uint8_t* site);
+    gc_oop_t* doSuperSend(uint8_t* site, gc_oop_t* sp);
 #endif
     bool doReturnNonLocal();
 #ifndef FRUCTUS

@@ -45,8 +45,8 @@ public:
         return sizeof(VMSafeUnaryPrimitive);
     }
 
-    VMFrame* Invoke(VMFrame* /*frame*/) override;
-    VMFrame* Invoke1(VMFrame* /*frame*/) override;
+    gc_oop_t* Invoke(VMFrame* /*frame*/, gc_oop_t* /*sp*/) override;
+    gc_oop_t* Invoke1(VMFrame* /*frame*/, gc_oop_t* /*sp*/) override;
 
     [[nodiscard]] AbstractVMObject* CloneForMovingGC() const final;
 
@@ -79,8 +79,8 @@ public:
         return sizeof(VMSafeBinaryPrimitive);
     }
 
-    VMFrame* Invoke(VMFrame* /*frame*/) override;
-    VMFrame* Invoke1(VMFrame* /*unused*/) override;
+    gc_oop_t* Invoke(VMFrame* /*frame*/, gc_oop_t* /*sp*/) override;
+    gc_oop_t* Invoke1(VMFrame* /*unused*/, gc_oop_t* /*sp*/) override;
 
     [[nodiscard]] AbstractVMObject* CloneForMovingGC() const final;
 
@@ -113,8 +113,8 @@ public:
         return sizeof(VMSafeTernaryPrimitive);
     }
 
-    VMFrame* Invoke(VMFrame* /*frame*/) override;
-    VMFrame* Invoke1(VMFrame* /*unused*/) override;
+    gc_oop_t* Invoke(VMFrame* /*frame*/, gc_oop_t* /*sp*/) override;
+    gc_oop_t* Invoke1(VMFrame* /*unused*/, gc_oop_t* /*sp*/) override;
 
     [[nodiscard]] AbstractVMObject* CloneForMovingGC() const final;
 

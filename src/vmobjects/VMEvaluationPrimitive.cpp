@@ -30,6 +30,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "../interpreter/Interpreter.h"
 #include "../memory/Heap.h"
 #include "../misc/debug.h"
 #include "../misc/defs.h"
@@ -85,38 +86,39 @@ VMSymbol* VMEvaluationPrimitive::computeSignatureString(size_t argc) {
 }
 #endif
 
-VMFrame* VMEvaluationPrimitive::Invoke(VMFrame* frm) {
+gc_oop_t* VMEvaluationPrimitive::Invoke(VMFrame* frm, gc_oop_t* sp) {
     // Get the block (the receiver) from the stack
-    auto* block =
-        static_cast<VMBlock*>(frm->GetStackElement(numberOfArguments - 1));
+    auto* block = static_cast<VMBlock*>(load_ptr(sp[1 - numberOfArguments]));
 
     // Get the context of the block...
     VMFrame* context = block->GetContext();
     VMInvokable* method = block->GetMethod();
-    VMFrame* newFrame = method->Invoke(frm);
+    sp = method->Invoke(frm, sp);
 
     // Push set its context to be the one specified in the block
-    if (newFrame != nullptr) {
+    VMFrame* const newFrame = GetInterpreter()->GetFrame();
+    if (newFrame != frm) {
         newFrame->SetContextOfCurrent(context);
     }
-    return nullptr;
+    return sp;
 }
 
-VMFrame* VMEvaluationPrimitive::Invoke1(VMFrame* frm) {
+gc_oop_t* VMEvaluationPrimitive::Invoke1(VMFrame* frm, gc_oop_t* sp) {
     assert(numberOfArguments == 1);
     // Get the block (the receiver) from the stack
-    auto* block = static_cast<VMBlock*>(frm->GetStackElement(0));
+    auto* block = static_cast<VMBlock*>(load_ptr(*sp));
 
     // Get the context of the block...
     VMFrame* context = block->GetContext();
     VMInvokable* method = block->GetMethod();
-    VMFrame* newFrame = method->Invoke1(frm);
+    sp = method->Invoke1(frm, sp);
 
     // Push set its context to be the one specified in the block
-    if (newFrame != nullptr) {
+    VMFrame* const newFrame = GetInterpreter()->GetFrame();
+    if (newFrame != frm) {
         newFrame->SetContextOfCurrent(context);
     }
-    return nullptr;
+    return sp;
 }
 
 #if DEBUG

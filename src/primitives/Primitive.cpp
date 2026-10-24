@@ -34,7 +34,7 @@ static void pInvokeOnWith(VMFrame* frame) {
         vm_oop_t arg = args->GetIndexableField(i);
         frame->PushIntoCurrent(arg);
     }
-    mthd->Invoke(frame);
+    mthd->InvokeFromVM(frame);
 
     // put the arguments back if the invokable couldn't allocate what it
     // needed, so that the interpreter can run this send again

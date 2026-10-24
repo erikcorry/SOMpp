@@ -27,6 +27,7 @@
 #include "VMPrimitive.h"
 
 #include "../compiler/CompileAttempt.h"
+#include "../interpreter/Interpreter.h"
 #include "../memory/Heap.h"
 #include "../misc/debug.h"
 #include "../misc/defs.h"
@@ -42,6 +43,14 @@
 VMInvokable* VMPrimitive::GetFramePrim(VMSymbol* sig, FramePrim prim) {
     return AbandonIfCompilingAndNull(new (GetHeap<HEAP_CLS>(), 0)
                                          VMPrimitive(sig, prim));
+}
+
+// The routine works on the frame's stack, and may push a frame, see
+// InvokeFromVM().
+gc_oop_t* VMPrimitive::Invoke(VMFrame* frm, gc_oop_t* sp) {
+    frm->SetStackPointer(sp);
+    prim.pointer(frm);
+    return GetInterpreter()->GetFrame()->GetStackPointer();
 }
 
 VMPrimitive* VMPrimitive::CloneForMovingGC() const {

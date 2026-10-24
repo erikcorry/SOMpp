@@ -91,8 +91,8 @@ public:
         return sizeof(VMLiteralReturn);
     }
 
-    VMFrame* Invoke(VMFrame* /*frame*/) override;
-    VMFrame* Invoke1(VMFrame* /*frame*/) override;
+    gc_oop_t* Invoke(VMFrame* /*frame*/, gc_oop_t* /*sp*/) override;
+    gc_oop_t* Invoke1(VMFrame* /*frame*/, gc_oop_t* /*sp*/) override;
 
 #ifndef FRUCTUS
     void InlineInto(MethodGenerationContext& mgenc, const Parser& parser,
@@ -141,8 +141,8 @@ public:
         return sizeof(VMGlobalReturn);
     }
 
-    VMFrame* Invoke(VMFrame* /*frame*/) override;
-    VMFrame* Invoke1(VMFrame* /*frame*/) override;
+    gc_oop_t* Invoke(VMFrame* /*frame*/, gc_oop_t* /*sp*/) override;
+    gc_oop_t* Invoke1(VMFrame* /*frame*/, gc_oop_t* /*sp*/) override;
 
 #ifndef FRUCTUS
     void InlineInto(MethodGenerationContext& mgenc, const Parser& parser,
@@ -169,7 +169,7 @@ public:
     }
 
 private:
-    void sendUnknownGlobal(VMFrame* frame);
+    gc_oop_t* sendUnknownGlobal(VMFrame* frame, gc_oop_t* sp);
 
     GCSymbol* globalName;
     uint8_t numberOfArguments;
@@ -192,8 +192,8 @@ public:
         return sizeof(VMGetter);
     }
 
-    VMFrame* Invoke(VMFrame* /*frame*/) override;
-    VMFrame* Invoke1(VMFrame* /*frame*/) override;
+    gc_oop_t* Invoke(VMFrame* /*frame*/, gc_oop_t* /*sp*/) override;
+    gc_oop_t* Invoke1(VMFrame* /*frame*/, gc_oop_t* /*sp*/) override;
 
 #ifndef FRUCTUS
     void InlineInto(MethodGenerationContext& mgenc, const Parser& parser,
@@ -240,8 +240,8 @@ public:
         return sizeof(VMSetter);
     }
 
-    VMFrame* Invoke(VMFrame* /*frame*/) override;
-    VMFrame* Invoke1(VMFrame* /*unused*/) override;
+    gc_oop_t* Invoke(VMFrame* /*frame*/, gc_oop_t* /*sp*/) override;
+    gc_oop_t* Invoke1(VMFrame* /*unused*/, gc_oop_t* /*sp*/) override;
 
 #ifndef FRUCTUS
     void InlineInto(MethodGenerationContext& mgenc, const Parser& parser,

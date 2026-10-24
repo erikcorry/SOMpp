@@ -382,7 +382,7 @@ vm_oop_t Universe::interpretMethod(VMObject* receiver, VMInvokable* initialize,
         bootstrapFrame->PushIntoCurrent(argumentsArray);
     }
 
-    initialize->Invoke(bootstrapFrame);
+    initialize->InvokeFromVM(bootstrapFrame);
 
     // An allocation that fails makes the interpreter run the bytecode again
     // after collecting. The scope isn't in Start(), where it slows the

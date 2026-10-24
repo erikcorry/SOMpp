@@ -28,12 +28,20 @@
 
 #include <cstddef>
 
+#include "../interpreter/Interpreter.h"
 #include "../vm/Print.h"
 #include "ObjectFormats.h"
 #include "VMClass.h"
+#include "VMFrame.h"
 
 bool VMInvokable::IsPrimitive() const {
     return false;
+}
+
+void VMInvokable::InvokeFromVM(VMFrame* frame) {
+    gc_oop_t* const sp = Invoke(frame, frame->GetStackPointer());
+    // the frame's, or the new frame's, if it pushed one
+    GetInterpreter()->GetFrame()->SetStackPointer(sp);
 }
 
 void VMInvokable::WalkObjects(walk_heap_fn walk) {

@@ -99,7 +99,7 @@ static void objPerform(VMFrame* frame) {
     VMClass* clazz = CLASS_OF(self);
     VMInvokable* invokable = clazz->LookupInvokable(selector);
 
-    invokable->Invoke(frame);
+    invokable->InvokeFromVM(frame);
     if (invokeFailed()) {
         frame->PushIntoCurrent(selector);
     }
@@ -111,7 +111,7 @@ static void objPerformInSuperclass(VMFrame* frame) {
 
     VMInvokable* invokable = clazz->LookupInvokable(selector);
 
-    invokable->Invoke(frame);
+    invokable->InvokeFromVM(frame);
     if (invokeFailed()) {
         frame->PushIntoCurrent(selector);
         frame->PushIntoCurrent(clazz);
@@ -132,7 +132,7 @@ static void objPerformWithArguments(VMFrame* frame) {
     VMClass* clazz = CLASS_OF(self);
     VMInvokable* invokable = clazz->LookupInvokable(selector);
 
-    invokable->Invoke(frame);
+    invokable->InvokeFromVM(frame);
     if (invokeFailed()) {
         for (size_t i = 0; i < num_args; i++) {
             frame->PopVoid();
@@ -155,7 +155,7 @@ static void objPerformWithArgumentsInSuperclass(VMFrame* frame) {
 
     VMInvokable* invokable = clazz->LookupInvokable(selector);
 
-    invokable->Invoke(frame);
+    invokable->InvokeFromVM(frame);
     if (invokeFailed()) {
         for (size_t i = 0; i < num_args; i++) {
             frame->PopVoid();

@@ -77,19 +77,18 @@ VMTrivialMethod* MakeSetter(VMSymbol* sig, vector<Variable>& arguments,
 }
 #endif
 
-VMFrame* VMLiteralReturn::Invoke(VMFrame* frame) {
-    for (int i = 0; i < numberOfArguments; i += 1) {
-        frame->Pop();
-    }
-    frame->PushIntoCurrent(load_ptr(literal));
-    return nullptr;
+// The trivial methods replace the receiver and the arguments on the stack
+// with their result.
+gc_oop_t* VMLiteralReturn::Invoke(VMFrame* /*frame*/, gc_oop_t* sp) {
+    sp -= numberOfArguments - 1;
+    *sp = store_with_separate_barrier(load_ptr(literal));
+    return sp;
 }
 
-VMFrame* VMLiteralReturn::Invoke1(VMFrame* frame) {
+gc_oop_t* VMLiteralReturn::Invoke1(VMFrame* /*frame*/, gc_oop_t* sp) {
     assert(numberOfArguments == 1);
-    frame->Pop();
-    frame->PushIntoCurrent(load_ptr(literal));
-    return nullptr;
+    *sp = store_with_separate_barrier(load_ptr(literal));
+    return sp;
 }
 
 AbstractVMObject* VMLiteralReturn::CloneForMovingGC() const {
@@ -117,42 +116,40 @@ void VMLiteralReturn::InlineInto(MethodGenerationContext& mgenc,
 }
 #endif
 
-VMFrame* VMGlobalReturn::Invoke(VMFrame* frame) {
+gc_oop_t* VMGlobalReturn::Invoke(VMFrame* frame, gc_oop_t* sp) {
     vm_oop_t value = Universe::GetGlobal(load_ptr(globalName));
     if (value == nullptr) {
-        sendUnknownGlobal(frame);
-        return nullptr;
+        return sendUnknownGlobal(frame, sp);
     }
 
-    for (int i = 0; i < numberOfArguments; i += 1) {
-        frame->Pop();
-    }
-    frame->PushIntoCurrent(value);
-    return nullptr;
+    sp -= numberOfArguments - 1;
+    *sp = store_with_separate_barrier(value);
+    return sp;
 }
 
-VMFrame* VMGlobalReturn::Invoke1(VMFrame* frame) {
+gc_oop_t* VMGlobalReturn::Invoke1(VMFrame* frame, gc_oop_t* sp) {
     assert(numberOfArguments == 1);
 
     vm_oop_t value = Universe::GetGlobal(load_ptr(globalName));
     if (value == nullptr) {
-        sendUnknownGlobal(frame);
-        return nullptr;
+        return sendUnknownGlobal(frame, sp);
     }
 
-    frame->Pop();
-    frame->PushIntoCurrent(value);
-    return nullptr;
+    *sp = store_with_separate_barrier(value);
+    return sp;
 }
 
 // Sends #unknownGlobal: in place of the send of the method, which its result
-// is the result of. Changes nothing if it fails.
-void VMGlobalReturn::sendUnknownGlobal(VMFrame* frame) {
+// is the result of, from the frame's stack, see VMInvokable::InvokeFromVM().
+// Changes nothing if it fails.
+gc_oop_t* VMGlobalReturn::sendUnknownGlobal(VMFrame* frame, gc_oop_t* sp) {
 #ifdef FRUCTUS
     // all globals are in the image, so this is an error
     (void)frame;
     GetInterpreter()->SendUnknownGlobal(load_ptr(globalName));
+    return sp;
 #else
+    frame->SetStackPointer(sp);
     std::vector<vm_oop_t> arguments(numberOfArguments);
     for (int i = numberOfArguments - 1; i >= 0; i -= 1) {
         arguments[i] = frame->Pop();
@@ -162,6 +159,7 @@ void VMGlobalReturn::sendUnknownGlobal(VMFrame* frame) {
             frame->PushIntoCurrent(arg);
         }
     }
+    return GetInterpreter()->GetFrame()->GetStackPointer();
 #endif
 }
 
@@ -190,11 +188,9 @@ AbstractVMObject* VMGlobalReturn::CloneForMovingGC() const {
     return prim;
 }
 
-VMFrame* VMGetter::Invoke(VMFrame* frame) {
-    vm_oop_t self = nullptr;
-    for (int i = 0; i < numberOfArguments; i += 1) {
-        self = frame->Pop();
-    }
+gc_oop_t* VMGetter::Invoke(VMFrame* /*frame*/, gc_oop_t* sp) {
+    sp -= numberOfArguments - 1;
+    vm_oop_t self = load_ptr(*sp);
 
     assert(self != nullptr);
 
@@ -206,14 +202,13 @@ VMFrame* VMGetter::Invoke(VMFrame* frame) {
         result = ((VMObject*)self)->GetField(fieldIndex);
     }
 
-    frame->PushIntoCurrent(result);
-
-    return nullptr;
+    *sp = store_with_separate_barrier(result);
+    return sp;
 }
 
-VMFrame* VMGetter::Invoke1(VMFrame* frame) {
+gc_oop_t* VMGetter::Invoke1(VMFrame* /*frame*/, gc_oop_t* sp) {
     assert(numberOfArguments == 1);
-    vm_oop_t self = frame->Pop();
+    vm_oop_t self = load_ptr(*sp);
 
     assert(self != nullptr);
 
@@ -225,9 +220,8 @@ VMFrame* VMGetter::Invoke1(VMFrame* frame) {
         result = ((VMObject*)self)->GetField(fieldIndex);
     }
 
-    frame->PushIntoCurrent(result);
-
-    return nullptr;
+    *sp = store_with_separate_barrier(result);
+    return sp;
 }
 
 #ifndef FRUCTUS
@@ -252,19 +246,11 @@ std::string VMGetter::AsDebugString() const {
 }
 #endif
 
-VMFrame* VMSetter::Invoke(VMFrame* frame) {
-    vm_oop_t value = nullptr;
-    vm_oop_t self = nullptr;
-
-    for (size_t i = numberOfArguments - 1; i > 0; i -= 1) {
-        if (i == argIndex) {
-            value = frame->Pop();
-        } else {
-            frame->Pop();
-        }
-    }
-
-    self = frame->Top();
+gc_oop_t* VMSetter::Invoke(VMFrame* /*frame*/, gc_oop_t* sp) {
+    // the receiver stays, as the result
+    sp -= numberOfArguments - 1;
+    vm_oop_t value = load_ptr(sp[argIndex]);
+    vm_oop_t self = load_ptr(*sp);
     assert(self != nullptr);
     assert(value != nullptr);
 
@@ -274,10 +260,10 @@ VMFrame* VMSetter::Invoke(VMFrame* frame) {
         ((VMObject*)self)->SetField(fieldIndex, value);
     }
 
-    return nullptr;
+    return sp;
 }
 
-VMFrame* VMSetter::Invoke1(VMFrame* /*unused*/) {
+gc_oop_t* VMSetter::Invoke1(VMFrame* /*unused*/, gc_oop_t* /*sp*/) {
     ErrorExit("VMSetter::Invoke1 should not be reachable");
 }
 

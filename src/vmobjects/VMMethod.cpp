@@ -131,21 +131,28 @@ VMSymbol* VMMethod::GetSendSelector(size_t bytecodeIndex) const {
 }
 #endif
 
-// Answers nullptr, and changes nothing, if the frame can't be allocated.
-VMFrame* VMMethod::Invoke(VMFrame* frame) {
+// The caller's stack keeps its top in stack_ptr while the frame runs, for
+// the return, see Interpreter::popFrameAndPushResult(). It's stored before the
+// frame is pushed, since a frame on the frame stack goes right above it.
+// Changes nothing if the frame can't be allocated.
+gc_oop_t* VMMethod::Invoke(VMFrame* frame, gc_oop_t* sp) {
+    frame->SetStackPointer(sp);
     VMFrame* frm = GetInterpreter()->PushNewFrame(this);
-    if (frm != nullptr) {
-        frm->CopyArgumentsFrom(frame);
+    if (frm == nullptr) {
+        return sp;
     }
-    return frm;
+    frm->CopyArgumentsFrom(sp);
+    return frm->GetStackPointer();
 }
 
-VMFrame* VMMethod::Invoke1(VMFrame* frame) {
+gc_oop_t* VMMethod::Invoke1(VMFrame* frame, gc_oop_t* sp) {
+    frame->SetStackPointer(sp);
     VMFrame* frm = GetInterpreter()->PushNewFrame(this);
-    if (frm != nullptr) {
-        frm->SetArgumentOfCurrent(0, frame->Top());
+    if (frm == nullptr) {
+        return sp;
     }
-    return frm;
+    frm->SetArgumentOfCurrent(0, load_ptr(*sp));
+    return frm->GetStackPointer();
 }
 
 #ifndef FRUCTUS

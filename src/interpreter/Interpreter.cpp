@@ -323,16 +323,16 @@ LABEL_BC_POP_FIELD_1:
 
 LABEL_BC_SEND:
     PROLOGUE();
-    SAVE_NEXT_PC(SendSite::Length(BC_SEND));
-    doSend(pc);
-    RELOAD_PC();
+    SAVE_NEXT_PC_ONLY(SendSite::Length(BC_SEND));
+    sp = doSend(pc, sp);
+    RELOAD_PC_ONLY();
     DISPATCH_GC(SendSite::Length(BC_SEND));
 
 LABEL_BC_SEND_1:
     PROLOGUE();
-    SAVE_NEXT_PC(SendSite::Length(BC_SEND_1));
-    doUnarySend(pc);
-    RELOAD_PC();
+    SAVE_NEXT_PC_ONLY(SendSite::Length(BC_SEND_1));
+    sp = doUnarySend(pc, sp);
+    RELOAD_PC_ONLY();
     DISPATCH_GC(SendSite::Length(BC_SEND_1));
 
 LABEL_BC_SUPER_SEND:
@@ -341,25 +341,27 @@ LABEL_BC_SUPER_SEND:
     __builtin_unreachable();
 #else
     PROLOGUE();
-    SAVE_NEXT_PC(SendSite::Length(BC_SUPER_SEND));
-    doSuperSend(pc);
-    RELOAD_PC();
+    SAVE_NEXT_PC_ONLY(SendSite::Length(BC_SUPER_SEND));
+    sp = doSuperSend(pc, sp);
+    RELOAD_PC_ONLY();
     DISPATCH_GC(SendSite::Length(BC_SUPER_SEND));
 #endif
 
     // A send that can only call one invokable, see SendSite.h.
 LABEL_BC_STATIC_SEND:
     PROLOGUE();
-    SAVE_NEXT_PC(SendSite::staticLength);
-    ((VMInvokable*)LoadWord(pc + SendSite::staticTarget))->Invoke(GetFrame());
-    RELOAD_PC();
+    SAVE_NEXT_PC_ONLY(SendSite::staticLength);
+    sp = ((VMInvokable*)LoadWord(pc + SendSite::staticTarget))
+             ->Invoke(GetFrame(), sp);
+    RELOAD_PC_ONLY();
     DISPATCH_GC(SendSite::staticLength);
 
 LABEL_BC_STATIC_SEND_1:
     PROLOGUE();
-    SAVE_NEXT_PC(SendSite::staticLength);
-    ((VMInvokable*)LoadWord(pc + SendSite::staticTarget))->Invoke1(GetFrame());
-    RELOAD_PC();
+    SAVE_NEXT_PC_ONLY(SendSite::staticLength);
+    sp = ((VMInvokable*)LoadWord(pc + SendSite::staticTarget))
+             ->Invoke1(GetFrame(), sp);
+    RELOAD_PC_ONLY();
     DISPATCH_GC(SendSite::staticLength);
 
     // A send of a selector no class has, see SendSite.h.
@@ -743,9 +745,9 @@ LABEL_BC_SEND_EQEQ: {
         NEXT_NOGC(SendSite::Length(BC_SEND_EQEQ));
     }
 }
-    SAVE_NEXT_PC(SendSite::Length(BC_SEND_EQEQ));
-    doSend(pc);
-    RELOAD_PC();
+    SAVE_NEXT_PC_ONLY(SendSite::Length(BC_SEND_EQEQ));
+    sp = doSend(pc, sp);
+    RELOAD_PC_ONLY();
     DISPATCH_GC(SendSite::Length(BC_SEND_EQEQ));
 
     // An allocation of the bytecode at pc failed, and it changed nothing:
@@ -853,7 +855,8 @@ void Interpreter::popFrameAndPushResult(vm_oop_t result) {
 // The slow path of a send, where the receiver's classId isn't in the first
 // range of the target: look in its other ranges, and then in the others in
 // its ring, and link the send to the one that has it, see SendSite.h.
-void Interpreter::sendMiss(uint8_t* site, VMClass* receiverClass) {
+gc_oop_t* Interpreter::sendMiss(uint8_t* site, VMClass* receiverClass,
+                                gc_oop_t* sp) {
     auto* const target = (VMInvokable*)SendSite::GetTarget(site);
     size_t const classId = receiverClass->GetClassId();
     VMInvokable* invokable = target;
@@ -874,22 +877,23 @@ void Interpreter::sendMiss(uint8_t* site, VMClass* receiverClass) {
     }
     recordStat(CallStats, receiverClass, invokable);
     if (site[0] == BC_SEND_1) {
-        invokable->Invoke1(GetFrame());
-    } else {
-        invokable->Invoke(GetFrame());
+        return invokable->Invoke1(GetFrame(), sp);
     }
+    return invokable->Invoke(GetFrame(), sp);
 }
 #else
 // The slow path of a send, which looks the selector up, and links the send
 // if it's unlinked, see SendSite.h.
-void Interpreter::sendMiss(uint8_t* site, VMClass* receiverClass) {
+gc_oop_t* Interpreter::sendMiss(uint8_t* site, VMClass* receiverClass,
+                                gc_oop_t* sp) {
     bool const isUnlinked = SendSite::GetReceiverClass(site) == nullptr;
     VMSymbol* selector = method->GetSendSelector(site - method->GetBytecodes());
     VMInvokable* invokable = receiverClass->LookupInvokable(selector);
 
     if (invokable == nullptr) {
+        GetFrame()->SetStackPointer(sp);
         triggerDoesNotUnderstand(selector);
-        return;
+        return GetFrame()->GetStackPointer();
     }
     if (isUnlinked) {
         SendSite::Link(site, invokable, receiverClass);
@@ -898,10 +902,9 @@ void Interpreter::sendMiss(uint8_t* site, VMClass* receiverClass) {
     }
     recordStat(CallStats, receiverClass, invokable);
     if (site[0] == BC_SEND_1) {
-        invokable->Invoke1(GetFrame());
-    } else {
-        invokable->Invoke(GetFrame());
+        return invokable->Invoke1(GetFrame(), sp);
     }
+    return invokable->Invoke(GetFrame(), sp);
 }
 #endif
 
@@ -1031,9 +1034,8 @@ static inline bool hits(const uint8_t* site, uint8_t bc,
 #endif
 }
 
-void Interpreter::doSend(uint8_t* site) {
-    vm_oop_t receiver = GetFrame()->GetStackElement(
-        site[SendSite::numberOfArguments] - 1);
+gc_oop_t* Interpreter::doSend(uint8_t* site, gc_oop_t* sp) {
+    vm_oop_t receiver = stackElement(sp, site[SendSite::numberOfArguments] - 1);
     assert(IsValidObject(receiver));
     VMClass* receiverClass = CLASS_OF(receiver);
     recordStat(ReceiverType, receiverClass);
@@ -1041,14 +1043,13 @@ void Interpreter::doSend(uint8_t* site) {
     if (hits(site, BC_SEND, receiverClass)) {
         auto* invokable = (VMInvokable*)SendSite::GetTarget(site, BC_SEND);
         recordStat(CallStats, receiverClass, invokable);
-        invokable->Invoke(GetFrame());
-    } else {
-        sendMiss(site, receiverClass);
+        return invokable->Invoke(GetFrame(), sp);
     }
+    return sendMiss(site, receiverClass, sp);
 }
 
-void Interpreter::doUnarySend(uint8_t* site) {
-    vm_oop_t receiver = GetFrame()->GetStackElement(0);
+gc_oop_t* Interpreter::doUnarySend(uint8_t* site, gc_oop_t* sp) {
+    vm_oop_t receiver = load_ptr(*sp);
     assert(IsValidObject(receiver));
     VMClass* receiverClass = CLASS_OF(receiver);
     recordStat(ReceiverType, receiverClass);
@@ -1056,21 +1057,19 @@ void Interpreter::doUnarySend(uint8_t* site) {
     if (hits(site, BC_SEND_1, receiverClass)) {
         auto* invokable = (VMInvokable*)SendSite::GetTarget(site, BC_SEND_1);
         recordStat(CallStats, receiverClass, invokable);
-        invokable->Invoke1(GetFrame());
-    } else {
-        sendMiss(site, receiverClass);
+        return invokable->Invoke1(GetFrame(), sp);
     }
+    return sendMiss(site, receiverClass, sp);
 }
 
 #ifndef FRUCTUS
 // On fructus the image writer makes every super send a STATIC_SEND, so
 // invokables need no holder to find the superclass
-void Interpreter::doSuperSend(uint8_t* site) {
+gc_oop_t* Interpreter::doSuperSend(uint8_t* site, gc_oop_t* sp) {
     // a linked super send has its invokable whatever the receiver is
     if (SendSite::GetReceiverClass(site) != nullptr) {
         auto* invokable = (VMInvokable*)SendSite::GetTarget(site);
-        invokable->Invoke(GetFrame());
-        return;
+        return invokable->Invoke(GetFrame(), sp);
     }
 
     auto* signature = (VMSymbol*)SendSite::GetTarget(site);
@@ -1085,10 +1084,11 @@ void Interpreter::doSuperSend(uint8_t* site) {
         SendSite::Link(site, invokable, super);
         write_barrier(method, invokable);
         write_barrier(method, super);
-        invokable->Invoke(GetFrame());
-    } else {
-        triggerDoesNotUnderstand(signature);
+        return invokable->Invoke(GetFrame(), sp);
     }
+    GetFrame()->SetStackPointer(sp);
+    triggerDoesNotUnderstand(signature);
+    return GetFrame()->GetStackPointer();
 }
 #endif
 

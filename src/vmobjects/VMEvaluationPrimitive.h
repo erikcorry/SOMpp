@@ -54,8 +54,8 @@ public:
     void MarkObjectAsInvalid() override;
     [[nodiscard]] bool IsMarkedInvalid() const override;
 
-    VMFrame* Invoke(VMFrame* frm) override;
-    VMFrame* Invoke1(VMFrame* frm) override;
+    gc_oop_t* Invoke(VMFrame* frm, gc_oop_t* /*sp*/) override;
+    gc_oop_t* Invoke1(VMFrame* frm, gc_oop_t* /*sp*/) override;
 #ifndef FRUCTUS
     void InlineInto(MethodGenerationContext& mgenc, const Parser& parser,
                     bool mergeScope = true) final;

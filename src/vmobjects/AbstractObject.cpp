@@ -33,7 +33,7 @@ bool AbstractVMObject::Send(VMSymbol* selector, vm_oop_t* arguments,
 
     VMClass* cl = GetClass();
     VMInvokable* invokable = cl->LookupInvokable(selector);
-    invokable->Invoke(frame);
+    invokable->InvokeFromVM(frame);
 
     // the invokable changed nothing if it failed, so the arguments are on top
     if (GetHeap<HEAP_CLS>()->isRetryRequested()) {

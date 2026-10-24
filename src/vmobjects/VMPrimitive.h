@@ -58,14 +58,10 @@ public:
 
     [[nodiscard]] VMPrimitive* CloneForMovingGC() const override;
 
-    VMFrame* Invoke(VMFrame* frm) override {
-        prim.pointer(frm);
-        return nullptr;
-    };
+    gc_oop_t* Invoke(VMFrame* frm, gc_oop_t* sp) override;
 
-    VMFrame* Invoke1(VMFrame* frm) override {
-        prim.pointer(frm);
-        return nullptr;
+    gc_oop_t* Invoke1(VMFrame* frm, gc_oop_t* sp) override {
+        return Invoke(frm, sp);
     };
 
 #ifndef FRUCTUS
