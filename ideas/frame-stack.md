@@ -349,8 +349,11 @@ Decided 2026-10-24, for the sliding heap, on fructus and on the host.
   accessible a page at a time, and on fructus it grows a pagelet at a time.
 - Bumping fails like an allocation, so the send is retried after a
   collection, and gc-stress-retry mode makes it fail too.
-- Frames keep `totalObjectSize` and `locals` for now. On fructus the size is
-  a small integer below the heap, so the scan skips it.
+- Frames on fructus have no `totalObjectSize`: `GetObjectSize()` computes it
+  from the method, which is in the image and never moves. The host's frames
+  keep it, since a host collector may move or free a method in the same
+  collection as a frame of it, and still need the frame's size. Frames keep
+  `locals` for now.
 
 ## Related
 

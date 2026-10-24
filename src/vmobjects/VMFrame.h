@@ -64,11 +64,16 @@ public:
         :
 #ifdef FRUCTUS
           bytecodePointer(method->GetBytecodes()),
-#endif
+#else
           totalObjectSize(additionalBytes + sizeof(VMFrame)),
+#endif
           previousFrame(store_root(previousFrame)), method(store_root(method)),
           locals(arguments() + method->GetNumberOfArguments()),
           stack_ptr(locals + method->GetNumberOfLocals() - 1) {
+#ifdef FRUCTUS
+        // the size comes from the method, see GetObjectSize()
+        (void)additionalBytes;
+#endif
         // The arguments are copied in still, and the stack needs nothing,
         // since nothing above stack_ptr is a root, see WalkObjects().
         for (gc_oop_t* local = locals; local <= stack_ptr; local++) {
@@ -82,8 +87,27 @@ public:
 
     [[nodiscard]] inline VMClass* GetClass() const final { return nullptr; }
 
+    /** The size of a frame of `method` in the heap. */
+    static size_t SizeFor(const VMMethod* method) {
+        return sizeof(VMFrame) + (method->GetNumberOfArguments() +
+                                  method->GetNumberOfLocals() +
+                                  method->GetMaximumNumberOfStackElements() +
+                                  EXTRA_STACK_SLOTS) *
+                                     sizeof(gc_oop_t);
+    }
+
+    /**
+     * On fructus the size comes from the method, which is in the image and
+     * never moves, so a frame needs no field for it. The host's methods are
+     * in the heap, and a collector may move or free one while it needs the
+     * size of a frame of it, so the frame has the size.
+     */
     [[nodiscard]] inline size_t GetObjectSize() const final {
+#ifdef FRUCTUS
+        return SizeFor(GetMethod());
+#else
         return totalObjectSize;
+#endif
     }
 
     void MarkObjectAsInvalid() final {
@@ -250,7 +274,7 @@ public:
         // - 1 because the stack pointer points at the top entry,
         // so the next entry would be put at stackPointer+1
         size_t const size =
-            ((size_t)this + totalObjectSize - size_t(stack_ptr)) /
+            ((size_t)this + GetObjectSize() - size_t(stack_ptr)) /
             sizeof(VMObject*);
         return size - 1;
     }
@@ -267,8 +291,8 @@ public:
     uint8_t* bytecodePointer;
 #else
     size_t bytecodeIndex{0};
-#endif
     size_t totalObjectSize;
+#endif
 
     void ResetStackPointer() {
         VMMethod const* meth = GetMethod();

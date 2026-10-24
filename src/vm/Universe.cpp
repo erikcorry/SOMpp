@@ -973,11 +973,7 @@ VMFrame* Universe::NewFrame(VMFrame* previousFrame, VMMethod* method) {
     } else
 #endif
     {
-        size_t const length = method->GetNumberOfArguments() +
-                              method->GetNumberOfLocals() +
-                              method->GetMaximumNumberOfStackElements() +
-                              VMFrame::EXTRA_STACK_SLOTS;
-        additionalBytes = length * sizeof(VMObject*);
+        additionalBytes = VMFrame::SizeFor(method) - sizeof(VMFrame);
         place = VMFrame::operator new(sizeof(VMFrame), GetHeap<HEAP_CLS>(),
                                       additionalBytes);
         recordStat(Allocation, "VMFrame", sizeof(VMFrame) + additionalBytes);

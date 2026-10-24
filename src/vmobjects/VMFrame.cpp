@@ -45,7 +45,7 @@
 #include "VMSymbol.h"
 
 VMFrame* VMFrame::CloneForMovingGC() const {
-    size_t const addSpace = totalObjectSize - sizeof(VMFrame);
+    size_t const addSpace = GetObjectSize() - sizeof(VMFrame);
     auto* clone =
         new (GetHeap<HEAP_CLS>(), addSpace ALLOC_MATURE) VMFrame(*this);
     void* destination = SHIFTED_PTR(clone, sizeof(VMFrame));
@@ -78,8 +78,8 @@ void VMFrame::WalkObjects(walk_heap_fn walk) {
     // since a live object's whole extent is marked. The other collectors
     // would take them for objects; the copying ones relocate them in
     // CloneForMovingGC().
-    assert((void*)locals < SHIFTED_PTR(this, totalObjectSize));
-    assert((void*)stack_ptr < SHIFTED_PTR(this, totalObjectSize));
+    assert((void*)locals < SHIFTED_PTR(this, GetObjectSize()));
+    assert((void*)stack_ptr < SHIFTED_PTR(this, GetObjectSize()));
     locals = (gc_oop_t*)walk((gc_oop_t)locals);
     stack_ptr = (gc_oop_t*)walk((gc_oop_t)stack_ptr);
 #endif
