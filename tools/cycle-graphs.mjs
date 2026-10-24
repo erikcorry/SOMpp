@@ -65,6 +65,7 @@ const SHORT = {
   '6bfa2245': 'Frame stack',
   '67f69752': 'No barrier into current frame',
   'f7672260': 'Stack and heap frames',
+  '8016517d': 'Pass sp into Invoke',
   // The rows after them are named by the fructus commit their note starts with.
   'c51921e': 'Faster absolute jump/call',
   'd170fdf': 'Dynamic branch predictor',
