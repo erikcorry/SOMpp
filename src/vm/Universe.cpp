@@ -945,31 +945,33 @@ VMDouble* Universe::NewDouble(double value) {
 #endif
 
 VMFrame* Universe::NewFrame(VMFrame* previousFrame, VMMethod* method) {
-    size_t additionalBytes = 0;
-    void* place = nullptr;
 #if USE_FRAME_STACK
     // A method that makes no blocks has its frame on the frame stack, right
     // above the stack of the frame below it there, see ideas/frame-stack.md.
     size_t const stackFrameSize = method->GetStackFrameSize();
     if (stackFrameSize != 0) {
-        additionalBytes = stackFrameSize - sizeof(VMFrame);
+        void* place = nullptr;
         if (!gcStressRetryMode ||
             !GetHeap<HEAP_CLS>()->StressFailsAllocation(stackFrameSize)) {
             place = GetInterpreter()->AllocateStackFrame(stackFrameSize);
         }
-    } else
-#endif
-    {
-        additionalBytes = VMFrame::SizeFor(method) - sizeof(VMFrame);
-        place = VMFrame::operator new(sizeof(VMFrame), GetHeap<HEAP_CLS>(),
-                                      additionalBytes);
-        recordStat(Allocation, "VMFrame", sizeof(VMFrame) + additionalBytes);
+        if (place == nullptr) {
+            AbandonIfCompiling();
+            return nullptr;
+        }
+        return ::new (place) VMStackFrame(method, previousFrame);
     }
-    if (place == nullptr) {
+#endif
+    size_t const additionalBytes =
+        VMHeapFrame::SizeFor(method) - sizeof(VMHeapFrame);
+    auto* result = new (GetHeap<HEAP_CLS>(), additionalBytes)
+        VMHeapFrame(additionalBytes, method, previousFrame);
+    if (result == nullptr) {
         AbandonIfCompiling();
         return nullptr;
     }
-    return ::new (place) VMFrame(additionalBytes, method, previousFrame);
+    recordStat(Allocation, "VMFrame", result->GetObjectSize());
+    return result;
 }
 
 VMObject* Universe::NewInstance(VMClass* classOfInstance) {

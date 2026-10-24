@@ -978,11 +978,7 @@ VMMethod* VMMethod::MakeStackRelative() {
     // Interpreter::sendEscapedBlock(), so that block's frames go in the heap.
     // Fructus never sends it, see FructusImage::AsmFile::writeMethod().
     if (!lowered->MakesBlocks() && !lowered->HasBytecode(BC_RETURN_NON_LOCAL)) {
-        lowered->stackFrameSize =
-            sizeof(VMFrame) +
-            (numArgs + numberOfLocals + maximumNumberOfStackElements +
-             VMFrame::EXTRA_STACK_SLOTS) *
-                sizeof(VMObject*);
+        lowered->stackFrameSize = VMStackFrame::SizeFor(lowered);
     }
     // the lowered method owns them now
     lexicalScope = nullptr;

@@ -44,12 +44,16 @@
 #include "VMObjectBase.h"  // NOLINT(misc-include-cleaner) needed for some GCs
 #include "VMSymbol.h"
 
-VMFrame* VMFrame::CloneForMovingGC() const {
-    size_t const addSpace = GetObjectSize() - sizeof(VMFrame);
+VMFrame* VMStackFrame::CloneForMovingGC() const {
+    ErrorExit("a frame on the frame stack is never cloned");
+}
+
+VMFrame* VMHeapFrame::CloneForMovingGC() const {
+    size_t const addSpace = GetObjectSize() - sizeof(VMHeapFrame);
     auto* clone =
-        new (GetHeap<HEAP_CLS>(), addSpace ALLOC_MATURE) VMFrame(*this);
-    void* destination = SHIFTED_PTR(clone, sizeof(VMFrame));
-    const void* source = SHIFTED_PTR(this, sizeof(VMFrame));
+        new (GetHeap<HEAP_CLS>(), addSpace ALLOC_MATURE) VMHeapFrame(*this);
+    void* destination = SHIFTED_PTR(clone, sizeof(VMHeapFrame));
+    const void* source = SHIFTED_PTR(this, sizeof(VMHeapFrame));
     memcpy(destination, source, addSpace);
     // locals and stack_ptr point into the frame
     clone->locals =
@@ -69,7 +73,7 @@ VMFrame* VMFrame::GetOuterContext() {
     return current;
 }
 
-void VMFrame::WalkObjects(walk_heap_fn walk) {
+void VMHeapFrame::WalkObjects(walk_heap_fn walk) {
     // VMFrame is not a proper SOM object any longer, we don't have a class for
     // it. clazz = (VMClass*) walk(clazz);
 
@@ -93,8 +97,9 @@ void VMFrame::WalkObjects(walk_heap_fn walk) {
     method = static_cast<GCMethod*>(walk(method));
 
     // all other fields are indexable via arguments array
-    // --> until end of Frame
-    gc_oop_t* const arguments = this->arguments();
+    // --> until end of Frame. The method may have moved already, so they're
+    // found by the size of the fields, not by the method's arguments.
+    auto* const arguments = (gc_oop_t*)SHIFTED_PTR(this, sizeof(VMHeapFrame));
     size_t i = 0;
     while (arguments + i <= stack_ptr) {
         if (arguments[i] != nullptr) {

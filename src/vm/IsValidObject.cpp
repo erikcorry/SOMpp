@@ -37,7 +37,8 @@ static void* vt_block;
 static void* vt_class;
 static void* vt_double;
 static void* vt_eval_primitive;
-static void* vt_frame;
+static void* vt_stack_frame;
+static void* vt_heap_frame;
 static void* vt_integer;
 static void* vt_big_integer;
 static void* vt_method;
@@ -78,12 +79,12 @@ bool IsValidObject(vm_oop_t obj) {
 
     void const* vt = *(void**)obj;
     bool b = vt == vt_array || vt == vt_block || vt == vt_class ||
-             vt == vt_double || vt == vt_eval_primitive || vt == vt_frame ||
-             vt == vt_integer || vt == vt_big_integer || vt == vt_method ||
-             vt == vt_object || vt == vt_primitive ||
-             vt == vt_safe_un_primitive || vt == vt_safe_bin_primitive ||
-             vt == vt_safe_ter_primitive || vt == vt_string ||
-             vt == vt_symbol || vt == vt_literal_return ||
+             vt == vt_double || vt == vt_eval_primitive ||
+             vt == vt_stack_frame || vt == vt_heap_frame || vt == vt_integer ||
+             vt == vt_big_integer || vt == vt_method || vt == vt_object ||
+             vt == vt_primitive || vt == vt_safe_un_primitive ||
+             vt == vt_safe_bin_primitive || vt == vt_safe_ter_primitive ||
+             vt == vt_string || vt == vt_symbol || vt == vt_literal_return ||
              vt == vt_global_return || vt == vt_getter || vt == vt_setter ||
              vt == vt_vector;
     if (!b) {
@@ -117,7 +118,8 @@ void set_vt_to_null() {
     vt_class = nullptr;
     vt_double = nullptr;
     vt_eval_primitive = nullptr;
-    vt_frame = nullptr;
+    vt_stack_frame = nullptr;
+    vt_heap_frame = nullptr;
     vt_integer = nullptr;
     vt_big_integer = nullptr;
     vt_method = nullptr;
@@ -233,7 +235,8 @@ void obtain_vtables_of_known_classes(VMSymbol* someValidSymbol) {
     auto* const mth =
         ::new (methodStorage) VMMethod(nullptr, 0, 0, 0, nullptr, nullptr);
     vt_method = get_vtable(mth);
-    vt_frame = vtable_of<VMFrame>(0, mth, nullptr);
+    vt_stack_frame = vtable_of<VMStackFrame>(mth, nullptr);
+    vt_heap_frame = vtable_of<VMHeapFrame>(0, mth, nullptr);
     mth->~VMMethod();
 
     vt_primitive = vtable_of<VMPrimitive>(someValidSymbol, FramePrim());

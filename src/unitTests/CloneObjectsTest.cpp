@@ -205,12 +205,14 @@ void CloneObjectsTest::testCloneFrame() {
     VMMethod* method = Universe::NewMethod(
         methodSymbol, 0, 0, 0, new LexicalScope(nullptr, {}, {}), inlinedLoops);
 
-    VMFrame* orig = Universe::NewFrame(nullptr, method);
+    // the method makes its frames in the heap
+    auto* orig = static_cast<VMHeapFrame*>(Universe::NewFrame(nullptr, method));
     VMFrame* context = orig->CloneForMovingGC();
     orig->SetContext(context);
     VMInteger* dummyArg = Universe::NewInteger(1111);
     orig->SetArgument(0, 0, dummyArg);
-    VMFrame const* const clone = orig->CloneForMovingGC();
+    auto const* const clone =
+        static_cast<VMHeapFrame const*>(orig->CloneForMovingGC());
 
     CPPUNIT_ASSERT((intptr_t)orig != (intptr_t)clone);
     CPPUNIT_ASSERT_EQUAL_MESSAGE("objectSize differs!!", orig->totalObjectSize,

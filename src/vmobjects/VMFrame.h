@@ -34,6 +34,12 @@
 
 class Universe;
 
+/**
+ * A frame, of one of two kinds: a VMStackFrame on the frame stack, or a
+ * VMHeapFrame in the heap, see ideas/frame-stack.md. The fields only a heap
+ * frame needs are in VMHeapFrame, after the ones here, so a stack frame is
+ * smaller.
+ */
 class VMFrame : public AbstractVMObject {
     friend class Universe;
     friend class Interpreter;
@@ -58,56 +64,19 @@ public:
     static constexpr size_t EXTRA_STACK_SLOTS = 2;
 #endif
 
-
-    explicit VMFrame(size_t additionalBytes, VMMethod* method,
-                     VMFrame* previousFrame)
-        :
-#ifdef FRUCTUS
-          bytecodePointer(method->GetBytecodes()),
-#else
-          totalObjectSize(additionalBytes + sizeof(VMFrame)),
-#endif
-          previousFrame(store_root(previousFrame)), method(store_root(method)),
-          locals(arguments() + method->GetNumberOfArguments()),
-          stack_ptr(locals + method->GetNumberOfLocals() - 1) {
-#ifdef FRUCTUS
-        // the size comes from the method, see GetObjectSize()
-        (void)additionalBytes;
-#endif
-        // The arguments are copied in still, and the stack needs nothing,
-        // since nothing above stack_ptr is a root, see WalkObjects().
-        for (gc_oop_t* local = locals; local <= stack_ptr; local++) {
-            *local = nilObject;
-        }
-    }
-
     [[nodiscard]] som_int_t GetHash() const final {
         return 0; /* should never be called */
     }
 
     [[nodiscard]] inline VMClass* GetClass() const final { return nullptr; }
 
-    /** The size of a frame of `method` in the heap. */
-    static size_t SizeFor(const VMMethod* method) {
-        return sizeof(VMFrame) + (method->GetNumberOfArguments() +
-                                  method->GetNumberOfLocals() +
-                                  method->GetMaximumNumberOfStackElements() +
-                                  EXTRA_STACK_SLOTS) *
-                                     sizeof(gc_oop_t);
-    }
-
     /**
-     * On fructus the size comes from the method, which is in the image and
-     * never moves, so a frame needs no field for it. The host's methods are
-     * in the heap, and a collector may move or free one while it needs the
-     * size of a frame of it, so the frame has the size.
+     * The slots of a frame of `method`: its arguments, then its locals and
+     * its stack.
      */
-    [[nodiscard]] inline size_t GetObjectSize() const final {
-#ifdef FRUCTUS
-        return SizeFor(GetMethod());
-#else
-        return totalObjectSize;
-#endif
+    static size_t SlotsFor(const VMMethod* method) {
+        return method->GetNumberOfArguments() + method->GetNumberOfLocals() +
+               method->GetMaximumNumberOfStackElements() + EXTRA_STACK_SLOTS;
     }
 
     void MarkObjectAsInvalid() final {
@@ -260,8 +229,7 @@ public:
         store_ptr(arguments()[argIdx], value);
     }
 
-    void WalkObjects(walk_heap_fn /*unused*/) override;
-    [[nodiscard]] VMFrame* CloneForMovingGC() const override;
+    [[nodiscard]] VMFrame* CloneForMovingGC() const override = 0;
 
 #if DEBUG
     void PrintStack() const;
@@ -291,7 +259,6 @@ public:
     uint8_t* bytecodePointer;
 #else
     size_t bytecodeIndex{0};
-    size_t totalObjectSize;
 #endif
 
     void ResetStackPointer() {
@@ -302,7 +269,30 @@ public:
 
     void ResetBytecodeIndex();
 
-private:
+protected:
+    /**
+     * A frame whose fields take `headerSize` bytes, before its slots. It's
+     * inlined into each kind's constructor, as one constructor was before
+     * there were two kinds, see Universe::NewFrame().
+     */
+    __attribute__((always_inline)) VMFrame(size_t headerSize,
+                                           VMMethod* method,
+                                           VMFrame* previousFrame)
+        :
+#ifdef FRUCTUS
+          bytecodePointer(method->GetBytecodes()),
+#endif
+          previousFrame(store_root(previousFrame)), method(store_root(method)),
+          locals((gc_oop_t*)SHIFTED_PTR(this, headerSize) +
+                 method->GetNumberOfArguments()),
+          stack_ptr(locals + method->GetNumberOfLocals() - 1) {
+        // The arguments are copied in still, and the stack needs nothing,
+        // since nothing above stack_ptr is a root, see WalkObjects().
+        for (gc_oop_t* local = locals; local <= stack_ptr; local++) {
+            *local = nilObject;
+        }
+    }
+
     GCFrame* previousFrame;
     GCFrame* context{nullptr};
     GCMethod* method;
@@ -311,12 +301,9 @@ private:
 
     /**
      * The arguments, then the locals and the stack, which come right after
-     * the fields.
+     * the fields of the frame's kind.
      */
-    [[nodiscard]] gc_oop_t* arguments() const {
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast)
-        return (gc_oop_t*)SHIFTED_PTR(this, sizeof(VMFrame));
-    }
+    [[nodiscard]] inline gc_oop_t* arguments() const;
 
     static const size_t VMFrameNumberOfFields;
 
@@ -328,6 +315,85 @@ private:
     inline void SetBytecodeIndex(size_t index) { bytecodeIndex = index; }
 #endif
 };
+
+/**
+ * A frame on the frame stack. The stack is scanned word by word, so a stack
+ * frame is never walked, cloned, or asked its size by a collector.
+ */
+class VMStackFrame final : public VMFrame {
+public:
+    VMStackFrame(VMMethod* method, VMFrame* previousFrame)
+        : VMFrame(sizeof(VMStackFrame), method, previousFrame) {}
+
+    /** The size of a frame of `method` on the frame stack. */
+    static size_t SizeFor(const VMMethod* method) {
+        return sizeof(VMStackFrame) + SlotsFor(method) * sizeof(gc_oop_t);
+    }
+
+    /** The method is alive and in place while its frame is on the stack. */
+    [[nodiscard]] size_t GetObjectSize() const final {
+        return GetMethod()->GetStackFrameSize();
+    }
+
+    [[nodiscard]] VMFrame* CloneForMovingGC() const final;
+};
+
+/** A frame in the heap, which may be a block's context. */
+class VMHeapFrame final : public VMFrame {
+public:
+    VMHeapFrame(size_t additionalBytes, VMMethod* method,
+                VMFrame* previousFrame)
+        : VMFrame(sizeof(VMHeapFrame), method, previousFrame)
+#ifndef FRUCTUS
+          ,
+          totalObjectSize(additionalBytes + sizeof(VMHeapFrame))
+#endif
+    {
+#ifdef FRUCTUS
+        // the size comes from the method, see GetObjectSize()
+        (void)additionalBytes;
+#endif
+    }
+
+    /** The size of a frame of `method` in the heap. */
+    static size_t SizeFor(const VMMethod* method) {
+        return sizeof(VMHeapFrame) + SlotsFor(method) * sizeof(gc_oop_t);
+    }
+
+    /**
+     * On fructus the size comes from the method, which is in the image and
+     * never moves, so a frame needs no field for it. The host's methods are
+     * in the heap, and a collector may move or free one while it needs the
+     * size of a frame of it, so the frame has the size.
+     */
+    [[nodiscard]] size_t GetObjectSize() const final {
+#ifdef FRUCTUS
+        return SizeFor(GetMethod());
+#else
+        return totalObjectSize;
+#endif
+    }
+
+    void WalkObjects(walk_heap_fn /*unused*/) final;
+    [[nodiscard]] VMFrame* CloneForMovingGC() const final;
+
+    make_testable(public);
+
+#ifndef FRUCTUS
+    size_t totalObjectSize;
+#endif
+};
+
+gc_oop_t* VMFrame::arguments() const {
+    if constexpr (sizeof(VMStackFrame) == sizeof(VMHeapFrame)) {
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast)
+        return (gc_oop_t*)SHIFTED_PTR(this, sizeof(VMHeapFrame));
+    } else {
+        // they're at different offsets in the two kinds, right before the
+        // locals
+        return locals - GetMethod()->GetNumberOfArguments();
+    }
+}
 
 bool VMFrame::HasContext() const {
     return context != nullptr;

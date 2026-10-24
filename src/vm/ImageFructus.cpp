@@ -205,7 +205,8 @@ void FructusImage::CheckLayout() {
     static_assert(VMMethod::headerSize == L::VMMethod_size);
     static_assert(L::VMMethod_stackFrameWords + 1 == L::VMMethod_size);
     static_assert(sizeof(VMMethod) == L::PaddedSize(L::VMMethod_size));
-    static_assert(sizeof(VMFrame) == L::VMFrame_size);
+    static_assert(sizeof(VMStackFrame) == L::VMFrame_size);
+    static_assert(sizeof(VMHeapFrame) == L::VMFrame_size);
 
     CHECK_FIELD(VMLiteralReturn, literal, VMLiteralReturn_literal);
     CHECK_FIELD(VMLiteralReturn, numberOfArguments,
