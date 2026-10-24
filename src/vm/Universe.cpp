@@ -944,20 +944,7 @@ VMDouble* Universe::NewDouble(double value) {
 }
 #endif
 
-#if USE_FRAME_STACK && defined(UNSAFE_FRAME_OPTIMIZATION)
-  #error "the frame stack reuses its frames already"
-#endif
-
 VMFrame* Universe::NewFrame(VMFrame* previousFrame, VMMethod* method) {
-    VMFrame* result = nullptr;
-#ifdef UNSAFE_FRAME_OPTIMIZATION
-    result = load_ptr(method->GetCachedFrame());
-    if (result != nullptr) {
-        method->SetCachedFrame(nullptr);
-        result->SetPreviousFrameOnReuse(previousFrame);
-        return result;
-    }
-#endif
     size_t additionalBytes = 0;
     void* place = nullptr;
 #if USE_FRAME_STACK
@@ -982,8 +969,7 @@ VMFrame* Universe::NewFrame(VMFrame* previousFrame, VMMethod* method) {
         AbandonIfCompiling();
         return nullptr;
     }
-    result = ::new (place) VMFrame(additionalBytes, method, previousFrame);
-    return result;
+    return ::new (place) VMFrame(additionalBytes, method, previousFrame);
 }
 
 VMObject* Universe::NewInstance(VMClass* classOfInstance) {

@@ -82,10 +82,6 @@ VMMethod::VMMethod(VMSymbol* signature, size_t bcCount, size_t numLocals,
                             : Signature::GetNumberOfArguments(signature)),
       lexicalScope(lexicalScope), inlinedLoops(inlinedLoops) {
 #endif
-#ifdef UNSAFE_FRAME_OPTIMIZATION
-    cachedFrame = nullptr;
-#endif
-
 #ifdef BYTECODE_HEATMAP
     heatmap = new uint64_t[bcCount]();
 #endif
@@ -103,12 +99,6 @@ VMMethod* VMMethod::CloneForMovingGC() const {
 
 void VMMethod::WalkObjects(walk_heap_fn walk) {
     VMInvokable::WalkObjects(walk);
-
-#ifdef UNSAFE_FRAME_OPTIMIZATION
-    if (cachedFrame != nullptr) {
-        cachedFrame = static_cast<GCFrame*>(walk(cachedFrame));
-    }
-#endif
 
 #ifndef FRUCTUS
     // the words in the bytecodes, see bytecodes.h
@@ -138,22 +128,6 @@ VMSymbol* VMMethod::GetSendSelector(size_t bytecodeIndex) const {
         return (VMSymbol*)target;
     }
     return ((VMInvokable*)target)->GetSignature();
-}
-#endif
-
-#ifdef UNSAFE_FRAME_OPTIMIZATION
-GCFrame* VMMethod::GetCachedFrame() const {
-    return cachedFrame;
-}
-
-void VMMethod::SetCachedFrame(VMFrame* frame) {
-    cachedFrame = store_with_separate_barrier(frame);
-    if (frame != nullptr) {
-        frame->SetContext(nullptr);
-        frame->SetBytecodeIndex(0);
-        frame->ResetStackPointer();
-        write_barrier(this, frame);
-    }
 }
 #endif
 

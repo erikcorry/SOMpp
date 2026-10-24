@@ -245,11 +245,6 @@ public:
         GetBytecodes()[indx] = val;
     }
 
-#ifdef UNSAFE_FRAME_OPTIMIZATION
-    void SetCachedFrame(VMFrame* frame);
-    GCFrame* GetCachedFrame() const;
-#endif
-
     void WalkObjects(walk_heap_fn /*unused*/) override;
 
     [[nodiscard]] VMMethod* CloneForMovingGC() const override;
@@ -332,10 +327,6 @@ private:
     size_t bytecodeHash{0};
     // see GetStackFrameSize()
     size_t stackFrameSize{0};
-#endif
-
-#ifdef UNSAFE_FRAME_OPTIMIZATION
-    GCFrame* cachedFrame;
 #endif
 
 #ifdef BYTECODE_HEATMAP
