@@ -165,6 +165,24 @@ public:
 
     inline VMFrame* GetFrame() { return frame; }
 
+    /**
+     * Whether the slot at `p` is in the current frame, and on the frame
+     * stack, below its end: the stack's end is where the deepest stack so
+     * far ended, so a push past it is a frame that overflowed its stack.
+     */
+    [[nodiscard]] bool FitsInFrame(const gc_oop_t* p) const {
+        if ((const char*)(p + 1) >
+            (const char*)frame + frame->GetObjectSize()) {
+            return false;
+        }
+#if USE_FRAME_STACK
+        if (OnFrameStack(frame) && (const char*)(p + 1) > stackEnd) {
+            return false;
+        }
+#endif
+        return true;
+    }
+
     VMMethod* GetMethod();
     uint8_t* GetBytecodes();
     void WalkGlobals(walk_heap_fn /*walk*/);

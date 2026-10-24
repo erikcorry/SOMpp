@@ -74,6 +74,7 @@ Interpreter theInterpreter ZP;
 // the frame is remembered when it stops being the current one, and before a
 // collection, see SetFrame().
 static inline void push(gc_oop_t*& sp, vm_oop_t val) {
+    assert(GetInterpreter()->FitsInFrame(sp + 1));
     *++sp = store_with_separate_barrier(val);
 }
 

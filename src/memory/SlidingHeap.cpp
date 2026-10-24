@@ -107,17 +107,15 @@ bool SlidingHeap::grow() {
     return false;
 }
 
-// Each bump takes room from the heap for good, so the stack grows a pagelet
-// at a time.
+// Each bump takes room from the heap for good, so the stack grows by just
+// what the frame needs.
 bool SlidingHeap::GrowStack(char* end) {
-    char* const newEnd =
-        stackBase + roundUp((size_t)(end - stackBase), PAGELET);
-    if (newEnd > allocation) {
-        allocationFailed((size_t)(newEnd - stackEnd));
+    if (end > allocation) {
+        allocationFailed((size_t)(end - stackEnd));
         return false;
     }
-    stackEnd = newEnd;
-    bottom = newEnd;
+    stackEnd = end;
+    bottom = end;
     return true;
 }
 #else
@@ -178,6 +176,7 @@ SlidingHeap::SlidingHeap(size_t objectSpaceSize)
     stackReservedSize = STACK_RESERVED_SIZE;
     stackBase = static_cast<char*>(reserve(stackReservedSize));
     stackEnd = stackBase;
+    stackAccessible = stackBase;
 }
 
 SlidingHeap::~SlidingHeap() {
@@ -207,17 +206,22 @@ bool SlidingHeap::grow() {
     return true;
 }
 
+// The end is where the frames need it, as on fructus, and the pages up to it
+// are made accessible as it passes them.
 bool SlidingHeap::GrowStack(char* end) {
-    auto const pageSize = (size_t)sysconf(_SC_PAGESIZE);
-    char* const newEnd =
-        stackBase + roundUp((size_t)(end - stackBase), pageSize);
-    if (newEnd > stackBase + stackReservedSize ||
-        mprotect(stackEnd, (size_t)(newEnd - stackEnd),
-                 PROT_READ | PROT_WRITE) != 0) {
-        allocationFailed((size_t)(newEnd - stackEnd));
-        return false;
+    if (end > stackAccessible) {
+        auto const pageSize = (size_t)sysconf(_SC_PAGESIZE);
+        char* const newAccessible =
+            stackBase + roundUp((size_t)(end - stackBase), pageSize);
+        if (newAccessible > stackBase + stackReservedSize ||
+            mprotect(stackAccessible, (size_t)(newAccessible - stackAccessible),
+                     PROT_READ | PROT_WRITE) != 0) {
+            allocationFailed((size_t)(end - stackEnd));
+            return false;
+        }
+        stackAccessible = newAccessible;
     }
-    stackEnd = newEnd;
+    stackEnd = end;
     return true;
 }
 #endif

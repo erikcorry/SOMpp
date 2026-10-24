@@ -346,7 +346,10 @@ Decided 2026-10-24, for the sliding heap, on fructus and on the host.
 - The heap owns the stack (`SlidingHeap::GrowStack()`), and the interpreter
   keeps copies of its end (and base on the host) with `stackTop`, for the
   frame switches. On the host the stack has a reservation of its own, made
-  accessible a page at a time, and on fructus it grows a pagelet at a time.
+  accessible a page at a time. On both, the stack's end is bumped exactly to
+  the end of the frame that needs it, so it's where the deepest stack so far
+  ended, and a debug build asserts that the interpreter's pushes stay below
+  it, and in the current frame.
 - Bumping fails like an allocation, so the send is retried after a
   collection, and gc-stress-retry mode makes it fail too.
 - Frames on fructus have no `totalObjectSize`: `GetObjectSize()` computes it

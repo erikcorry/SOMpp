@@ -35,7 +35,8 @@
  *
  * The frames of the methods that make no blocks are on the frame stack, see
  * ideas/frame-stack.md. It grows up, from stackBase to stackEnd, which is
- * bumped when a frame needs more room, and never shrinks. On fructus it's at
+ * bumped to the end of a frame that needs more room, and never shrinks, so
+ * it's where the deepest stack so far ended. On fructus it's at
  * the bottom of the heap's memory, and its end is the heap's bottom, so the
  * bump allocator stops at it. The host has a reservation of its own for it.
  * The collector never moves or frees anything in it, since it's below low,
@@ -238,6 +239,8 @@ public:
     char* stackEnd;
 #ifndef FRUCTUS
     size_t stackReservedSize;
+    // the pages below it are accessible
+    char* stackAccessible;
 #endif
 
     uint8_t* objectStarts;
