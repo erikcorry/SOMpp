@@ -164,6 +164,11 @@ public:
         *stack_ptr = store_with_separate_barrier(obj);
     }
 
+    inline void SetContextOfCurrent(VMFrame* frm) {
+        assert(IsCurrent());
+        context = store_with_separate_barrier(frm);
+    }
+
     inline void SetTopOfCurrent(vm_oop_t val) {
         assert(IsCurrent());
         *stack_ptr = store_with_separate_barrier(val);

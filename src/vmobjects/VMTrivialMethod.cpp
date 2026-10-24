@@ -159,7 +159,7 @@ void VMGlobalReturn::sendUnknownGlobal(VMFrame* frame) {
     }
     if (!GetInterpreter()->SendUnknownGlobal(load_ptr(globalName))) {
         for (vm_oop_t arg : arguments) {
-            frame->Push(arg);
+            frame->PushIntoCurrent(arg);
         }
     }
 #endif

@@ -97,7 +97,7 @@ VMFrame* VMEvaluationPrimitive::Invoke(VMFrame* frm) {
 
     // Push set its context to be the one specified in the block
     if (newFrame != nullptr) {
-        newFrame->SetContext(context);
+        newFrame->SetContextOfCurrent(context);
     }
     return nullptr;
 }
@@ -114,7 +114,7 @@ VMFrame* VMEvaluationPrimitive::Invoke1(VMFrame* frm) {
 
     // Push set its context to be the one specified in the block
     if (newFrame != nullptr) {
-        newFrame->SetContext(context);
+        newFrame->SetContextOfCurrent(context);
     }
     return nullptr;
 }

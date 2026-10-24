@@ -27,12 +27,12 @@ static void pInvokeOnWith(VMFrame* frame) {
     auto* rcvr = frame->Pop();
     auto* mthd = static_cast<VMInvokable*>(frame->Pop());
 
-    frame->Push(rcvr);
+    frame->PushIntoCurrent(rcvr);
 
     size_t const num_args = args->GetNumberOfIndexableFields();
     for (size_t i = 0; i < num_args; i++) {
         vm_oop_t arg = args->GetIndexableField(i);
-        frame->Push(arg);
+        frame->PushIntoCurrent(arg);
     }
     mthd->Invoke(frame);
 
@@ -42,9 +42,9 @@ static void pInvokeOnWith(VMFrame* frame) {
         for (size_t i = 0; i <= num_args; i++) {
             frame->PopVoid();
         }
-        frame->Push(mthd);
-        frame->Push(rcvr);
-        frame->Push(args);
+        frame->PushIntoCurrent(mthd);
+        frame->PushIntoCurrent(rcvr);
+        frame->PushIntoCurrent(args);
     }
 }
 

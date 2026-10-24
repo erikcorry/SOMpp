@@ -101,7 +101,7 @@ static void objPerform(VMFrame* frame) {
 
     invokable->Invoke(frame);
     if (invokeFailed()) {
-        frame->Push(selector);
+        frame->PushIntoCurrent(selector);
     }
 }
 
@@ -113,8 +113,8 @@ static void objPerformInSuperclass(VMFrame* frame) {
 
     invokable->Invoke(frame);
     if (invokeFailed()) {
-        frame->Push(selector);
-        frame->Push(clazz);
+        frame->PushIntoCurrent(selector);
+        frame->PushIntoCurrent(clazz);
     }
 }
 
@@ -126,7 +126,7 @@ static void objPerformWithArguments(VMFrame* frame) {
     size_t const num_args = args->GetNumberOfIndexableFields();
     for (size_t i = 0; i < num_args; i++) {
         vm_oop_t arg = args->GetIndexableField(i);
-        frame->Push(arg);
+        frame->PushIntoCurrent(arg);
     }
 
     VMClass* clazz = CLASS_OF(self);
@@ -137,8 +137,8 @@ static void objPerformWithArguments(VMFrame* frame) {
         for (size_t i = 0; i < num_args; i++) {
             frame->PopVoid();
         }
-        frame->Push(selector);
-        frame->Push(args);
+        frame->PushIntoCurrent(selector);
+        frame->PushIntoCurrent(args);
     }
 }
 
@@ -150,7 +150,7 @@ static void objPerformWithArgumentsInSuperclass(VMFrame* frame) {
     size_t const num_args = args->GetNumberOfIndexableFields();
     for (size_t i = 0; i < num_args; i++) {
         vm_oop_t arg = args->GetIndexableField(i);
-        frame->Push(arg);
+        frame->PushIntoCurrent(arg);
     }
 
     VMInvokable* invokable = clazz->LookupInvokable(selector);
@@ -160,9 +160,9 @@ static void objPerformWithArgumentsInSuperclass(VMFrame* frame) {
         for (size_t i = 0; i < num_args; i++) {
             frame->PopVoid();
         }
-        frame->Push(selector);
-        frame->Push(args);
-        frame->Push(clazz);
+        frame->PushIntoCurrent(selector);
+        frame->PushIntoCurrent(args);
+        frame->PushIntoCurrent(clazz);
     }
 }
 

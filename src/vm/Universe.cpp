@@ -376,10 +376,10 @@ vm_oop_t Universe::interpretMethod(VMObject* receiver, VMInvokable* initialize,
         bootstrapFrame->SetArgument(argIdx, 0, load_ptr(nilObject));
     }
 
-    bootstrapFrame->Push(receiver);
+    bootstrapFrame->PushIntoCurrent(receiver);
 
     if (argumentsArray != nullptr) {
-        bootstrapFrame->Push(argumentsArray);
+        bootstrapFrame->PushIntoCurrent(argumentsArray);
     }
 
     initialize->Invoke(bootstrapFrame);

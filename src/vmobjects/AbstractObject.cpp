@@ -25,10 +25,10 @@ bool AbstractVMObject::Send(VMSymbol* selector, vm_oop_t* arguments,
                             size_t argc) {
     assert(!GetHeap<HEAP_CLS>()->isRetryRequested());
     VMFrame* frame = GetInterpreter()->GetFrame();
-    frame->Push(this);
+    frame->PushIntoCurrent(this);
 
     for (size_t i = 0; i < argc; ++i) {
-        frame->Push(arguments[i]);
+        frame->PushIntoCurrent(arguments[i]);
     }
 
     VMClass* cl = GetClass();

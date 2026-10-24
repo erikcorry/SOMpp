@@ -958,9 +958,9 @@ void Interpreter::triggerDoesNotUnderstand(VMSymbol* signature) {
     // it needs 3 slots, and the failed send had at least 1, see
     // VMFrame::EXTRA_STACK_SLOTS
     if (!AS_OBJ(receiver)->Send(selector, arguments, 2)) {
-        GetFrame()->Push(receiver);
+        GetFrame()->PushIntoCurrent(receiver);
         for (size_t i = 0; i < (size_t)numberOfArgs - 1; ++i) {
-            GetFrame()->Push(argumentsArray->GetIndexableField(i));
+            GetFrame()->PushIntoCurrent(argumentsArray->GetIndexableField(i));
         }
     }
 }
@@ -1131,7 +1131,7 @@ bool Interpreter::doReturnNonLocal() {
 bool Interpreter::sendEscapedBlock(vm_oop_t result) {
     VMSymbol* selector = SymbolFor(escapedBlock);
     if (selector == nullptr) {
-        GetFrame()->Push(result);
+        GetFrame()->PushIntoCurrent(result);
         return false;
     }
 
@@ -1156,10 +1156,10 @@ bool Interpreter::sendEscapedBlock(vm_oop_t result) {
     // VMFrame::EXTRA_STACK_SLOTS
     if (!AS_OBJ(sender)->Send(selector, arguments, 1)) {
         for (vm_oop_t arg : blockArguments) {
-            prevFrame->Push(arg);
+            prevFrame->PushIntoCurrent(arg);
         }
         SetFrame(blockFrame);
-        blockFrame->Push(result);
+        blockFrame->PushIntoCurrent(result);
         return false;
     }
     blockFrame->ClearPreviousFrame();
