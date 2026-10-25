@@ -168,6 +168,11 @@ public:
      * frames can be on the stack. The compiler sets it in
      * MakeStackRelative(), so a method made any other way has heap frames.
      */
+    /** Whether the method's frames are on the frame stack, see VMStackFrame. */
+    [[nodiscard]] bool HasStackFrames() const {
+        return USE_FRAME_STACK && GetStackFrameSize() != 0;
+    }
+
     [[nodiscard]] size_t GetStackFrameSize() const {
 #ifdef FRUCTUS
         return (size_t)stackFrameWords * sizeof(void*);
@@ -193,6 +198,13 @@ public:
      * variables. Takes the lexical scope and the lines.
      */
     [[nodiscard]] VMMethod* MakeStackRelative();
+
+    /**
+     * Moves the arguments `slots` further below the locals, in the offsets
+     * of PUSH_STACK and POP_STACK, for a frame with a gap between them, see
+     * VMStackFrame.
+     */
+    void MoveArguments(int slots);
 
     /** Whether the method makes blocks, which capture its frame. */
     [[nodiscard]] bool MakesBlocks() const {

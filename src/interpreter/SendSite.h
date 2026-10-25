@@ -52,7 +52,7 @@ constexpr size_t numberOfArguments = 1;
 
 /** Where the target is in a send with bytecode `bc`. */
 constexpr size_t Target(uint8_t bc) {
-    return bc == BC_SEND_1 ? 1 : 2;
+    return bc == BC_SEND_1 || bc == BC_SEND_1_STACK ? 1 : 2;
 }
 
 #ifdef FRUCTUS
@@ -81,7 +81,9 @@ constexpr size_t notUnderstoodLength = notUnderstoodSelector + sizeof(void*);
 constexpr size_t maxLength = Length(BC_SEND);
 
 inline uint8_t GetNumberOfArguments(const uint8_t* site) {
-    return site[0] == BC_SEND_1 ? 1 : site[numberOfArguments];
+    return site[0] == BC_SEND_1 || site[0] == BC_SEND_1_STACK
+               ? 1
+               : site[numberOfArguments];
 }
 
 /**

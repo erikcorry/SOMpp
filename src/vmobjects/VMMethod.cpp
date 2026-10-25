@@ -134,32 +134,37 @@ VMSymbol* VMMethod::GetSendSelector(size_t bytecodeIndex) const {
 // The caller, the current frame, saves its self above the arguments, and the
 // top of its stack while the frame runs, for the return, see
 // Interpreter::popFrameAndPushResult(). They're saved before the frame is
-// pushed, since a frame on the frame stack goes right above them. Changes
-// nothing if the frame can't be allocated.
+// pushed, since a frame on the frame stack goes right above them, and keeps
+// the arguments where they are, see VMStackFrame. A frame in the heap has
+// them right below its locals. Changes nothing if the frame can't be
+// allocated.
 gc_oop_t* VMMethod::Invoke(VMFrame* /*frame*/, gc_oop_t* sp) {
-    GetInterpreter()->SetStackPointer(GetInterpreter()->PushSelf(sp));
-    VMFrame* frm = GetInterpreter()->PushNewFrame(this);
+    VMFrame* frm =
+        GetInterpreter()->PushFrame(this, GetInterpreter()->PushSelf(sp));
     if (frm == nullptr) {
         return sp;
     }
-    // the arguments are right below the locals, and on top of the stack
     gc_oop_t* const locals = frm->locals;
-    for (size_t i = 0; i < numberOfArguments; ++i) {
-        locals[i - numberOfArguments] = sp[i + 1 - numberOfArguments];
+    gc_oop_t* const pushed = sp + 1 - numberOfArguments;
+    if (!HasStackFrames()) {
+        for (size_t i = 0; i < numberOfArguments; ++i) {
+            locals[i - numberOfArguments] = pushed[i];
+        }
     }
-    GetInterpreter()->SetSelf(load_ptr(sp[1 - numberOfArguments]));
+    GetInterpreter()->SetSelf(load_ptr(*pushed));
     return locals + numberOfLocals - 1;
 }
 
 gc_oop_t* VMMethod::Invoke1(VMFrame* /*frame*/, gc_oop_t* sp) {
-    GetInterpreter()->SetStackPointer(GetInterpreter()->PushSelf(sp));
-    VMFrame* frm = GetInterpreter()->PushNewFrame(this);
+    VMFrame* frm =
+        GetInterpreter()->PushFrame(this, GetInterpreter()->PushSelf(sp));
     if (frm == nullptr) {
         return sp;
     }
-    // the receiver, right below the locals
     gc_oop_t* const locals = frm->locals;
-    locals[-1] = *sp;
+    if (!HasStackFrames()) {
+        locals[-1] = *sp;
+    }
     GetInterpreter()->SetSelf(load_ptr(*sp));
     return locals + numberOfLocals - 1;
 }
@@ -867,6 +872,29 @@ bool VMMethod::HasBytecode(uint8_t bytecode) const {
     return false;
 }
 
+void VMMethod::MoveArguments(int slots) {
+    uint8_t* bytecodes = GetBytecodes();
+    std::vector<int> const depths = ComputeStackDepths(bytecodes, bcLength);
+    for (size_t i = 0; i < bcLength;
+         i += Bytecode::GetBytecodeLength(bytecodes[i])) {
+        if ((bytecodes[i] != BC_PUSH_STACK && bytecodes[i] != BC_POP_STACK) ||
+            depths[i] == -1) {
+            continue;
+        }
+        // the locals and the stack are the offsets up to here, as in
+        // MakeStackRelative()
+        int const offset = bytecodes[i + 1];
+        if (offset < (int)numberOfLocals + depths[i]) {
+            continue;
+        }
+        int const moved = offset + slots;
+        if (moved < 0 || moved > 0xFF) {
+            ErrorExit("A method has too many locals and stack elements");
+        }
+        bytecodes[i + 1] = (uint8_t)moved;
+    }
+}
+
 VMMethod* VMMethod::MakeStackRelative() {
     const uint8_t* bytecodes = GetBytecodes();
     std::vector<int> const depths = ComputeStackDepths(bytecodes, bcLength);
@@ -995,6 +1023,9 @@ VMMethod* VMMethod::MakeStackRelative() {
     // Fructus never sends it, see FructusImage::AsmFile::writeMethod().
     if (!lowered->MakesBlocks() && !lowered->HasBytecode(BC_RETURN_NON_LOCAL)) {
         lowered->stackFrameSize = VMStackFrame::SizeFor(lowered);
+  #if USE_FRAME_STACK
+        lowered->MoveArguments((int)VMStackFrame::ArgumentGap());
+  #endif
     }
     // the lowered method owns them now
     lexicalScope = nullptr;

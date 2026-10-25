@@ -83,7 +83,12 @@ public:
     static VMBlock* NewBlock(VMInvokable* method, VMFrame* context,
                              uint8_t arguments);
     static VMClass* NewClass(VMClass* /*classOfClass*/);
-    static VMFrame* NewFrame(VMFrame* /*previousFrame*/, VMMethod* /*method*/);
+    /**
+     * A frame of `method`, for a send from `previousFrame`, which is on the
+     * frame stack if `senderOnFrameStack`, see VMStackFrame.
+     */
+    static VMFrame* NewFrame(VMFrame* previousFrame, VMMethod* method,
+                             bool senderOnFrameStack = false);
 #ifdef FRUCTUS
     static VMMethod* NewMethod(VMSymbol* /*signature*/,
                                size_t numberOfBytecodes, size_t numLocals,

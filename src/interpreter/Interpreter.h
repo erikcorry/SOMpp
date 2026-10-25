@@ -142,8 +142,19 @@ class Interpreter {
 public:
     vm_oop_t Start();
 
-    /** Makes a frame of method the current one, whose self the caller sets. */
+    /**
+     * Makes a frame of method the current one, whose self the caller sets,
+     * for the bootstrap, whose frames are in the heap.
+     */
     VMFrame* PushNewFrame(VMMethod* method);
+
+    /**
+     * Makes a frame of `meth` the current one, for a send from the current
+     * frame, which saves `top` as the top of its stack, see
+     * VMMethod::Invoke(). Answers nullptr, and changes nothing else, if the
+     * frame can't be allocated.
+     */
+    VMFrame* PushFrame(VMMethod* meth, gc_oop_t* top);
     void SetFrame(VMFrame* frm);
 
     /** Sets the current context's self, for a new frame, see GetSelf(). */
@@ -236,8 +247,13 @@ public:
      * far ended, so a push past it is a frame that overflowed its stack.
      */
     [[nodiscard]] bool FitsInFrame(const gc_oop_t* p) const {
-        if ((const char*)(p + 1) >
-            (const char*)frame + frame->GetObjectSize()) {
+        size_t size = 0;
+        if (IsStackFrame(frame)) {
+            size = static_cast<VMStackFrame*>(frame)->GetObjectSize();
+        } else {
+            size = static_cast<VMHeapFrame*>(frame)->GetObjectSize();
+        }
+        if ((const char*)(p + 1) > (const char*)frame + size) {
             return false;
         }
 #if USE_FRAME_STACK
@@ -280,10 +296,16 @@ private:
 #endif
 
     void switchFrame(VMFrame* frm);
+    gc_oop_t* enterMethod(VMMethod* callee, gc_oop_t* sp, bool senderOnStack);
+    gc_oop_t* leaveFrame(vm_oop_t result, bool returningOnStack);
     VMFrame* popFrame();
     gc_oop_t* popFrameAndPushResult(vm_oop_t result);
 
+#ifdef FRUCTUS
+    VMInvokable* lookupMiss(uint8_t* site, VMClass* receiverClass);
+#else
     gc_oop_t* sendMiss(uint8_t* site, VMClass* receiverClass, gc_oop_t* sp);
+#endif
 
 #ifdef FRUCTUS
     [[noreturn]] void triggerDoesNotUnderstand(VMSymbol* signature,
@@ -292,11 +314,8 @@ private:
     void triggerDoesNotUnderstand(VMSymbol* signature);
 #endif
 
-    gc_oop_t* doReturnFieldWithIndex(uint8_t fieldIndex);
     vm_oop_t getField(uint8_t fieldIndex);
     void setField(uint8_t fieldIndex, vm_oop_t o);
-    gc_oop_t* doSend(uint8_t* site, gc_oop_t* sp);
-    gc_oop_t* doUnarySend(uint8_t* site, gc_oop_t* sp);
 #ifndef FRUCTUS
     gc_oop_t* doSuperSend(uint8_t* site, gc_oop_t* sp);
 #endif
@@ -318,11 +337,13 @@ inline Interpreter* GetInterpreter() {
 }
 
 gc_oop_t* VMFrame::arguments() const {
-    auto const headerSize = GetInterpreter()->IsStackFrame(this)
-                                ? sizeof(VMStackFrame)
-                                : sizeof(VMHeapFrame);
+    if (GetInterpreter()->IsStackFrame(this)) {
+        // below the sender's self, see VMStackFrame
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast)
+        return (gc_oop_t*)this - 1 - GetMethod()->GetNumberOfArguments();
+    }
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast)
-    return (gc_oop_t*)SHIFTED_PTR(this, headerSize);
+    return (gc_oop_t*)SHIFTED_PTR(this, sizeof(VMHeapFrame));
 }
 
 vm_oop_t VMFrame::Pop() {

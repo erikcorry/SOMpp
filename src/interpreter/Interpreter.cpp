@@ -39,6 +39,7 @@
 #if USE_FRAME_STACK
   #include "../memory/SlidingHeap.h"
 #endif
+#include "../misc/PlacementNew.h"
 #include "../misc/defs.h"
 #include "../vm/Globals.h"
 #include "../vm/IsValidObject.h"
@@ -86,6 +87,146 @@ static inline vm_oop_t stackElement(gc_oop_t* sp, size_t index) {
     return load_ptr(sp[-std::make_signed_t<som_int_t>(index)]);
 }
 
+// Whether the send at `site`, whose bytecode is `bc`, calls its target for
+// an instance of `receiverClass` without a lookup, see SendSite.h.
+static inline bool hits(const uint8_t* site, uint8_t bc,
+                        VMClass* receiverClass) {
+#ifdef FRUCTUS
+    return ((VMInvokable*)SendSite::GetTarget(site, bc))
+        ->IsFirstMethodOf(receiverClass->GetClassId());
+#else
+    return receiverClass == SendSite::GetReceiverClass(site, bc);
+#endif
+}
+
+// A send tells a method from the other invokables by its vtable, and pushes
+// the method's frame itself, without a call, see Start().
+#ifdef FRUCTUS
+// where a VMMethod's vtable pointer points, see Vtable() in
+// FructusImageWriter.cpp
+extern "C" const void* const _ZTV8VMMethod[];  // NOLINT
+
+static inline bool isMethod(const VMInvokable* invokable) {
+    return *(const void* const*)invokable == &_ZTV8VMMethod[2];
+}
+#else
+// the host's link-time optimization doesn't allow another declaration of the
+// vtable
+static inline bool isMethod(VMInvokable* invokable) {
+    return IsVMMethod((vm_oop_t)invokable);
+}
+#endif
+
+// A send of `callee`, whose arguments are on top of the stack at sp, whose
+// frame goes in one of four ways, by where the sender's frame and the
+// callee's go: the sender saves its self above the arguments, and the top of
+// its stack, see PushSelf() and popFrameAndPushResult(). A frame on the frame
+// stack keeps the arguments where they are if its sender is on it too, and
+// otherwise they're copied below it, see VMStackFrame. A frame in the heap
+// has them below its locals. Answers the top of the new frame's stack, or
+// nullptr, and changes nothing, if the frame can't be allocated.
+__attribute__((always_inline)) inline gc_oop_t* Interpreter::enterMethod(
+    VMMethod* callee, gc_oop_t* sp, bool senderOnStack) {
+    size_t const numberOfArgs = callee->GetNumberOfArguments();
+    gc_oop_t* const pushed = sp + 1 - numberOfArgs;
+    gc_oop_t* const top = sp + 1;
+    *top = self;
+    VMFrame* const sender = frame;
+    VMFrame* frm = nullptr;
+#if USE_FRAME_STACK
+    if (callee->HasStackFrames()) {
+        size_t const size = callee->GetStackFrameSize();
+        gc_oop_t* place = top + 1;
+        size_t argumentSlots = 0;
+        if (!senderOnStack) {
+            place = stackTop;
+            argumentSlots = numberOfArgs + 1;
+        }
+        char* const end = (char*)(place + argumentSlots) + size;
+        if ((end > stackEnd && !growFrameStack(end)) ||
+            (gcStressRetryMode &&
+             GetHeap<HEAP_CLS>()->StressFailsAllocation(
+                 argumentSlots * sizeof(gc_oop_t) + size))) {
+            return nullptr;
+        }
+        if (!senderOnStack) {
+            static_cast<VMHeapFrame*>(sender)->stack_ptr = top;
+            for (size_t i = 0; i < argumentSlots; i++) {
+                place[i] = pushed[i];
+            }
+        }
+        frm =
+            ::new ((void*)(place + argumentSlots)) VMStackFrame(callee, sender);
+    } else
+#endif
+    {
+        if (senderOnStack) {
+#if USE_FRAME_STACK
+            stackTop = top + 1;
+#endif
+        } else {
+            static_cast<VMHeapFrame*>(sender)->stack_ptr = top;
+        }
+        frm = Universe::NewFrame(sender, callee);
+        if (frm == nullptr) {
+            return nullptr;
+        }
+        gc_oop_t* const args = frm->locals - numberOfArgs;
+        for (size_t i = 0; i < numberOfArgs; i++) {
+            args[i] = pushed[i];
+        }
+    }
+    // see switchFrame()
+    if (!senderOnStack) {
+        remember_object(sender);
+    }
+    frame = frm;
+    method = callee;
+    self = *pushed;
+    return frm->locals + callee->GetNumberOfLocals() - 1;
+}
+
+// The return of `result` from the current frame, in one of four ways, by
+// where the frame and its caller are, see enterMethod(): it goes in place of
+// the receiver, and the caller's self comes back from above the arguments.
+// Answers the top of the caller's stack.
+__attribute__((always_inline)) inline gc_oop_t* Interpreter::leaveFrame(
+    vm_oop_t result, bool returningOnStack) {
+    VMFrame* const returning = frame;
+    VMFrame* const caller = returning->GetPreviousFrame();
+    size_t const numberOfArgs = method->GetNumberOfArguments();
+    bool const callerOnStack = IsStackFrame(caller);
+    gc_oop_t* top = nullptr;
+    if (returningOnStack) {
+        if (callerOnStack) {
+            top = (gc_oop_t*)returning - 1;
+        } else {
+#if USE_FRAME_STACK
+            // where the arguments were copied, see enterMethod()
+            stackTop = (gc_oop_t*)returning - 1 - numberOfArgs;
+#endif
+            top = static_cast<VMHeapFrame*>(caller)->stack_ptr;
+        }
+    } else {
+        // a block may still have it as its context, see switchFrame()
+        remember_object(returning);
+#if USE_FRAME_STACK
+        top = callerOnStack ? stackTop - 1
+                            : static_cast<VMHeapFrame*>(caller)->stack_ptr;
+#else
+        top = static_cast<VMHeapFrame*>(caller)->stack_ptr;
+#endif
+    }
+    returning->ClearPreviousFrame();
+    frame = caller;
+    method = caller->GetMethod();
+    self = *top;
+    gc_oop_t* const sp = top - numberOfArgs;
+    // the caller is the current frame again, see switchFrame()
+    *sp = store_with_separate_barrier(result);
+    return sp;
+}
+
 vm_oop_t Interpreter::Start() {
 #ifdef BYTECODE_HEATMAP
   #define HEATMAP_INC() method->heatmap[pc - method->GetBytecodes()]++
@@ -98,6 +239,9 @@ vm_oop_t Interpreter::Start() {
     method = GetMethod();
     uint8_t* pc = nullptr;
     gc_oop_t* sp = nullptr;
+    // what a send gives ENTER, and a return RETURN, see below
+    VMMethod* callee = nullptr;
+    vm_oop_t result = nullptr;
     RELOAD_PC();
 
     void const* const loopTargets[] = {&&LABEL_BC_HALT,
@@ -170,7 +314,31 @@ vm_oop_t Interpreter::Start() {
                                        &&LABEL_BC_STATIC_SEND_1,
                                        &&LABEL_BC_NOT_UNDERSTOOD,
                                        &&LABEL_BC_PUSH_STACK,
-                                       &&LABEL_BC_POP_STACK};
+                                       &&LABEL_BC_POP_STACK,
+#ifdef FRUCTUS
+                                       &&LABEL_BC_SEND_STACK,
+                                       &&LABEL_BC_SEND_1_STACK,
+                                       &&LABEL_BC_SEND_EQEQ_STACK,
+                                       &&LABEL_BC_STATIC_SEND_STACK,
+                                       &&LABEL_BC_STATIC_SEND_1_STACK,
+                                       &&LABEL_BC_RETURN_LOCAL_STACK,
+                                       &&LABEL_BC_RETURN_SELF_STACK,
+                                       &&LABEL_BC_RETURN_FIELD_0_STACK,
+                                       &&LABEL_BC_RETURN_FIELD_1_STACK,
+                                       &&LABEL_BC_RETURN_FIELD_2_STACK
+#else
+                                       &&LABEL_FRUCTUS_ONLY,
+                                       &&LABEL_FRUCTUS_ONLY,
+                                       &&LABEL_FRUCTUS_ONLY,
+                                       &&LABEL_FRUCTUS_ONLY,
+                                       &&LABEL_FRUCTUS_ONLY,
+                                       &&LABEL_FRUCTUS_ONLY,
+                                       &&LABEL_FRUCTUS_ONLY,
+                                       &&LABEL_FRUCTUS_ONLY,
+                                       &&LABEL_FRUCTUS_ONLY,
+                                       &&LABEL_FRUCTUS_ONLY
+#endif
+    };
 
     goto* loopTargets[*pc];
 
@@ -321,19 +489,68 @@ LABEL_BC_POP_FIELD_1:
     setField(1, load_ptr(*sp--));
     NEXT_NOGC(1);
 
+    // A send of `bc` to the receiver at `receiverIndex` below the top: a
+    // method's frame is pushed at ENTER, and the other invokables are called.
+#ifdef FRUCTUS
+  #define SEND(bc, receiverIndex, INVOKE, ENTER_LABEL)                      \
+      {                                                                     \
+          SAVE_NEXT_PC_ONLY(SendSite::Length(bc));                          \
+          VMClass* const cls = CLASS_OF(stackElement(sp, (receiverIndex))); \
+          recordStat(ReceiverType, cls);                                    \
+          auto* invokable = (VMInvokable*)SendSite::GetTarget(pc, bc);      \
+          if (!hits(pc, bc, cls)) {                                         \
+              invokable = lookupMiss(pc, cls);                              \
+          }                                                                 \
+          recordStat(CallStats, cls, invokable);                            \
+          if (isMethod(invokable)) {                                        \
+              callee = (VMMethod*)invokable;                                \
+              goto ENTER_LABEL;                                             \
+          }                                                                 \
+          sp = invokable->INVOKE(frame, sp);                                \
+          RELOAD_PC_ONLY();                                                 \
+          DISPATCH_GC(SendSite::Length(bc));                                \
+      }
+#else
+  #define SEND(bc, receiverIndex, INVOKE, ENTER_LABEL)                      \
+      {                                                                     \
+          SAVE_NEXT_PC_ONLY(SendSite::Length(bc));                          \
+          VMClass* const cls = CLASS_OF(stackElement(sp, (receiverIndex))); \
+          recordStat(ReceiverType, cls);                                    \
+          if (!hits(pc, bc, cls)) {                                         \
+              sp = sendMiss(pc, cls, sp);                                   \
+              RELOAD_PC_ONLY();                                             \
+              DISPATCH_GC(SendSite::Length(bc));                            \
+          }                                                                 \
+          auto* invokable = (VMInvokable*)SendSite::GetTarget(pc, bc);      \
+          recordStat(CallStats, cls, invokable);                            \
+          if (isMethod(invokable)) {                                        \
+              callee = (VMMethod*)invokable;                                \
+              goto ENTER_LABEL;                                             \
+          }                                                                 \
+          sp = invokable->INVOKE(frame, sp);                                \
+          RELOAD_PC_ONLY();                                                 \
+          DISPATCH_GC(SendSite::Length(bc));                                \
+      }
+#endif
+
 LABEL_BC_SEND:
     PROLOGUE();
-    SAVE_NEXT_PC_ONLY(SendSite::Length(BC_SEND));
-    sp = doSend(pc, sp);
-    RELOAD_PC_ONLY();
-    DISPATCH_GC(SendSite::Length(BC_SEND));
+    SEND(BC_SEND, pc[SendSite::numberOfArguments] - 1, Invoke, ENTER);
 
 LABEL_BC_SEND_1:
     PROLOGUE();
-    SAVE_NEXT_PC_ONLY(SendSite::Length(BC_SEND_1));
-    sp = doUnarySend(pc, sp);
-    RELOAD_PC_ONLY();
-    DISPATCH_GC(SendSite::Length(BC_SEND_1));
+    SEND(BC_SEND_1, 0, Invoke1, ENTER);
+
+#ifdef FRUCTUS
+LABEL_BC_SEND_STACK:
+    PROLOGUE();
+    SEND(BC_SEND, pc[SendSite::numberOfArguments] - 1, Invoke,
+         ENTER_FROM_STACK);
+
+LABEL_BC_SEND_1_STACK:
+    PROLOGUE();
+    SEND(BC_SEND_1, 0, Invoke1, ENTER_FROM_STACK);
+#endif
 
 LABEL_BC_SUPER_SEND:
 #ifdef FRUCTUS
@@ -348,21 +565,37 @@ LABEL_BC_SUPER_SEND:
 #endif
 
     // A send that can only call one invokable, see SendSite.h.
+#define STATIC_SEND(INVOKE, ENTER_LABEL)                         \
+    {                                                            \
+        SAVE_NEXT_PC_ONLY(SendSite::staticLength);               \
+        auto* const invokable =                                  \
+            (VMInvokable*)LoadWord(pc + SendSite::staticTarget); \
+        if (isMethod(invokable)) {                               \
+            callee = (VMMethod*)invokable;                       \
+            goto ENTER_LABEL;                                    \
+        }                                                        \
+        sp = invokable->INVOKE(frame, sp);                       \
+        RELOAD_PC_ONLY();                                        \
+        DISPATCH_GC(SendSite::staticLength);                     \
+    }
+
 LABEL_BC_STATIC_SEND:
     PROLOGUE();
-    SAVE_NEXT_PC_ONLY(SendSite::staticLength);
-    sp = ((VMInvokable*)LoadWord(pc + SendSite::staticTarget))
-             ->Invoke(GetFrame(), sp);
-    RELOAD_PC_ONLY();
-    DISPATCH_GC(SendSite::staticLength);
+    STATIC_SEND(Invoke, ENTER);
 
 LABEL_BC_STATIC_SEND_1:
     PROLOGUE();
-    SAVE_NEXT_PC_ONLY(SendSite::staticLength);
-    sp = ((VMInvokable*)LoadWord(pc + SendSite::staticTarget))
-             ->Invoke1(GetFrame(), sp);
-    RELOAD_PC_ONLY();
-    DISPATCH_GC(SendSite::staticLength);
+    STATIC_SEND(Invoke1, ENTER);
+
+#ifdef FRUCTUS
+LABEL_BC_STATIC_SEND_STACK:
+    PROLOGUE();
+    STATIC_SEND(Invoke, ENTER_FROM_STACK);
+
+LABEL_BC_STATIC_SEND_1_STACK:
+    PROLOGUE();
+    STATIC_SEND(Invoke1, ENTER_FROM_STACK);
+#endif
 
     // A send of a selector no class has, see SendSite.h.
 LABEL_BC_NOT_UNDERSTOOD:
@@ -380,9 +613,8 @@ LABEL_BC_NOT_UNDERSTOOD:
 LABEL_BC_RETURN_LOCAL:
     PROLOGUE();
     // the returning frame's stack doesn't matter any more
-    sp = popFrameAndPushResult(load_ptr(*sp));
-    RELOAD_PC_ONLY();
-    DISPATCH_NOGC();
+    result = load_ptr(*sp);
+    goto RETURN;
 
 LABEL_BC_RETURN_NON_LOCAL:
     PROLOGUE();
@@ -401,27 +633,50 @@ LABEL_BC_RETURN_SELF:
     PROLOGUE();
     assert(GetFrame()->GetContext() == nullptr &&
            "RETURN_SELF is not allowed in blocks");
-    sp = popFrameAndPushResult(GetSelf());
-    RELOAD_PC_ONLY();
-    DISPATCH_NOGC();
+    result = GetSelf();
+    goto RETURN;
 
 LABEL_BC_RETURN_FIELD_0:
     PROLOGUE();
-    sp = doReturnFieldWithIndex(0);
-    RELOAD_PC_ONLY();
-    DISPATCH_NOGC();
+    result = getField(0);
+    goto RETURN;
 
 LABEL_BC_RETURN_FIELD_1:
     PROLOGUE();
-    sp = doReturnFieldWithIndex(1);
-    RELOAD_PC_ONLY();
-    DISPATCH_NOGC();
+    result = getField(1);
+    goto RETURN;
 
 LABEL_BC_RETURN_FIELD_2:
     PROLOGUE();
-    sp = doReturnFieldWithIndex(2);
-    RELOAD_PC_ONLY();
-    DISPATCH_NOGC();
+    result = getField(2);
+    goto RETURN;
+
+#ifdef FRUCTUS
+LABEL_BC_RETURN_LOCAL_STACK:
+    PROLOGUE();
+    result = load_ptr(*sp);
+    goto RETURN_FROM_STACK;
+
+LABEL_BC_RETURN_SELF_STACK:
+    PROLOGUE();
+    result = GetSelf();
+    goto RETURN_FROM_STACK;
+
+LABEL_BC_RETURN_FIELD_0_STACK:
+    PROLOGUE();
+    result = getField(0);
+    goto RETURN_FROM_STACK;
+
+LABEL_BC_RETURN_FIELD_1_STACK:
+    PROLOGUE();
+    result = getField(1);
+    goto RETURN_FROM_STACK;
+
+LABEL_BC_RETURN_FIELD_2_STACK:
+    PROLOGUE();
+    result = getField(2);
+    goto RETURN_FROM_STACK;
+#endif
 
 LABEL_BC_INC:
     PROLOGUE();
@@ -733,21 +988,68 @@ LABEL_BC_JUMP2_BACKWARD: {
     // integer is a small one whenever it fits, so a small integer is only
     // equal to itself: Integer>>== is a primitive that says so, even for a
     // double of the same value. Anything else is a send.
-LABEL_BC_SEND_EQEQ: {
+#define SEND_EQEQ(ENTER_LABEL)                                                \
+    {                                                                         \
+        vm_oop_t const arg = load_ptr(sp[0]);                                 \
+        vm_oop_t const receiver = load_ptr(sp[-1]);                           \
+        if (receiver == load_ptr(nilObject) || IS_TAGGED(receiver) ||         \
+            CLASS_OF(receiver) == load_ptr(symbolClass)) {                    \
+            sp--;                                                             \
+            setTop(sp, load_ptr(receiver == arg ? trueObject : falseObject)); \
+            NEXT_NOGC(SendSite::Length(BC_SEND_EQEQ));                        \
+        }                                                                     \
+    }                                                                         \
+    SEND(BC_SEND_EQEQ, 1, Invoke, ENTER_LABEL);
+
+LABEL_BC_SEND_EQEQ:
     PROLOGUE();
-    vm_oop_t const arg = load_ptr(sp[0]);
-    vm_oop_t const receiver = load_ptr(sp[-1]);
-    if (receiver == load_ptr(nilObject) || IS_TAGGED(receiver) ||
-        CLASS_OF(receiver) == load_ptr(symbolClass)) {
-        sp--;
-        setTop(sp, load_ptr(receiver == arg ? trueObject : falseObject));
-        NEXT_NOGC(SendSite::Length(BC_SEND_EQEQ));
+    SEND_EQEQ(ENTER);
+
+#ifdef FRUCTUS
+LABEL_BC_SEND_EQEQ_STACK:
+    PROLOGUE();
+    SEND_EQEQ(ENTER_FROM_STACK);
+#else
+LABEL_FRUCTUS_ONLY:
+    __builtin_unreachable();
+#endif
+
+    // The frame switches, which on fructus each kind of method has its own
+    // bytecodes for, so that the sender's kind or the returning frame's is
+    // known, see FructusImage::AsmFile::writeBytecodes(). On the host they
+    // work it out.
+#define ENTER_FROM(senderOnStack)                                            \
+    {                                                                        \
+        gc_oop_t* const calleeSp = enterMethod(callee, sp, (senderOnStack)); \
+        if (calleeSp == nullptr) {                                           \
+            goto RETRY;                                                      \
+        }                                                                    \
+        sp = calleeSp;                                                       \
+        RELOAD_PC_ONLY();                                                    \
+        DISPATCH_GC(0);                                                      \
     }
-}
-    SAVE_NEXT_PC_ONLY(SendSite::Length(BC_SEND_EQEQ));
-    sp = doSend(pc, sp);
-    RELOAD_PC_ONLY();
-    DISPATCH_GC(SendSite::Length(BC_SEND_EQEQ));
+#define RETURN_FROM(returningOnStack)                \
+    {                                                \
+        sp = leaveFrame(result, (returningOnStack)); \
+        RELOAD_PC_ONLY();                            \
+        DISPATCH_NOGC();                             \
+    }
+
+#ifdef FRUCTUS
+ENTER:
+    ENTER_FROM(false);
+ENTER_FROM_STACK:
+    ENTER_FROM(true);
+RETURN:
+    RETURN_FROM(false);
+RETURN_FROM_STACK:
+    RETURN_FROM(true);
+#else
+ENTER:
+    ENTER_FROM(IsStackFrame(frame));
+RETURN:
+    RETURN_FROM(IsStackFrame(frame));
+#endif
 
     // An allocation of the bytecode at pc failed, and it changed nothing:
     // collect, and run it again. The bytecodes that go to DISPATCH_GC do this
@@ -762,10 +1064,40 @@ RETRY:
 // Answers nullptr, and leaves the current frame, if the frame can't be
 // allocated.
 VMFrame* Interpreter::PushNewFrame(VMMethod* method) {
+    assert(!method->HasStackFrames());
     VMFrame* frm = Universe::NewFrame(GetFrame(), method);
     if (frm != nullptr) {
         switchFrame(frm);
     }
+    return frm;
+}
+
+// The sender's kind decides where its top goes, and where the arguments of
+// a frame on the frame stack are, see VMStackFrame, so it's worked out once,
+// here.
+VMFrame* Interpreter::PushFrame(VMMethod* meth, gc_oop_t* top) {
+    VMFrame* const sender = frame;
+#if USE_FRAME_STACK
+    bool const senderOnFrameStack = OnFrameStack(sender);
+    if (senderOnFrameStack) {
+        stackTop = top + 1;
+    } else
+#else
+    bool const senderOnFrameStack = false;
+#endif
+    {
+        static_cast<VMHeapFrame*>(sender)->stack_ptr = top;
+    }
+    VMFrame* const frm = Universe::NewFrame(sender, meth, senderOnFrameStack);
+    if (frm == nullptr) {
+        return nullptr;
+    }
+    // see switchFrame()
+    if (!senderOnFrameStack) {
+        remember_object(sender);
+    }
+    frame = frm;
+    method = meth;
     return frm;
 }
 
@@ -839,16 +1171,20 @@ vm_oop_t Interpreter::GetSelf() {
     return load_ptr(self);
 }
 
-// A frame on the frame stack that returns leaves its address as the frame
-// stack's top: it went where the top was, which is the top of its caller's
-// stack + 1 if the caller is on the stack too, see VMStackFrame. The caller's
-// self is on top of its stack, see popFrameAndPushResult().
+// A frame on the frame stack that returns leaves the frame stack's top where
+// it was before the frame: at the frame, which is the top of its caller's
+// stack + 1 if the caller is on the stack too, or else at the arguments
+// copied below it, see VMStackFrame. The caller's self is on top of its
+// stack, see popFrameAndPushResult().
 VMFrame* Interpreter::popFrame() {
     VMFrame* result = GetFrame();
     switchFrame(GetFrame()->GetPreviousFrame());
 #if USE_FRAME_STACK
     if (OnFrameStack(result)) {
         stackTop = (gc_oop_t*)result;
+        if (!OnFrameStack(frame)) {
+            stackTop -= result->GetMethod()->GetNumberOfArguments() + 1;
+        }
     }
 #endif
 
@@ -878,8 +1214,8 @@ gc_oop_t* Interpreter::popFrameAndPushResult(vm_oop_t result) {
 // The slow path of a send, where the receiver's classId isn't in the first
 // range of the target: look in its other ranges, and then in the others in
 // its ring, and link the send to the one that has it, see SendSite.h.
-gc_oop_t* Interpreter::sendMiss(uint8_t* site, VMClass* receiverClass,
-                                gc_oop_t* sp) {
+// Answers the invokable to call.
+VMInvokable* Interpreter::lookupMiss(uint8_t* site, VMClass* receiverClass) {
     auto* const target = (VMInvokable*)SendSite::GetTarget(site);
     size_t const classId = receiverClass->GetClassId();
     VMInvokable* invokable = target;
@@ -898,11 +1234,7 @@ gc_oop_t* Interpreter::sendMiss(uint8_t* site, VMClass* receiverClass,
         // which the cards don't cover.
         SendSite::Link(site, invokable);
     }
-    recordStat(CallStats, receiverClass, invokable);
-    if (site[0] == BC_SEND_1) {
-        return invokable->Invoke1(GetFrame(), sp);
-    }
-    return invokable->Invoke(GetFrame(), sp);
+    return invokable;
 }
 #else
 // The slow path of a send, which looks the selector up, and links the send
@@ -997,20 +1329,6 @@ vm_oop_t Interpreter::getField(uint8_t fieldIndex) {
     return ((VMObject*)self)->GetField(fieldIndex);
 }
 
-gc_oop_t* Interpreter::doReturnFieldWithIndex(uint8_t fieldIndex) {
-    vm_oop_t self = GetSelf();
-    vm_oop_t o = nullptr;
-
-    if (unlikely(IS_TAGGED(self))) {
-        o = nullptr;
-        ErrorExit("Integers do not have fields!");
-    } else {
-        o = ((VMObject*)self)->GetField(fieldIndex);
-    }
-
-    return popFrameAndPushResult(o);
-}
-
 #ifdef FRUCTUS
 // all globals are in the image, so this is an error
 bool Interpreter::SendUnknownGlobal(VMSymbol* globalName) {
@@ -1043,46 +1361,6 @@ void Interpreter::setField(uint8_t fieldIndex, vm_oop_t o) {
     } else {
         ((VMObject*)self)->SetField(fieldIndex, o);
     }
-}
-
-// Whether the send at `site`, whose bytecode is `bc`, calls its target for
-// an instance of `receiverClass` without a lookup, see SendSite.h.
-static inline bool hits(const uint8_t* site, uint8_t bc,
-                        VMClass* receiverClass) {
-#ifdef FRUCTUS
-    return ((VMInvokable*)SendSite::GetTarget(site, bc))
-        ->IsFirstMethodOf(receiverClass->GetClassId());
-#else
-    return receiverClass == SendSite::GetReceiverClass(site, bc);
-#endif
-}
-
-gc_oop_t* Interpreter::doSend(uint8_t* site, gc_oop_t* sp) {
-    vm_oop_t receiver = stackElement(sp, site[SendSite::numberOfArguments] - 1);
-    assert(IsValidObject(receiver));
-    VMClass* receiverClass = CLASS_OF(receiver);
-    recordStat(ReceiverType, receiverClass);
-
-    if (hits(site, BC_SEND, receiverClass)) {
-        auto* invokable = (VMInvokable*)SendSite::GetTarget(site, BC_SEND);
-        recordStat(CallStats, receiverClass, invokable);
-        return invokable->Invoke(GetFrame(), sp);
-    }
-    return sendMiss(site, receiverClass, sp);
-}
-
-gc_oop_t* Interpreter::doUnarySend(uint8_t* site, gc_oop_t* sp) {
-    vm_oop_t receiver = load_ptr(*sp);
-    assert(IsValidObject(receiver));
-    VMClass* receiverClass = CLASS_OF(receiver);
-    recordStat(ReceiverType, receiverClass);
-
-    if (hits(site, BC_SEND_1, receiverClass)) {
-        auto* invokable = (VMInvokable*)SendSite::GetTarget(site, BC_SEND_1);
-        recordStat(CallStats, receiverClass, invokable);
-        return invokable->Invoke1(GetFrame(), sp);
-    }
-    return sendMiss(site, receiverClass, sp);
 }
 
 #ifndef FRUCTUS

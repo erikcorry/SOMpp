@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <deque>
 #include <fstream>
+#include <functional>
 #include <map>
 #include <set>
 #include <sstream>
@@ -21,9 +22,9 @@
 #include "../primitives/FructusPrimitives.h"
 #include "../vm/FructusImage.h"
 #include "../vm/Globals.h"
+#include "../vm/IsValidObject.h"
 #include "../vm/Print.h"
 #include "../vm/Symbols.h"
-#include "../vm/IsValidObject.h"
 #include "../vm/Universe.h"
 #include "../vmobjects/ObjectFormats.h"
 #include "../vmobjects/Signature.h"
@@ -31,6 +32,7 @@
 #include "../vmobjects/VMBigInteger.h"
 #include "../vmobjects/VMClass.h"
 #include "../vmobjects/VMEvaluationPrimitive.h"
+#include "../vmobjects/VMFrame.h"
 #include "../vmobjects/VMInteger.h"
 #include "../vmobjects/VMMethod.h"
 #include "../vmobjects/VMObject.h"
@@ -457,6 +459,12 @@ private:
     void numberClasses();
     void findDispatchRanges();
     void findSignatureGroups();
+    /**
+     * Moves the arguments in the bytecodes of every method from where the
+     * host's frames have them to where fructus's do, see
+     * VMMethod::MoveArguments().
+     */
+    void placeArguments();
     void findStaticSends();
     void findStaticSends(VMClass* holder, VMMethod* method, size_t depth);
     VMInvokable* lookup(VMClass* cls, VMSymbol* selector);
@@ -951,6 +959,62 @@ void FructusImage::AsmFile::writeInvokableHeader(ObjectWriter& w, VMInvokable* i
            "nextWithSignature");
 }
 
+/**
+ * The slots between the arguments of a frame of `method` and its locals on
+ * fructus, where a method that makes no blocks has its frames on the frame
+ * stack, see VMStackFrame and writeMethod().
+ */
+static int FructusArgumentGap(VMMethod* method) {
+    return method->MakesBlocks() ? 0
+                                 : 1 + (int)(L::VMStackFrame_size / L::word);
+}
+
+/**
+ * The bytecode `bc` of `method` on fructus: the sends and returns of a method
+ * whose frames are on the frame stack have their own, so that the
+ * interpreter knows where the frames are, see Interpreter::enterMethod().
+ */
+static uint8_t FrameKindBytecode(VMMethod* method, uint8_t bc) {
+    if (FructusArgumentGap(method) == 0) {
+        return bc;
+    }
+    switch (bc) {
+        case BC_SEND:
+            return BC_SEND_STACK;
+        case BC_SEND_1:
+            return BC_SEND_1_STACK;
+        case BC_SEND_EQEQ:
+            return BC_SEND_EQEQ_STACK;
+        case BC_STATIC_SEND:
+            return BC_STATIC_SEND_STACK;
+        case BC_STATIC_SEND_1:
+            return BC_STATIC_SEND_1_STACK;
+        case BC_RETURN_LOCAL:
+            return BC_RETURN_LOCAL_STACK;
+        case BC_RETURN_SELF:
+            return BC_RETURN_SELF_STACK;
+        case BC_RETURN_FIELD_0:
+            return BC_RETURN_FIELD_0_STACK;
+        case BC_RETURN_FIELD_1:
+            return BC_RETURN_FIELD_1_STACK;
+        case BC_RETURN_FIELD_2:
+            return BC_RETURN_FIELD_2_STACK;
+        default:
+            return bc;
+    }
+}
+
+/** The slots the host's compiler left between them, for the host's frames. */
+static int HostArgumentGap(VMMethod* method) {
+#if USE_FRAME_STACK
+    return method->GetStackFrameSize() != 0 ? (int)VMStackFrame::ArgumentGap()
+                                            : 0;
+#else
+    (void)method;
+    return 0;
+#endif
+}
+
 void FructusImage::AsmFile::writeMethod(VMMethod* method, const std::string& label) {
     ObjectWriter w(out, label);
     // the words are shorter on fructus, and writeBytecodes() writes them
@@ -975,11 +1039,12 @@ void FructusImage::AsmFile::writeMethod(VMMethod* method, const std::string& lab
            "numberOfArguments");
     // Fructus's frames are smaller, and it has no EXTRA_STACK_SLOTS. A block
     // with a non-local return can have its frame on the stack too, since
-    // fructus never sends #escapedBlock:.
+    // fructus never sends #escapedBlock:. The arguments are below the frame,
+    // see VMStackFrame.
     size_t stackFrameWords = 0;
     if (!method->MakesBlocks()) {
         stackFrameWords = L::VMStackFrame_size / L::word +
-                          method->numberOfArguments + method->numberOfLocals +
+                          method->numberOfLocals +
                           method->maximumNumberOfStackElements;
         if (stackFrameWords > UINT8_MAX) {
             Fail(describe(method) + " has too big a frame for the stack");
@@ -1050,14 +1115,15 @@ FructusImage::AsmFile::Lines FructusImage::AsmFile::writeBytecodes(
         size_t const fructusLength = hasWord ? 1 + L::word : length;
         std::ostringstream line;
         line << "\t.byte\t";
+        uint8_t const newBc = FrameKindBytecode(method, fructusBytecodes[n]);
         for (size_t j = 0; j < numBytes; j++) {
-            unsigned byte = fructusBytecodes[n + j];
+            unsigned byte = j == 0 ? newBc : fructusBytecodes[n + j];
             if (j == 1 && HasFieldOperand(bc)) {
                 byte = FructusFieldIndex(method->GetHolder(), byte);
             }
             line << (j == 0 ? "" : ", ") << byte;
         }
-        std::string name = Bytecode::GetBytecodeName(fructusBytecodes[n]);
+        std::string name = Bytecode::GetBytecodeName(newBc);
         name.erase(name.find_last_not_of(' ') + 1);
         line << "\t; " << name;
         if (hasWord) {
@@ -1112,8 +1178,9 @@ size_t FructusImage::AsmFile::writeSendSite(ObjectWriter& w, size_t offset,
                                             VMMethod* method, size_t index) {
     uint8_t const bc = method->GetBytecode(index);
     uint8_t const newBc = fructusBytecode(method, index);
+    uint8_t const kindBc = FrameKindBytecode(method, newBc);
     VMSymbol* selector = method->GetSendSelector(index);
-    std::string name = Bytecode::GetBytecodeName(newBc);
+    std::string name = Bytecode::GetBytecodeName(kindBc);
     name.erase(name.find_last_not_of(' ') + 1);
     std::string comment = name + " #" + Printable(selector);
     unsigned const numArgs =
@@ -1122,7 +1189,7 @@ size_t FructusImage::AsmFile::writeSendSite(ObjectWriter& w, size_t offset,
     std::ostringstream line;
     if (newBc == BC_STATIC_SEND || newBc == BC_STATIC_SEND_1) {
         VMInvokable* target = image.StaticTarget(method, index);
-        line << "\t.byte\t" << (unsigned)newBc << "\t; " << comment
+        line << "\t.byte\t" << (unsigned)kindBc << "\t; " << comment
              << ", static " << describe(target) << "\n"
              << "\t.short\t" << Ref(target) << "\n";
         w.Raw(offset, L::StaticSend_length, line.str());
@@ -1139,7 +1206,7 @@ size_t FructusImage::AsmFile::writeSendSite(ObjectWriter& w, size_t offset,
 
     // a unary send has no number of arguments
     VMInvokable* head = image.RingHead(selector);
-    line << "\t.byte\t" << (unsigned)bc;
+    line << "\t.byte\t" << (unsigned)kindBc;
     if (bc != BC_SEND_1) {
         line << ", " << numArgs;
     }
@@ -1640,6 +1707,36 @@ VMInvokable* FructusImage::ImageWriter::uniqueTarget(VMClass* holder,
  * The world is closed, so only the classes in the image have instances.
  * #== isn't, since SEND_EQEQ answers it inline for some receivers.
  */
+void FructusImage::ImageWriter::placeArguments() {
+    std::set<VMMethod*> placed;
+    std::function<void(VMMethod*)> place = [&](VMMethod* method) {
+        if (!placed.insert(method).second) {
+            return;
+        }
+        method->MoveArguments(FructusArgumentGap(method) -
+                              HostArgumentGap(method));
+        for (size_t i = 0; i < method->bcLength;
+             i += Bytecode::GetBytecodeLength(method->GetBytecode(i))) {
+            // a block may be a trivial invokable, without bytecodes
+            if (method->GetBytecode(i) == BC_PUSH_BLOCK) {
+                if (auto* block =
+                        dynamic_cast<VMMethod*>(method->GetConstant(i))) {
+                    place(block);
+                }
+            }
+        }
+    };
+    for (VMClass* c : allClasses) {
+        size_t const n = c->GetNumberOfInstanceInvokables();
+        for (size_t i = 0; i < n; i++) {
+            if (auto* method =
+                    dynamic_cast<VMMethod*>(c->GetInstanceInvokable(i))) {
+                place(method);
+            }
+        }
+    }
+}
+
 void FructusImage::ImageWriter::findStaticSends() {
     for (VMClass* c : allClasses) {
         size_t const n = c->GetNumberOfInstanceInvokables();
@@ -1692,11 +1789,12 @@ void FructusImage::ImageWriter::findStaticSends(VMClass* holder,
     };
 
     // self is the first argument, the slot of the frame the furthest below
-    // the stack, see VMMethod::MakeStackRelative()
+    // the stack, see VMMethod::MakeStackRelative() and placeArguments()
     std::vector<int> const stackDepths =
         ComputeStackDepths(method->GetBytecodes(), bcLength);
     int const selfBelowStack =
-        (int)(method->GetNumberOfArguments() + method->GetNumberOfLocals()) - 1;
+        (int)(method->GetNumberOfArguments() + method->GetNumberOfLocals()) -
+        1 + FructusArgumentGap(method);
 
     for (size_t i = 0; i < bcLength; i = next(i)) {
         if (jumpTargets.count(i) != 0) {
@@ -1907,6 +2005,7 @@ void FructusImage::ImageWriter::Write(const std::vector<std::string>& arguments)
     numberClasses();
     findDispatchRanges();
     findSignatureGroups();
+    placeArguments();
     findStaticSends();
     for (VMClass* cls : classes) {
         writeClass(cls);

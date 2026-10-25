@@ -73,12 +73,9 @@ public:
 
     [[nodiscard]] inline VMClass* GetClass() const final { return nullptr; }
 
-    /**
-     * The slots of a frame of `method`: its arguments, then its locals and
-     * its stack.
-     */
-    static size_t SlotsFor(const VMMethod* method) {
-        return method->GetNumberOfArguments() + method->GetNumberOfLocals() +
+    /** The slots of a frame of `method` after its arguments. */
+    static size_t SlotsAfterArgumentsFor(const VMMethod* method) {
+        return method->GetNumberOfLocals() +
                method->GetMaximumNumberOfStackElements() + EXTRA_STACK_SLOTS;
     }
 
@@ -212,21 +209,20 @@ public:
 
 protected:
     /**
-     * A frame whose fields take `headerSize` bytes, before its slots. It's
-     * inlined into each kind's constructor, as one constructor was before
-     * there were two kinds, see Universe::NewFrame().
+     * A frame whose locals start at `locals`. It's inlined into each kind's
+     * constructor, as one constructor was before there were two kinds, see
+     * Universe::NewFrame().
      */
-    __attribute__((always_inline)) VMFrame(size_t headerSize,
-                                           VMMethod* method,
+    __attribute__((always_inline)) VMFrame(gc_oop_t* locals, VMMethod* method,
                                            VMFrame* previousFrame)
         :
 #ifdef FRUCTUS
           bytecodePointer(method->GetBytecodes()),
 #endif
           previousFrame(store_root(previousFrame)), method(store_root(method)),
-          locals((gc_oop_t*)SHIFTED_PTR(this, headerSize) +
-                 method->GetNumberOfArguments()) {
-        // The arguments are copied in still, and the stack needs nothing,
+          locals(locals) {
+        // The invokable sees to the arguments, see VMMethod::Invoke(), and
+        // the stack needs nothing,
         // since nothing above its top is a root, see WalkObjects() and
         // Interpreter::WalkGlobals().
         gc_oop_t* const end = locals + method->GetNumberOfLocals();
@@ -241,9 +237,9 @@ protected:
     gc_oop_t* locals;
 
     /**
-     * The arguments, then the locals and the stack, which come right after
-     * the fields of the frame's kind. Where the kinds' fields differ in
-     * size, it's in Interpreter.h, which knows the frame's kind.
+     * The arguments, which are where the frame's kind has them, see
+     * VMStackFrame and VMHeapFrame, so it's in Interpreter.h, which knows the
+     * frame's kind.
      */
     [[nodiscard]] inline gc_oop_t* arguments() const;
 
@@ -262,6 +258,14 @@ protected:
  * A frame on the frame stack. The stack is scanned word by word, so a stack
  * frame is never walked, cloned, or asked its size by a collector.
  *
+ * Its arguments stay where its sender pushed them, and the sender's self
+ * above them, see Interpreter::PushSelf(): the frame goes right above, and
+ * its locals and stack after its fields. A sender in the heap has its stack
+ * there, so the arguments are copied below the frame, with a slot for the
+ * self, see Universe::NewFrame(). The arguments are ArgumentGap() slots
+ * further below the locals than in a heap frame, which the offsets of the
+ * method's bytecodes allow for, see VMMethod::MoveArguments().
+ *
  * It has no stack_ptr: the top of its stack is right below the frame above
  * it on the frame stack, or below the frame stack's top, if the frames above
  * it are in the heap, or in the interpreter while it's the current frame,
@@ -270,12 +274,21 @@ protected:
 class VMStackFrame final : public VMFrame {
 public:
     VMStackFrame(VMMethod* method, VMFrame* previousFrame)
-        : VMFrame(sizeof(VMStackFrame), method, previousFrame) {}
+        : VMFrame((gc_oop_t*)SHIFTED_PTR(this, sizeof(VMStackFrame)), method,
+                  previousFrame) {}
 
-    /** The size of a frame of `method` on the frame stack. */
+    /**
+     * The size of a frame of `method` on the frame stack, without its
+     * arguments.
+     */
     static size_t SizeFor(const VMMethod* method) {
-        return sizeof(VMStackFrame) + SlotsFor(method) * sizeof(gc_oop_t);
+        return sizeof(VMStackFrame) +
+               SlotsAfterArgumentsFor(method) * sizeof(gc_oop_t);
     }
+
+    /** The slots between the arguments and the locals: the self, and the
+     * frame's fields. */
+    static constexpr size_t ArgumentGap();
 
     /** The method is alive and in place while its frame is on the stack. */
     [[nodiscard]] size_t GetObjectSize() const final {
@@ -290,7 +303,9 @@ class VMHeapFrame final : public VMFrame {
 public:
     VMHeapFrame(size_t additionalBytes, VMMethod* method,
                 VMFrame* previousFrame)
-        : VMFrame(sizeof(VMHeapFrame), method, previousFrame),
+        : VMFrame((gc_oop_t*)SHIFTED_PTR(this, sizeof(VMHeapFrame)) +
+                      method->GetNumberOfArguments(),
+                  method, previousFrame),
           stack_ptr(InitialStackPointer())
 #ifndef FRUCTUS
           ,
@@ -303,9 +318,14 @@ public:
 #endif
     }
 
-    /** The size of a frame of `method` in the heap. */
+    /**
+     * The size of a frame of `method` in the heap: its arguments, then its
+     * locals and its stack come after its fields.
+     */
     static size_t SizeFor(const VMMethod* method) {
-        return sizeof(VMHeapFrame) + SlotsFor(method) * sizeof(gc_oop_t);
+        return sizeof(VMHeapFrame) + (method->GetNumberOfArguments() +
+                                      SlotsAfterArgumentsFor(method)) *
+                                         sizeof(gc_oop_t);
     }
 
     /**
@@ -342,6 +362,10 @@ public:
     size_t totalObjectSize;
 #endif
 };
+
+constexpr size_t VMStackFrame::ArgumentGap() {
+    return 1 + sizeof(VMStackFrame) / sizeof(gc_oop_t);
+}
 
 bool VMFrame::HasContext() const {
     return context != nullptr;

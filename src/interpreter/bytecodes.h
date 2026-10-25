@@ -110,7 +110,21 @@
 #define BC_PUSH_STACK              69
 #define BC_POP_STACK               70
 
-#define _LAST_BYTECODE BC_POP_STACK
+// On fructus the sends and returns of a method whose frames are on the frame
+// stack, which only the image writer makes, see
+// FructusImage::AsmFile::writeBytecodes()
+#define BC_SEND_STACK              71
+#define BC_SEND_1_STACK            72
+#define BC_SEND_EQEQ_STACK         73
+#define BC_STATIC_SEND_STACK       74
+#define BC_STATIC_SEND_1_STACK     75
+#define BC_RETURN_LOCAL_STACK      76
+#define BC_RETURN_SELF_STACK       77
+#define BC_RETURN_FIELD_0_STACK    78
+#define BC_RETURN_FIELD_1_STACK    79
+#define BC_RETURN_FIELD_2_STACK    80
+
+#define _LAST_BYTECODE BC_RETURN_FIELD_2_STACK
 
 #define BC_INVALID           255
 // clang-format on

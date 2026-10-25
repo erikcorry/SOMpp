@@ -948,22 +948,43 @@ VMDouble* Universe::NewDouble(double value) {
 }
 #endif
 
-VMFrame* Universe::NewFrame(VMFrame* previousFrame, VMMethod* method) {
-#if USE_FRAME_STACK
+VMFrame* Universe::NewFrame(VMFrame* previousFrame, VMMethod* method,
+                            bool senderOnFrameStack) {
+#if !USE_FRAME_STACK
+    (void)senderOnFrameStack;
+#else
     // A method that makes no blocks has its frame on the frame stack, right
     // above the stack of the frame below it there, see ideas/frame-stack.md.
+    // The arguments and the sender's self are on top of that stack, or, if
+    // the sender is in the heap, they're copied from there to below the
+    // frame, see VMStackFrame.
     size_t const stackFrameSize = method->GetStackFrameSize();
     if (stackFrameSize != 0) {
-        void* place = nullptr;
+        size_t argumentSlots = 0;
+        if (!senderOnFrameStack) {
+            argumentSlots = method->GetNumberOfArguments() + 1;
+        }
+        size_t const size = argumentSlots * sizeof(gc_oop_t) + stackFrameSize;
+        gc_oop_t* place = nullptr;
         if (!gcStressRetryMode ||
-            !GetHeap<HEAP_CLS>()->StressFailsAllocation(stackFrameSize)) {
-            place = GetInterpreter()->AllocateStackFrame(stackFrameSize);
+            !GetHeap<HEAP_CLS>()->StressFailsAllocation(size)) {
+            place = (gc_oop_t*)GetInterpreter()->AllocateStackFrame(size);
         }
         if (place == nullptr) {
             AbandonIfCompiling();
             return nullptr;
         }
-        return ::new (place) VMStackFrame(method, previousFrame);
+        if (argumentSlots != 0) {
+            // the sender saved its top, its self, see VMMethod::Invoke()
+            gc_oop_t const* const from =
+                static_cast<VMHeapFrame*>(previousFrame)->stack_ptr + 1 -
+                argumentSlots;
+            for (size_t i = 0; i < argumentSlots; i++) {
+                place[i] = from[i];
+            }
+        }
+        return ::new (place + argumentSlots)
+            VMStackFrame(method, previousFrame);
     }
 #endif
     size_t const additionalBytes =

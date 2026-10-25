@@ -36,49 +36,49 @@
 #endif
 
 const uint8_t Bytecode::bytecodeLengths[] = {
-    1,  // BC_HALT
-    1,  // BC_DUP
-    1,  // BC_DUP_SECOND
-    3,  // BC_PUSH_LOCAL
-    1,  // BC_PUSH_LOCAL_0
-    1,  // BC_PUSH_LOCAL_1
-    1,  // BC_PUSH_LOCAL_2
-    3,  // BC_PUSH_ARGUMENT
-    1,  // BC_PUSH_SELF
-    1,  // BC_PUSH_ARG_1
-    1,  // BC_PUSH_ARG_2
-    2,  // BC_PUSH_FIELD
-    1,  // BC_PUSH_FIELD_0
-    1,  // BC_PUSH_FIELD_1
-    1 + sizeof(void*),  // BC_PUSH_BLOCK
-    1 + sizeof(void*),  // BC_PUSH_CONSTANT
-    1,  // BC_PUSH_0
-    1,  // BC_PUSH_1
-    2,  // BC_PUSH_SMALL_INT
-    1,  // BC_PUSH_NIL
-    1 + sizeof(void*),  // BC_PUSH_GLOBAL
-    1,  // BC_POP
-    3,  // BC_POP_LOCAL
-    1,  // BC_POP_LOCAL_0
-    1,  // BC_POP_LOCAL_1
-    1,  // BC_POP_LOCAL_2
-    3,  // BC_POP_ARGUMENT
-    2,  // BC_POP_FIELD
-    1,  // BC_POP_FIELD_0
-    1,  // BC_POP_FIELD_1
+    1,                                // BC_HALT
+    1,                                // BC_DUP
+    1,                                // BC_DUP_SECOND
+    3,                                // BC_PUSH_LOCAL
+    1,                                // BC_PUSH_LOCAL_0
+    1,                                // BC_PUSH_LOCAL_1
+    1,                                // BC_PUSH_LOCAL_2
+    3,                                // BC_PUSH_ARGUMENT
+    1,                                // BC_PUSH_SELF
+    1,                                // BC_PUSH_ARG_1
+    1,                                // BC_PUSH_ARG_2
+    2,                                // BC_PUSH_FIELD
+    1,                                // BC_PUSH_FIELD_0
+    1,                                // BC_PUSH_FIELD_1
+    1 + sizeof(void*),                // BC_PUSH_BLOCK
+    1 + sizeof(void*),                // BC_PUSH_CONSTANT
+    1,                                // BC_PUSH_0
+    1,                                // BC_PUSH_1
+    2,                                // BC_PUSH_SMALL_INT
+    1,                                // BC_PUSH_NIL
+    1 + sizeof(void*),                // BC_PUSH_GLOBAL
+    1,                                // BC_POP
+    3,                                // BC_POP_LOCAL
+    1,                                // BC_POP_LOCAL_0
+    1,                                // BC_POP_LOCAL_1
+    1,                                // BC_POP_LOCAL_2
+    3,                                // BC_POP_ARGUMENT
+    2,                                // BC_POP_FIELD
+    1,                                // BC_POP_FIELD_0
+    1,                                // BC_POP_FIELD_1
     SendSite::Length(BC_SEND),        // BC_SEND
     SendSite::Length(BC_SEND_1),      // BC_SEND_1
     SendSite::Length(BC_SUPER_SEND),  // BC_SUPER_SEND
-    1,  // BC_RETURN_LOCAL
-    1,  // BC_RETURN_NON_LOCAL
-    1,  // BC_RETURN_SELF
-    1,  // BC_RETURN_FIELD_0
-    1,  // BC_RETURN_FIELD_1
-    1,  // BC_RETURN_FIELD_2
-    1,  // BC_INC
-    1,  // BC_DEC
-    2,  // BC_INC_FIELD
-    2,  // BC_INC_FIELD_PUSH
+    1,                                // BC_RETURN_LOCAL
+    1,                                // BC_RETURN_NON_LOCAL
+    1,                                // BC_RETURN_SELF
+    1,                                // BC_RETURN_FIELD_0
+    1,                                // BC_RETURN_FIELD_1
+    1,                                // BC_RETURN_FIELD_2
+    1,                                // BC_INC
+    1,                                // BC_DEC
+    2,                                // BC_INC_FIELD
+    2,                                // BC_INC_FIELD_PUSH
 
     3,  // BC_JUMP
     3,  // BC_JUMP_ON_FALSE_POP
@@ -105,11 +105,22 @@ const uint8_t Bytecode::bytecodeLengths[] = {
     3,  // BC_JUMP2_BACKWARD
 
     SendSite::Length(BC_SEND_EQEQ),  // BC_SEND_EQEQ
-    SendSite::staticLength,  // BC_STATIC_SEND
-    SendSite::staticLength,  // BC_STATIC_SEND_1
-    SendSite::notUnderstoodLength,  // BC_NOT_UNDERSTOOD
-    2,  // BC_PUSH_STACK
-    2,  // BC_POP_STACK
+    SendSite::staticLength,          // BC_STATIC_SEND
+    SendSite::staticLength,          // BC_STATIC_SEND_1
+    SendSite::notUnderstoodLength,   // BC_NOT_UNDERSTOOD
+    2,                               // BC_PUSH_STACK
+    2,                               // BC_POP_STACK
+
+    SendSite::Length(BC_SEND),       // BC_SEND_STACK
+    SendSite::Length(BC_SEND_1),     // BC_SEND_1_STACK
+    SendSite::Length(BC_SEND_EQEQ),  // BC_SEND_EQEQ_STACK
+    SendSite::staticLength,          // BC_STATIC_SEND_STACK
+    SendSite::staticLength,          // BC_STATIC_SEND_1_STACK
+    1,                               // BC_RETURN_LOCAL_STACK
+    1,                               // BC_RETURN_SELF_STACK
+    1,                               // BC_RETURN_FIELD_0_STACK
+    1,                               // BC_RETURN_FIELD_1_STACK
+    1,                               // BC_RETURN_FIELD_2_STACK
 };
 
 const char* Bytecode::bytecodeNames[] = {
@@ -184,6 +195,16 @@ const char* Bytecode::bytecodeNames[] = {
     "NOT_UNDERSTOOD  ",          // 68
     "PUSH_STACK      ",          // 69
     "POP_STACK       ",          // 70
+    "SEND_STACK      ",          // 71
+    "SEND_1_STACK    ",          // 72
+    "SEND_EQEQ_STACK ",          // 73
+    "STATIC_SEND_STACK",         // 74
+    "STATIC_SEND_1_STACK",       // 75
+    "RETURN_LOCAL_STACK",        // 76
+    "RETURN_SELF_STACK",         // 77
+    "RETURN_FIELD_0_STACK",      // 78
+    "RETURN_FIELD_1_STACK",      // 79
+    "RETURN_FIELD_2_STACK",      // 80
 };
 
 uint8_t GetNumberOfWords(uint8_t bc) {
@@ -194,11 +215,16 @@ uint8_t GetNumberOfWords(uint8_t bc) {
         case BC_STATIC_SEND:
         case BC_STATIC_SEND_1:
         case BC_NOT_UNDERSTOOD:
+        case BC_STATIC_SEND_STACK:
+        case BC_STATIC_SEND_1_STACK:
             return 1;
         case BC_SEND:
         case BC_SEND_1:
         case BC_SUPER_SEND:
         case BC_SEND_EQEQ:
+        case BC_SEND_STACK:
+        case BC_SEND_1_STACK:
+        case BC_SEND_EQEQ_STACK:
             return 2;
         default:
             return 0;
