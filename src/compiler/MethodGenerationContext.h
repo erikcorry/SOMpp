@@ -114,6 +114,12 @@ public:
 
     uint8_t GetNumberOfArguments();
     void AddBytecode(uint8_t bc, som_int_t stackEffect);
+    /**
+     * Adds a send, which takes its receiver and arguments from the stack,
+     * and needs one more slot above them, for the sender's self, see
+     * Interpreter::PushSelf().
+     */
+    void AddSend(uint8_t bc, som_int_t stackEffect);
     void AddBytecodeArgument(uint8_t arg);
     size_t AddBytecodeArgumentAndGetIndex(size_t bc);
 

@@ -39,9 +39,9 @@ bool VMInvokable::IsPrimitive() const {
 }
 
 void VMInvokable::InvokeFromVM(VMFrame* frame) {
-    gc_oop_t* const sp = Invoke(frame, frame->GetStackPointer());
+    gc_oop_t* const sp = Invoke(frame, GetInterpreter()->GetStackPointer());
     // the frame's, or the new frame's, if it pushed one
-    GetInterpreter()->GetFrame()->SetStackPointer(sp);
+    GetInterpreter()->SetStackPointer(sp);
 }
 
 void VMInvokable::WalkObjects(walk_heap_fn walk) {

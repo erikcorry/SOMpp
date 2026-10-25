@@ -25,6 +25,16 @@ public:
     static VMInvokable* GetSafeBinary(VMSymbol* sig, BinaryPrim prim);
     static VMInvokable* GetSafeTernary(VMSymbol* sig, TernaryPrim prim);
 
+#ifndef FRUCTUS
+    /**
+     * For a routine that fails with an error: its primitive then sends
+     * #error: with `message` to its receiver, in place of its own send.
+     * Answers the message, as the routine's result, or nullptr if it can't
+     * be made, which makes the send run again after a collection.
+     */
+    static vm_oop_t SendError(const char* message);
+#endif
+
     DECLARE_AS_DEBUG_STRING(final)
 
 #ifndef FRUCTUS

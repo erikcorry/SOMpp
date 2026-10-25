@@ -13,6 +13,7 @@
 #endif
 #include "../vm/Universe.h"
 #include "../vmobjects/ObjectFormats.h"
+#include "../vmobjects/VMSafePrimitive.h"
 
 const size_t VMVector::VMVectorNumberOfFields = 3;
 
@@ -241,21 +242,9 @@ vm_oop_t VMVector::IndexOutOfBounds(size_t maxSize, size_t indexAccessed) {
     return sendError(message);
 }
 
-// Sends #error: to the vector from a primitive, whose receiver and arguments
-// are still on the stack, see VMFrame::EXTRA_STACK_SLOTS. Answers the message,
-// which VMSafe*Primitive::Invoke puts back on the stack, as the argument of
-// #error: in place of the primitive's, or nullptr if it failed.
+// Sends #error: to the vector, in place of the primitive's send, see
+// VMSafePrimitive::SendError().
 vm_oop_t VMVector::sendError(const char* message) {
-    VMFrame* frame = GetInterpreter()->GetFrame();
-    VMSymbol* selector = SymbolFor("error:");
-    vm_oop_t errorMsg = Universe::NewString(message);
-    if (selector == nullptr || errorMsg == nullptr) {
-        return nullptr;
-    }
-    vm_oop_t args[1] = {errorMsg};
-    if (!this->Send(selector, args, 1)) {
-        return nullptr;
-    }
-    return frame->Pop();
+    return VMSafePrimitive::SendError(message);
 }
 #endif

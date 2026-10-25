@@ -379,9 +379,9 @@ LABEL_BC_NOT_UNDERSTOOD:
 
 LABEL_BC_RETURN_LOCAL:
     PROLOGUE();
-    // the returning frame's stack_ptr doesn't matter any more
-    popFrameAndPushResult(load_ptr(*sp));
-    RELOAD_PC();
+    // the returning frame's stack doesn't matter any more
+    sp = popFrameAndPushResult(load_ptr(*sp));
+    RELOAD_PC_ONLY();
     DISPATCH_NOGC();
 
 LABEL_BC_RETURN_NON_LOCAL:
@@ -397,31 +397,30 @@ LABEL_BC_RETURN_NON_LOCAL:
     RELOAD_PC();
     DISPATCH_NOGC();
 
-LABEL_BC_RETURN_SELF: {
+LABEL_BC_RETURN_SELF:
     PROLOGUE();
     assert(GetFrame()->GetContext() == nullptr &&
            "RETURN_SELF is not allowed in blocks");
-    popFrameAndPushResult(GetFrame()->GetArgumentInCurrentContext(0));
-    RELOAD_PC();
+    sp = popFrameAndPushResult(GetSelf());
+    RELOAD_PC_ONLY();
     DISPATCH_NOGC();
-}
 
 LABEL_BC_RETURN_FIELD_0:
     PROLOGUE();
-    doReturnFieldWithIndex(0);
-    RELOAD_PC();
+    sp = doReturnFieldWithIndex(0);
+    RELOAD_PC_ONLY();
     DISPATCH_NOGC();
 
 LABEL_BC_RETURN_FIELD_1:
     PROLOGUE();
-    doReturnFieldWithIndex(1);
-    RELOAD_PC();
+    sp = doReturnFieldWithIndex(1);
+    RELOAD_PC_ONLY();
     DISPATCH_NOGC();
 
 LABEL_BC_RETURN_FIELD_2:
     PROLOGUE();
-    doReturnFieldWithIndex(2);
-    RELOAD_PC();
+    sp = doReturnFieldWithIndex(2);
+    RELOAD_PC_ONLY();
     DISPATCH_NOGC();
 
 LABEL_BC_INC:
@@ -765,7 +764,7 @@ RETRY:
 VMFrame* Interpreter::PushNewFrame(VMMethod* method) {
     VMFrame* frm = Universe::NewFrame(GetFrame(), method);
     if (frm != nullptr) {
-        SetFrame(frm);
+        switchFrame(frm);
     }
     return frm;
 }
@@ -782,29 +781,34 @@ VMFrame* Interpreter::PushNewFrame(VMMethod* method) {
 //
 // A frame on the frame stack isn't remembered, since the stack is a root at
 // every collection, see WalkGlobals(). When a frame on the stack stops being
-// the current frame for one in the heap, stackTop says where the next frame
-// on the stack goes: above the stack frame's stack if it called the heap
-// frame, and where the stack frame was if it returned, or otherwise left.
-void Interpreter::SetFrame(VMFrame* frm) {
-    if (frame != nullptr) {
-#if USE_FRAME_STACK
-        if (!OnFrameStack(frame)) {
-            remember_object(frame);
-        } else if (!OnFrameStack(frm)) {
-            stackTop = frm->GetPreviousFrame() == frame ? frame->stack_ptr + 1
-                                                        : (gc_oop_t*)frame;
-        }
-#else
+// the current frame, stackTop says where the next frame on the stack goes,
+// see popFrame() and VMMethod::Invoke().
+void Interpreter::switchFrame(VMFrame* frm) {
+    if (frame != nullptr && !IsStackFrame(frame)) {
         remember_object(frame);
-#endif
     }
     frame = frm;
     method = frm->GetMethod();
 }
 
+void Interpreter::SetFrame(VMFrame* frm) {
+    switchFrame(frm);
+    SetSelf(SelfOf(frm));
+}
+
+// A block's outer context is in the heap, and so is its self, at the heap
+// frame's offset.
+vm_oop_t Interpreter::SelfOf(VMFrame* frm) {
+    if (frm->HasContext()) {
+        return static_cast<VMHeapFrame*>(frm->GetOuterContext())->GetSelf();
+    }
+    return frm->GetArgumentInCurrentContext(0);
+}
+
 void Interpreter::ClearFrames() {
     frame = nullptr;
     method = nullptr;
+    self = nullptr;
 #if USE_FRAME_STACK
     SlidingHeap const* const heap = GetHeap<SlidingHeap>();
     stackTop = (gc_oop_t*)heap->GetStackBase();
@@ -826,29 +830,48 @@ bool Interpreter::growFrameStack(char* end) {
 }
 #endif
 
+// It's set as the current frame changes: by the invokable that pushes a
+// frame, see VMMethod::Invoke() and VMEvaluationPrimitive::Invoke(), by the
+// return, from where the send saved it, see popFrameAndPushResult(), and by
+// SetFrame().
 vm_oop_t Interpreter::GetSelf() {
-    VMFrame const* const context = GetFrame()->GetOuterContext();
-    return context->GetArgumentInCurrentContext(0);
+    assert(load_ptr(self) == SelfOf(GetFrame()));
+    return load_ptr(self);
 }
 
+// A frame on the frame stack that returns leaves its address as the frame
+// stack's top: it went where the top was, which is the top of its caller's
+// stack + 1 if the caller is on the stack too, see VMStackFrame. The caller's
+// self is on top of its stack, see popFrameAndPushResult().
 VMFrame* Interpreter::popFrame() {
     VMFrame* result = GetFrame();
-    SetFrame(GetFrame()->GetPreviousFrame());
+    switchFrame(GetFrame()->GetPreviousFrame());
+#if USE_FRAME_STACK
+    if (OnFrameStack(result)) {
+        stackTop = (gc_oop_t*)result;
+    }
+#endif
 
     result->ClearPreviousFrame();
     return result;
 }
 
-void Interpreter::popFrameAndPushResult(vm_oop_t result) {
+// Answers the top of the caller's stack, with the result in place of the
+// receiver and the arguments, without saving it, see RELOAD_PC_ONLY(). The
+// caller's self was saved above the arguments, see PushSelf().
+gc_oop_t* Interpreter::popFrameAndPushResult(vm_oop_t result) {
     VMFrame const* const prevFrame = popFrame();
 
     VMMethod const* const method = prevFrame->GetMethod();
     uint8_t const numberOfArgs = method->GetNumberOfArguments();
 
     // the frame is the current one again, which needs no write barrier, see
-    // SetFrame()
-    GetFrame()->stack_ptr -= numberOfArgs;
-    *++GetFrame()->stack_ptr = store_with_separate_barrier(result);
+    // switchFrame()
+    gc_oop_t* const top = GetStackPointer();
+    self = *top;
+    gc_oop_t* const sp = top - numberOfArgs;
+    *sp = store_with_separate_barrier(result);
+    return sp;
 }
 
 #ifdef FRUCTUS
@@ -891,9 +914,9 @@ gc_oop_t* Interpreter::sendMiss(uint8_t* site, VMClass* receiverClass,
     VMInvokable* invokable = receiverClass->LookupInvokable(selector);
 
     if (invokable == nullptr) {
-        GetFrame()->SetStackPointer(sp);
+        SetStackPointer(sp);
         triggerDoesNotUnderstand(selector);
-        return GetFrame()->GetStackPointer();
+        return GetStackPointer();
     }
     if (isUnlinked) {
         SendSite::Link(site, invokable, receiverClass);
@@ -954,8 +977,8 @@ void Interpreter::triggerDoesNotUnderstand(VMSymbol* signature) {
 
     GetFrame()->Pop();  // pop the receiver
 
-    // it needs 3 slots, and the failed send had at least 1, see
-    // VMFrame::EXTRA_STACK_SLOTS
+    // it needs 4 slots, with the saved self, and the failed send had at
+    // least 2, see VMFrame::EXTRA_STACK_SLOTS
     if (!AS_OBJ(receiver)->Send(selector, arguments, 2)) {
         GetFrame()->PushIntoCurrent(receiver);
         for (size_t i = 0; i < (size_t)numberOfArgs - 1; ++i) {
@@ -974,7 +997,7 @@ vm_oop_t Interpreter::getField(uint8_t fieldIndex) {
     return ((VMObject*)self)->GetField(fieldIndex);
 }
 
-void Interpreter::doReturnFieldWithIndex(uint8_t fieldIndex) {
+gc_oop_t* Interpreter::doReturnFieldWithIndex(uint8_t fieldIndex) {
     vm_oop_t self = GetSelf();
     vm_oop_t o = nullptr;
 
@@ -985,7 +1008,7 @@ void Interpreter::doReturnFieldWithIndex(uint8_t fieldIndex) {
         o = ((VMObject*)self)->GetField(fieldIndex);
     }
 
-    popFrameAndPushResult(o);
+    return popFrameAndPushResult(o);
 }
 
 #ifdef FRUCTUS
@@ -1006,8 +1029,8 @@ bool Interpreter::SendUnknownGlobal(VMSymbol* globalName) {
     vm_oop_t arguments[] = {globalName};
     vm_oop_t self = GetSelf();
 
-    // it needs 2 slots, and the push of the global had 1, see
-    // VMFrame::EXTRA_STACK_SLOTS
+    // it needs 3 slots, with the saved self, and the push of the global had
+    // 1, see VMFrame::EXTRA_STACK_SLOTS
     return AS_OBJ(self)->Send(selector, arguments, 1);
 }
 #endif
@@ -1086,9 +1109,9 @@ gc_oop_t* Interpreter::doSuperSend(uint8_t* site, gc_oop_t* sp) {
         write_barrier(method, super);
         return invokable->Invoke(GetFrame(), sp);
     }
-    GetFrame()->SetStackPointer(sp);
+    SetStackPointer(sp);
     triggerDoesNotUnderstand(signature);
-    return GetFrame()->GetStackPointer();
+    return GetStackPointer();
 }
 #endif
 
@@ -1115,7 +1138,7 @@ bool Interpreter::doReturnNonLocal() {
         popFrame();
     }
 
-    popFrameAndPushResult(result);
+    SetStackPointer(popFrameAndPushResult(result));
     return true;
 }
 
@@ -1142,18 +1165,22 @@ bool Interpreter::sendEscapedBlock(vm_oop_t result) {
     // the block's frame returns only if the send succeeds, so it keeps its
     // previous frame until then
     SetFrame(prevFrame);
+    // the sender's self, which SetFrame() set, above the arguments, see
+    // PushSelf()
+    vm_oop_t const savedSelf = prevFrame->Pop();
     uint8_t const numberOfArgs = blockFrame->GetMethod()->GetNumberOfArguments();
     std::vector<vm_oop_t> blockArguments(numberOfArgs);
     for (som_int_t i = numberOfArgs - 1; i >= 0; --i) {
         blockArguments[i] = prevFrame->Pop();
     }
 
-    // it needs 2 slots, and the block had at least 1, see
-    // VMFrame::EXTRA_STACK_SLOTS
+    // it needs 3 slots, with the saved self, and the block had at least 2,
+    // see VMFrame::EXTRA_STACK_SLOTS
     if (!AS_OBJ(sender)->Send(selector, arguments, 1)) {
         for (vm_oop_t arg : blockArguments) {
             prevFrame->PushIntoCurrent(arg);
         }
+        prevFrame->PushIntoCurrent(savedSelf);
         SetFrame(blockFrame);
         blockFrame->PushIntoCurrent(result);
         return false;
@@ -1252,6 +1279,9 @@ bool Interpreter::checkIsGreater(vm_oop_t top, vm_oop_t top2) {
 
 void Interpreter::WalkGlobals(walk_heap_fn walk) {
     method = load_ptr(static_cast<GCMethod*>(walk(tmp_ptr(method))));
+    if (self != nullptr) {
+        self = walk(self);
+    }
 
 #if USE_FRAME_STACK
     // The live part of the frame stack is a root, word by word, from the
@@ -1259,7 +1289,7 @@ void Interpreter::WalkGlobals(walk_heap_fn walk) {
     // the words of their headers that aren't oops are nullptr, or point
     // outside what's collected, see ideas/frame-stack.md.
     auto* const bottom = (gc_oop_t*)GetHeap<SlidingHeap>()->GetStackBase();
-    for (gc_oop_t* p = FrameStackTop(); p > bottom;) {
+    for (gc_oop_t* p = stackTop; p > bottom;) {
         p--;
         if (*p != nullptr) {
             *p = walk(*p);

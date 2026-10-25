@@ -28,6 +28,7 @@
 
 #include "FructusPrimitives.h"
 
+#include "../interpreter/Interpreter.h"
 #include "../vmobjects/VMFrame.h"
 
 void bRestart(VMFrame* frame) {

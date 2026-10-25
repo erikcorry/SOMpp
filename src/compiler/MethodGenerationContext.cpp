@@ -404,6 +404,11 @@ bool MethodGenerationContext::HasBytecodes() {
     return !bytecode.empty();
 }
 
+void MethodGenerationContext::AddSend(uint8_t bc, som_int_t stackEffect) {
+    maxStackDepth = max(maxStackDepth, currentStackDepth + 1);
+    AddBytecode(bc, stackEffect);
+}
+
 void MethodGenerationContext::AddBytecode(uint8_t bc, som_int_t stackEffect) {
     currentStackDepth += stackEffect;
     maxStackDepth = max(maxStackDepth, currentStackDepth);

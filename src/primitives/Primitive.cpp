@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <cstddef>
 
+#include "../interpreter/Interpreter.h"
 #include "../memory/Heap.h"
 #include "../vmobjects/ObjectFormats.h"
 #include "../vmobjects/VMClass.h"  // NOLINT(misc-include-cleaner) it's required to make the types complete

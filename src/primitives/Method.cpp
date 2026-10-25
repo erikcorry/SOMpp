@@ -2,6 +2,7 @@
 
 #include <cstddef>
 
+#include "../interpreter/Interpreter.h"
 #include "../memory/Heap.h"
 #include "../vmobjects/ObjectFormats.h"
 #include "../vmobjects/VMArray.h"

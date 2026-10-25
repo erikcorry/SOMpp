@@ -164,9 +164,11 @@ constexpr size_t VMMethod_stackFrameWords = 9;
 /** The bytecodes come right after the header, unaligned. */
 constexpr size_t VMMethod_size = 10;
 
-/** The header of a frame, before its arguments, the same for both kinds,
- * see VMFrame.h. */
-constexpr size_t VMFrame_size = 14;
+/** The header of a frame on the frame stack, before its arguments, see
+ * VMFrame.h. */
+constexpr size_t VMStackFrame_size = 12;
+/** The header of a frame in the heap, which has a stack_ptr too. */
+constexpr size_t VMHeapFrame_size = 14;
 
 constexpr size_t VMLiteralReturn_literal = 4;
 constexpr size_t VMLiteralReturn_numberOfArguments = 6;

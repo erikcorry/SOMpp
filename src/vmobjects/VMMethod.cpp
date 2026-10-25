@@ -131,28 +131,37 @@ VMSymbol* VMMethod::GetSendSelector(size_t bytecodeIndex) const {
 }
 #endif
 
-// The caller's stack keeps its top in stack_ptr while the frame runs, for
-// the return, see Interpreter::popFrameAndPushResult(). It's stored before the
-// frame is pushed, since a frame on the frame stack goes right above it.
-// Changes nothing if the frame can't be allocated.
-gc_oop_t* VMMethod::Invoke(VMFrame* frame, gc_oop_t* sp) {
-    frame->SetStackPointer(sp);
+// The caller, the current frame, saves its self above the arguments, and the
+// top of its stack while the frame runs, for the return, see
+// Interpreter::popFrameAndPushResult(). They're saved before the frame is
+// pushed, since a frame on the frame stack goes right above them. Changes
+// nothing if the frame can't be allocated.
+gc_oop_t* VMMethod::Invoke(VMFrame* /*frame*/, gc_oop_t* sp) {
+    GetInterpreter()->SetStackPointer(GetInterpreter()->PushSelf(sp));
     VMFrame* frm = GetInterpreter()->PushNewFrame(this);
     if (frm == nullptr) {
         return sp;
     }
-    frm->CopyArgumentsFrom(sp);
-    return frm->GetStackPointer();
+    // the arguments are right below the locals, and on top of the stack
+    gc_oop_t* const locals = frm->locals;
+    for (size_t i = 0; i < numberOfArguments; ++i) {
+        locals[i - numberOfArguments] = sp[i + 1 - numberOfArguments];
+    }
+    GetInterpreter()->SetSelf(load_ptr(sp[1 - numberOfArguments]));
+    return locals + numberOfLocals - 1;
 }
 
-gc_oop_t* VMMethod::Invoke1(VMFrame* frame, gc_oop_t* sp) {
-    frame->SetStackPointer(sp);
+gc_oop_t* VMMethod::Invoke1(VMFrame* /*frame*/, gc_oop_t* sp) {
+    GetInterpreter()->SetStackPointer(GetInterpreter()->PushSelf(sp));
     VMFrame* frm = GetInterpreter()->PushNewFrame(this);
     if (frm == nullptr) {
         return sp;
     }
-    frm->SetArgumentOfCurrent(0, load_ptr(*sp));
-    return frm->GetStackPointer();
+    // the receiver, right below the locals
+    gc_oop_t* const locals = frm->locals;
+    locals[-1] = *sp;
+    GetInterpreter()->SetSelf(load_ptr(*sp));
+    return locals + numberOfLocals - 1;
 }
 
 #ifndef FRUCTUS

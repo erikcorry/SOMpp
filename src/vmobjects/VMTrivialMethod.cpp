@@ -149,7 +149,7 @@ gc_oop_t* VMGlobalReturn::sendUnknownGlobal(VMFrame* frame, gc_oop_t* sp) {
     GetInterpreter()->SendUnknownGlobal(load_ptr(globalName));
     return sp;
 #else
-    frame->SetStackPointer(sp);
+    GetInterpreter()->SetStackPointer(sp);
     std::vector<vm_oop_t> arguments(numberOfArguments);
     for (int i = numberOfArguments - 1; i >= 0; i -= 1) {
         arguments[i] = frame->Pop();
@@ -159,7 +159,7 @@ gc_oop_t* VMGlobalReturn::sendUnknownGlobal(VMFrame* frame, gc_oop_t* sp) {
             frame->PushIntoCurrent(arg);
         }
     }
-    return GetInterpreter()->GetFrame()->GetStackPointer();
+    return GetInterpreter()->GetStackPointer();
 #endif
 }
 

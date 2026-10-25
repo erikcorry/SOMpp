@@ -56,10 +56,13 @@ public:
     /**
      * Stack slots beyond the method's maximum stack depth, for the sends the
      * VM makes that the compiler doesn't count, so that a frame never has to
-     * grow: the Vector primitives send #error: with their receiver and
-     * arguments still on the stack, #doesNotUnderstand:arguments: needs 3
-     * slots, where the send that failed had at least 1, and #unknownGlobal:
-     * and #escapedBlock: need 2, where the global or the block had 1.
+     * grow. With the sender's self, which a send saves above the arguments,
+     * see Interpreter::PushSelf(): #doesNotUnderstand:arguments: needs 4
+     * slots, where the send that failed had at least 2, #unknownGlobal: needs
+     * 3, where the global had 1, and #escapedBlock: needs 3, where the send
+     * of the block had at least 2, and so does the #error: that a unary
+     * Vector primitive sends in place of its own send, see
+     * VMSafePrimitive::SendError().
      */
     static constexpr size_t EXTRA_STACK_SLOTS = 2;
 #endif
@@ -98,58 +101,26 @@ public:
     VMFrame* GetOuterContext();
     [[nodiscard]] inline VMMethod* GetMethod() const;
 
-    inline vm_oop_t Pop() {
-        vm_oop_t result = load_ptr(*stack_ptr);
-        stack_ptr--;
-        return result;
-    }
-
-    inline void PopVoid() { stack_ptr--; }
-
-    inline vm_oop_t Top2() {
-        vm_oop_t result = load_ptr(*(stack_ptr - 1));
-        return result;
-    }
-
-    inline void SetTop(vm_oop_t val) { store_ptr(*stack_ptr, val); }
-
-    inline void Push(vm_oop_t obj) {
-        assert(RemainingStackSize() > 0);
-        ++stack_ptr;
-        store_ptr(*stack_ptr, obj);
-    }
-
-    /* Stores that skip the write barrier. Only valid for tagged integers,
-     * which are not heap objects, and for nil, true, and false. Being roots
-     * keeps those alive, but isn't enough by itself: a minor collection moves
-     * young objects, and only updates the old objects that the write barrier
-     * remembered. They are allocated in the nursery, but promoted by the first
-     * GC and never moved again. A frame can only be old after a GC, so storing
-     * them into a frame never needs the write barrier. */
-    inline void SetTopNoBarrier(vm_oop_t val) {
-        assert(IS_TAGGED(val) || val == load_ptr(nilObject) ||
-               val == load_ptr(trueObject) || val == load_ptr(falseObject));
-        *stack_ptr = store_with_separate_barrier(val);
-    }
-
-    /* Only valid for tagged integers, nil, true, and false, see
-     * SetTopNoBarrier(). */
-    inline void PushNoBarrier(vm_oop_t obj) {
-        assert(IS_TAGGED(obj) || obj == load_ptr(nilObject) ||
-               obj == load_ptr(trueObject) || obj == load_ptr(falseObject));
-        assert(RemainingStackSize() > 0);
-        ++stack_ptr;
-        SetTopNoBarrier(obj);
-    }
+    /*
+     * The stack of the current frame, for the C++ code outside the
+     * interpreter's loop. Its top is where the interpreter keeps it, see
+     * Interpreter::GetStackPointer(), so they're in Interpreter.h.
+     */
+    inline vm_oop_t Pop();
+    inline void PopVoid();
+    inline void Push(vm_oop_t obj);
+    [[nodiscard]] inline vm_oop_t GetStackElement(size_t index) const;
+    /** Empties the stack, see Block>>restart. */
+    inline void ResetStackPointer();
 
     /* Stores into the current frame, which need no write barrier: the
      * interpreter remembers the frame when it stops being the current one,
      * and before a collection, see Interpreter::SetFrame(). */
-    inline void PushIntoCurrent(vm_oop_t obj) {
-        assert(IsCurrent());
-        assert(RemainingStackSize() > 0);
-        ++stack_ptr;
-        *stack_ptr = store_with_separate_barrier(obj);
+    inline void PushIntoCurrent(vm_oop_t obj);
+
+    /** The top of a new frame's stack, with only its locals. */
+    [[nodiscard]] gc_oop_t* InitialStackPointer() const {
+        return locals + GetMethod()->GetNumberOfLocals() - 1;
     }
 
     inline void SetContextOfCurrent(VMFrame* frm) {
@@ -161,14 +132,6 @@ public:
         assert(IsCurrent());
         arguments()[argIdx] = store_with_separate_barrier(value);
     }
-
-    /**
-     * The top of the stack, which the current frame's stack_ptr has only
-     * where the interpreter saved it, see SAVE_PC() and
-     * VMInvokable::Invoke().
-     */
-    [[nodiscard]] gc_oop_t* GetStackPointer() const { return stack_ptr; }
-    void SetStackPointer(gc_oop_t* sp) { stack_ptr = sp; }
 
     /** Whether this is the interpreter's current frame. */
     [[nodiscard]] bool IsCurrent() const;
@@ -188,10 +151,6 @@ public:
         return bytecodeIndex;
     }
 #endif
-
-    [[nodiscard]] inline vm_oop_t GetStackElement(size_t index) const {
-        return load_ptr(stack_ptr[-std::make_signed_t<som_int_t>(index)]);
-    }
 
     inline vm_oop_t GetLocal(uint8_t index, uint8_t contextLevel) {
         VMFrame const* context = GetContextLevel(contextLevel);
@@ -221,8 +180,6 @@ public:
 
     void SetArgument(uint8_t index, uint8_t contextLevel, vm_oop_t value);
     void PrintStackTrace() const;
-    /** Copies the arguments from the top of a stack, at `sp`. */
-    void CopyArgumentsFrom(const gc_oop_t* sp);
 
     inline void SetArgument(size_t argIdx, vm_oop_t value) {
         store_ptr(arguments()[argIdx], value);
@@ -237,15 +194,6 @@ public:
     void PrintBytecode() const;
 #endif
 
-    [[nodiscard]] size_t RemainingStackSize() const {
-        // - 1 because the stack pointer points at the top entry,
-        // so the next entry would be put at stackPointer+1
-        size_t const size =
-            ((size_t)this + GetObjectSize() - size_t(stack_ptr)) /
-            sizeof(VMObject*);
-        return size - 1;
-    }
-
     DECLARE_AS_DEBUG_STRING(override)
 
     make_testable(public);
@@ -259,12 +207,6 @@ public:
 #else
     size_t bytecodeIndex{0};
 #endif
-
-    void ResetStackPointer() {
-        VMMethod const* meth = GetMethod();
-        // Set the stack pointer to its initial value thereby clearing the stack
-        stack_ptr = locals + meth->GetNumberOfLocals() - 1;
-    }
 
     void ResetBytecodeIndex();
 
@@ -283,11 +225,12 @@ protected:
 #endif
           previousFrame(store_root(previousFrame)), method(store_root(method)),
           locals((gc_oop_t*)SHIFTED_PTR(this, headerSize) +
-                 method->GetNumberOfArguments()),
-          stack_ptr(locals + method->GetNumberOfLocals() - 1) {
+                 method->GetNumberOfArguments()) {
         // The arguments are copied in still, and the stack needs nothing,
-        // since nothing above stack_ptr is a root, see WalkObjects().
-        for (gc_oop_t* local = locals; local <= stack_ptr; local++) {
+        // since nothing above its top is a root, see WalkObjects() and
+        // Interpreter::WalkGlobals().
+        gc_oop_t* const end = locals + method->GetNumberOfLocals();
+        for (gc_oop_t* local = locals; local < end; local++) {
             *local = nilObject;
         }
     }
@@ -296,11 +239,11 @@ protected:
     GCFrame* context{nullptr};
     GCMethod* method;
     gc_oop_t* locals;
-    gc_oop_t* stack_ptr;
 
     /**
      * The arguments, then the locals and the stack, which come right after
-     * the fields of the frame's kind.
+     * the fields of the frame's kind. Where the kinds' fields differ in
+     * size, it's in Interpreter.h, which knows the frame's kind.
      */
     [[nodiscard]] inline gc_oop_t* arguments() const;
 
@@ -318,6 +261,11 @@ protected:
 /**
  * A frame on the frame stack. The stack is scanned word by word, so a stack
  * frame is never walked, cloned, or asked its size by a collector.
+ *
+ * It has no stack_ptr: the top of its stack is right below the frame above
+ * it on the frame stack, or below the frame stack's top, if the frames above
+ * it are in the heap, or in the interpreter while it's the current frame,
+ * see Interpreter::GetStackPointer().
  */
 class VMStackFrame final : public VMFrame {
 public:
@@ -342,7 +290,8 @@ class VMHeapFrame final : public VMFrame {
 public:
     VMHeapFrame(size_t additionalBytes, VMMethod* method,
                 VMFrame* previousFrame)
-        : VMFrame(sizeof(VMHeapFrame), method, previousFrame)
+        : VMFrame(sizeof(VMHeapFrame), method, previousFrame),
+          stack_ptr(InitialStackPointer())
 #ifndef FRUCTUS
           ,
           totalObjectSize(additionalBytes + sizeof(VMHeapFrame))
@@ -376,23 +325,23 @@ public:
     void WalkObjects(walk_heap_fn /*unused*/) final;
     [[nodiscard]] VMFrame* CloneForMovingGC() const final;
 
+    /** The first argument, at the heap frame's offset, see arguments(). */
+    [[nodiscard]] vm_oop_t GetSelf() const {
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast)
+        return load_ptr(*(gc_oop_t*)SHIFTED_PTR(this, sizeof(VMHeapFrame)));
+    }
+
     make_testable(public);
 
+    /**
+     * The top of the stack, which is up to date only where the interpreter
+     * saved it, see Interpreter::GetStackPointer().
+     */
+    gc_oop_t* stack_ptr;
 #ifndef FRUCTUS
     size_t totalObjectSize;
 #endif
 };
-
-gc_oop_t* VMFrame::arguments() const {
-    if constexpr (sizeof(VMStackFrame) == sizeof(VMHeapFrame)) {
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast)
-        return (gc_oop_t*)SHIFTED_PTR(this, sizeof(VMHeapFrame));
-    } else {
-        // they're at different offsets in the two kinds, right before the
-        // locals
-        return locals - GetMethod()->GetNumberOfArguments();
-    }
-}
 
 bool VMFrame::HasContext() const {
     return context != nullptr;
@@ -434,3 +383,7 @@ void VMFrame::ClearPreviousFrame() {
 VMMethod* VMFrame::GetMethod() const {
     return load_ptr(method);
 }
+
+// the operations on the current frame's stack, and arguments(), which need
+// the interpreter
+#include "../interpreter/Interpreter.h"

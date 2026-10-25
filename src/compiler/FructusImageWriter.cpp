@@ -978,7 +978,7 @@ void FructusImage::AsmFile::writeMethod(VMMethod* method, const std::string& lab
     // fructus never sends #escapedBlock:.
     size_t stackFrameWords = 0;
     if (!method->MakesBlocks()) {
-        stackFrameWords = L::VMFrame_size / L::word +
+        stackFrameWords = L::VMStackFrame_size / L::word +
                           method->numberOfArguments + method->numberOfLocals +
                           method->maximumNumberOfStackElements;
         if (stackFrameWords > UINT8_MAX) {

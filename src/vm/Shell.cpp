@@ -69,6 +69,7 @@ void Shell::Start() {
 
     // Create a fake bootstrap frame
     currentFrame = GetInterpreter()->PushNewFrame(GetBootstrapMethod());
+    GetInterpreter()->SetSelf(load_ptr(nilObject));
     // Remember the first bytecode index, e.g. index of the halt instruction
     bytecodeIndex = currentFrame->GetBytecodeIndex();
 

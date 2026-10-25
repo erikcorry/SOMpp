@@ -99,6 +99,7 @@ gc_oop_t* VMEvaluationPrimitive::Invoke(VMFrame* frm, gc_oop_t* sp) {
     VMFrame* const newFrame = GetInterpreter()->GetFrame();
     if (newFrame != frm) {
         newFrame->SetContextOfCurrent(context);
+        GetInterpreter()->SetSelf(Interpreter::SelfOf(newFrame));
     }
     return sp;
 }
@@ -117,6 +118,7 @@ gc_oop_t* VMEvaluationPrimitive::Invoke1(VMFrame* frm, gc_oop_t* sp) {
     VMFrame* const newFrame = GetInterpreter()->GetFrame();
     if (newFrame != frm) {
         newFrame->SetContextOfCurrent(context);
+        GetInterpreter()->SetSelf(Interpreter::SelfOf(newFrame));
     }
     return sp;
 }

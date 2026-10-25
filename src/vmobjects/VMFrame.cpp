@@ -33,6 +33,7 @@
 #ifndef FRUCTUS
 #include "../compiler/Disassembler.h"
 #endif
+#include "../interpreter/Interpreter.h"
 #include "../memory/Heap.h"
 #include "../misc/defs.h"
 #include "../vm/Globals.h"
@@ -147,9 +148,16 @@ void VMFrame::PrintStack() const {
         local_offset++;
     }
 
-    // above stack_ptr the slots aren't initialized
-    for (size_t i = 0; &locals[local_offset + i] <= stack_ptr; i++) {
-        if (stack_ptr == &locals[local_offset + i]) {
+    // Above the top the slots aren't initialized. A stack frame has its top
+    // only while it's the current frame, see VMStackFrame.
+    const gc_oop_t* top = &locals[local_offset - 1];
+    if (IsCurrent()) {
+        top = GetInterpreter()->GetStackPointer();
+    } else if (!GetInterpreter()->IsStackFrame(this)) {
+        top = static_cast<const VMHeapFrame*>(this)->stack_ptr;
+    }
+    for (size_t i = 0; &locals[local_offset + i] <= top; i++) {
+        if (top == &locals[local_offset + i]) {
             Print("-> stk " + to_string(i) + ": ");
         } else {
             Print("   stk " + to_string(i) + ": ");
@@ -205,15 +213,6 @@ void VMFrame::PrintStackTrace() const {
     }
 }
 #endif
-
-void VMFrame::CopyArgumentsFrom(const gc_oop_t* sp) {
-    // this is the current frame, see VMMethod::Invoke()
-    size_t const num_args = GetMethod()->GetNumberOfArguments();
-    const gc_oop_t* const args = sp + 1 - num_args;
-    for (size_t i = 0; i < num_args; ++i) {
-        SetArgumentOfCurrent(i, load_ptr(args[i]));
-    }
-}
 
 #if DEBUG
 std::string VMFrame::AsDebugString() const {

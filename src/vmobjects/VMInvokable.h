@@ -65,16 +65,18 @@ public:
      * pushed one. If an allocation failed it changes nothing, and answers
      * sp.
      *
-     * The frame's stack_ptr isn't up to date: a method stores sp there when
-     * it pushes its frame, see VMMethod::Invoke(), and the rare invokables
-     * that work on the frame's stack store it first, see InvokeFromVM().
+     * The top of the frame's stack isn't saved: a method saves sp when it
+     * pushes its frame, see VMMethod::Invoke(), and the rare invokables
+     * that work on the frame's stack save it first, see InvokeFromVM() and
+     * Interpreter::GetStackPointer().
      */
     virtual gc_oop_t* Invoke(VMFrame* frame, gc_oop_t* sp) = 0;
     virtual gc_oop_t* Invoke1(VMFrame* frame, gc_oop_t* sp) = 0;
 
     /**
      * Invoke() for C++ code outside the interpreter, which keeps the top of
-     * the current frame's stack in its stack_ptr, before and after.
+     * the current frame's stack saved, before and after, see
+     * Interpreter::GetStackPointer().
      */
     void InvokeFromVM(VMFrame* frame);
 #ifndef FRUCTUS

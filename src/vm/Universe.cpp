@@ -321,15 +321,18 @@ void Universe::printUsageAndExit(char* executable) {
 }
 #endif
 
+// Its stack has the receiver and the arguments of the send, and the self
+// that the send saves above them, see Interpreter::PushSelf().
 VMMethod* Universe::createBootstrapMethod(VMClass* holder,
                                           uint8_t numArgsOfMsgSend) {
 #ifdef FRUCTUS
-    VMMethod* bootstrapMethod = NewMethod(nullptr, 1, 0, numArgsOfMsgSend, 1);
+    VMMethod* bootstrapMethod =
+        NewMethod(nullptr, 1, 0, numArgsOfMsgSend + 1, 1);
 #else
     vector<BackJump> inlinedLoops;
     auto* bootStrapScope = new LexicalScope(nullptr, {}, {});
     VMMethod* bootstrapMethod =
-        NewMethod(SymbolFor("bootstrap"), 1, 0, numArgsOfMsgSend,
+        NewMethod(SymbolFor("bootstrap"), 1, 0, numArgsOfMsgSend + 1,
                   bootStrapScope, inlinedLoops);
 #endif
 
@@ -375,6 +378,7 @@ vm_oop_t Universe::interpretMethod(VMObject* receiver, VMInvokable* initialize,
          argIdx += 1) {
         bootstrapFrame->SetArgument(argIdx, 0, load_ptr(nilObject));
     }
+    GetInterpreter()->SetSelf(load_ptr(nilObject));
 
     bootstrapFrame->PushIntoCurrent(receiver);
 

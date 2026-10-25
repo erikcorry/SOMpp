@@ -48,9 +48,9 @@ VMInvokable* VMPrimitive::GetFramePrim(VMSymbol* sig, FramePrim prim) {
 // The routine works on the frame's stack, and may push a frame, see
 // InvokeFromVM().
 gc_oop_t* VMPrimitive::Invoke(VMFrame* frm, gc_oop_t* sp) {
-    frm->SetStackPointer(sp);
+    GetInterpreter()->SetStackPointer(sp);
     prim.pointer(frm);
-    return GetInterpreter()->GetFrame()->GetStackPointer();
+    return GetInterpreter()->GetStackPointer();
 }
 
 VMPrimitive* VMPrimitive::CloneForMovingGC() const {
