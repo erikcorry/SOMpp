@@ -110,9 +110,8 @@
 #define BC_PUSH_STACK              69
 #define BC_POP_STACK               70
 
-// On fructus the sends and returns of a method whose frames are on the frame
-// stack, which only the image writer makes, see
-// FructusImage::AsmFile::writeBytecodes()
+// The sends and returns of a method whose frames are on the frame stack, see
+// StackFrameBytecode()
 #define BC_SEND_STACK              71
 #define BC_SEND_1_STACK            72
 #define BC_SEND_EQEQ_STACK         73
@@ -208,4 +207,12 @@ uint8_t IsReturnFieldBytecode(uint8_t bc);
  * must not have static sends, which lose the number of arguments.
  */
 std::vector<int> ComputeStackDepths(const uint8_t* bytecodes, size_t length);
+
+/**
+ * The bytecode in place of `bc` in a method whose frames are on the frame
+ * stack, so that the interpreter knows where the frames are, see
+ * Interpreter::enterMethod(), and HeapFrameBytecode() goes back.
+ */
+uint8_t StackFrameBytecode(uint8_t bc);
+uint8_t HeapFrameBytecode(uint8_t bc);
 #endif

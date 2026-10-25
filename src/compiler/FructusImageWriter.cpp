@@ -462,7 +462,7 @@ private:
     /**
      * Moves the arguments in the bytecodes of every method from where the
      * host's frames have them to where fructus's do, see
-     * VMMethod::MoveArguments().
+     * VMMethod::MoveArguments(), and drops the host's frame kinds.
      */
     void placeArguments();
     void findStaticSends();
@@ -975,33 +975,7 @@ static int FructusArgumentGap(VMMethod* method) {
  * interpreter knows where the frames are, see Interpreter::enterMethod().
  */
 static uint8_t FrameKindBytecode(VMMethod* method, uint8_t bc) {
-    if (FructusArgumentGap(method) == 0) {
-        return bc;
-    }
-    switch (bc) {
-        case BC_SEND:
-            return BC_SEND_STACK;
-        case BC_SEND_1:
-            return BC_SEND_1_STACK;
-        case BC_SEND_EQEQ:
-            return BC_SEND_EQEQ_STACK;
-        case BC_STATIC_SEND:
-            return BC_STATIC_SEND_STACK;
-        case BC_STATIC_SEND_1:
-            return BC_STATIC_SEND_1_STACK;
-        case BC_RETURN_LOCAL:
-            return BC_RETURN_LOCAL_STACK;
-        case BC_RETURN_SELF:
-            return BC_RETURN_SELF_STACK;
-        case BC_RETURN_FIELD_0:
-            return BC_RETURN_FIELD_0_STACK;
-        case BC_RETURN_FIELD_1:
-            return BC_RETURN_FIELD_1_STACK;
-        case BC_RETURN_FIELD_2:
-            return BC_RETURN_FIELD_2_STACK;
-        default:
-            return bc;
-    }
+    return FructusArgumentGap(method) == 0 ? bc : StackFrameBytecode(bc);
 }
 
 /** The slots the host's compiler left between them, for the host's frames. */
@@ -1475,7 +1449,7 @@ void FructusImage::ImageWriter::checkClassFields(VMClass* metaclass,
         uint8_t const bc = method->GetBytecode(i);
         // the field index, of the bytecodes that have one
         auto operand = [&]() { return method->GetBytecode(i + 1); };
-        switch (bc) {
+        switch (HeapFrameBytecode(bc)) {
             case BC_PUSH_BLOCK:
                 checkClassFields(metaclass, inv,
                                  static_cast<VMMethod*>(method->GetConstant(i)));
@@ -1717,6 +1691,9 @@ void FructusImage::ImageWriter::placeArguments() {
                               HostArgumentGap(method));
         for (size_t i = 0; i < method->bcLength;
              i += Bytecode::GetBytecodeLength(method->GetBytecode(i))) {
+            // the host's frames don't matter, see FrameKindBytecode()
+            method->GetBytecodes()[i] =
+                HeapFrameBytecode(method->GetBytecode(i));
             // a block may be a trivial invokable, without bytecodes
             if (method->GetBytecode(i) == BC_PUSH_BLOCK) {
                 if (auto* block =
@@ -2003,9 +1980,9 @@ void FructusImage::ImageWriter::Write(const std::vector<std::string>& arguments)
     collectClasses(arguments);
     checkClosedWorld();
     numberClasses();
+    placeArguments();
     findDispatchRanges();
     findSignatureGroups();
-    placeArguments();
     findStaticSends();
     for (VMClass* cls : classes) {
         writeClass(cls);

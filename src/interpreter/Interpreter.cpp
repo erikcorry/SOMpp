@@ -315,7 +315,6 @@ vm_oop_t Interpreter::Start() {
                                        &&LABEL_BC_NOT_UNDERSTOOD,
                                        &&LABEL_BC_PUSH_STACK,
                                        &&LABEL_BC_POP_STACK,
-#ifdef FRUCTUS
                                        &&LABEL_BC_SEND_STACK,
                                        &&LABEL_BC_SEND_1_STACK,
                                        &&LABEL_BC_SEND_EQEQ_STACK,
@@ -325,20 +324,7 @@ vm_oop_t Interpreter::Start() {
                                        &&LABEL_BC_RETURN_SELF_STACK,
                                        &&LABEL_BC_RETURN_FIELD_0_STACK,
                                        &&LABEL_BC_RETURN_FIELD_1_STACK,
-                                       &&LABEL_BC_RETURN_FIELD_2_STACK
-#else
-                                       &&LABEL_FRUCTUS_ONLY,
-                                       &&LABEL_FRUCTUS_ONLY,
-                                       &&LABEL_FRUCTUS_ONLY,
-                                       &&LABEL_FRUCTUS_ONLY,
-                                       &&LABEL_FRUCTUS_ONLY,
-                                       &&LABEL_FRUCTUS_ONLY,
-                                       &&LABEL_FRUCTUS_ONLY,
-                                       &&LABEL_FRUCTUS_ONLY,
-                                       &&LABEL_FRUCTUS_ONLY,
-                                       &&LABEL_FRUCTUS_ONLY
-#endif
-    };
+                                       &&LABEL_BC_RETURN_FIELD_2_STACK};
 
     goto* loopTargets[*pc];
 
@@ -541,7 +527,6 @@ LABEL_BC_SEND_1:
     PROLOGUE();
     SEND(BC_SEND_1, 0, Invoke1, ENTER);
 
-#ifdef FRUCTUS
 LABEL_BC_SEND_STACK:
     PROLOGUE();
     SEND(BC_SEND, pc[SendSite::numberOfArguments] - 1, Invoke,
@@ -550,7 +535,6 @@ LABEL_BC_SEND_STACK:
 LABEL_BC_SEND_1_STACK:
     PROLOGUE();
     SEND(BC_SEND_1, 0, Invoke1, ENTER_FROM_STACK);
-#endif
 
 LABEL_BC_SUPER_SEND:
 #ifdef FRUCTUS
@@ -587,7 +571,6 @@ LABEL_BC_STATIC_SEND_1:
     PROLOGUE();
     STATIC_SEND(Invoke1, ENTER);
 
-#ifdef FRUCTUS
 LABEL_BC_STATIC_SEND_STACK:
     PROLOGUE();
     STATIC_SEND(Invoke, ENTER_FROM_STACK);
@@ -595,7 +578,6 @@ LABEL_BC_STATIC_SEND_STACK:
 LABEL_BC_STATIC_SEND_1_STACK:
     PROLOGUE();
     STATIC_SEND(Invoke1, ENTER_FROM_STACK);
-#endif
 
     // A send of a selector no class has, see SendSite.h.
 LABEL_BC_NOT_UNDERSTOOD:
@@ -651,7 +633,6 @@ LABEL_BC_RETURN_FIELD_2:
     result = getField(2);
     goto RETURN;
 
-#ifdef FRUCTUS
 LABEL_BC_RETURN_LOCAL_STACK:
     PROLOGUE();
     result = load_ptr(*sp);
@@ -676,7 +657,6 @@ LABEL_BC_RETURN_FIELD_2_STACK:
     PROLOGUE();
     result = getField(2);
     goto RETURN_FROM_STACK;
-#endif
 
 LABEL_BC_INC:
     PROLOGUE();
@@ -1005,21 +985,16 @@ LABEL_BC_SEND_EQEQ:
     PROLOGUE();
     SEND_EQEQ(ENTER);
 
-#ifdef FRUCTUS
 LABEL_BC_SEND_EQEQ_STACK:
     PROLOGUE();
     SEND_EQEQ(ENTER_FROM_STACK);
-#else
-LABEL_FRUCTUS_ONLY:
-    __builtin_unreachable();
-#endif
 
-    // The frame switches, which on fructus each kind of method has its own
-    // bytecodes for, so that the sender's kind or the returning frame's is
-    // known, see FructusImage::AsmFile::writeBytecodes(). On the host they
-    // work it out.
+    // The frame switches, which each kind of method has its own bytecodes
+    // for, so that the sender's kind or the returning frame's is known, see
+    // StackFrameBytecode().
 #define ENTER_FROM(senderOnStack)                                            \
     {                                                                        \
+        assert(IsStackFrame(frame) == (senderOnStack));                      \
         gc_oop_t* const calleeSp = enterMethod(callee, sp, (senderOnStack)); \
         if (calleeSp == nullptr) {                                           \
             goto RETRY;                                                      \
@@ -1028,14 +1003,14 @@ LABEL_FRUCTUS_ONLY:
         RELOAD_PC_ONLY();                                                    \
         DISPATCH_GC(0);                                                      \
     }
-#define RETURN_FROM(returningOnStack)                \
-    {                                                \
-        sp = leaveFrame(result, (returningOnStack)); \
-        RELOAD_PC_ONLY();                            \
-        DISPATCH_NOGC();                             \
+#define RETURN_FROM(returningOnStack)                      \
+    {                                                      \
+        assert(IsStackFrame(frame) == (returningOnStack)); \
+        sp = leaveFrame(result, (returningOnStack));       \
+        RELOAD_PC_ONLY();                                  \
+        DISPATCH_NOGC();                                   \
     }
 
-#ifdef FRUCTUS
 ENTER:
     ENTER_FROM(false);
 ENTER_FROM_STACK:
@@ -1044,12 +1019,6 @@ RETURN:
     RETURN_FROM(false);
 RETURN_FROM_STACK:
     RETURN_FROM(true);
-#else
-ENTER:
-    ENTER_FROM(IsStackFrame(frame));
-RETURN:
-    RETURN_FROM(IsStackFrame(frame));
-#endif
 
     // An allocation of the bytecode at pc failed, and it changed nothing:
     // collect, and run it again. The bytecodes that go to DISPATCH_GC do this
@@ -1256,7 +1225,7 @@ gc_oop_t* Interpreter::sendMiss(uint8_t* site, VMClass* receiverClass,
         write_barrier(method, receiverClass);
     }
     recordStat(CallStats, receiverClass, invokable);
-    if (site[0] == BC_SEND_1) {
+    if (site[0] == BC_SEND_1 || site[0] == BC_SEND_1_STACK) {
         return invokable->Invoke1(GetFrame(), sp);
     }
     return invokable->Invoke(GetFrame(), sp);

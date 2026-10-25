@@ -233,7 +233,8 @@ uint8_t GetNumberOfWords(uint8_t bc) {
 
 bool IsSendBytecode(uint8_t bc) {
     return bc == BC_SEND || bc == BC_SEND_1 || bc == BC_SUPER_SEND ||
-           bc == BC_SEND_EQEQ;
+           bc == BC_SEND_EQEQ || bc == BC_SEND_STACK || bc == BC_SEND_1_STACK ||
+           bc == BC_SEND_EQEQ_STACK;
 }
 
 bool IsJumpBytecode(uint8_t bc) {
@@ -404,7 +405,7 @@ std::vector<int> ComputeStackDepths(const uint8_t* bytecodes, size_t length) {
         }
 
         int effect = 0;
-        switch (bc) {
+        switch (HeapFrameBytecode(bc)) {
             case BC_HALT:
             case BC_RETURN_LOCAL:
             case BC_RETURN_NON_LOCAL:
@@ -467,5 +468,27 @@ std::vector<int> ComputeStackDepths(const uint8_t* bytecodes, size_t length) {
         reach(next, depth + effect);
     }
     return depths;
+}
+
+// the bytecodes that BC_SEND_STACK and the ones after it are in place of
+static const uint8_t heapFrameBytecodes[] = {
+    BC_SEND,           BC_SEND_1,        BC_SEND_EQEQ,   BC_STATIC_SEND,
+    BC_STATIC_SEND_1,  BC_RETURN_LOCAL,  BC_RETURN_SELF, BC_RETURN_FIELD_0,
+    BC_RETURN_FIELD_1, BC_RETURN_FIELD_2};
+static_assert(sizeof(heapFrameBytecodes) == _LAST_BYTECODE + 1 - BC_SEND_STACK);
+
+uint8_t StackFrameBytecode(uint8_t bc) {
+    for (size_t i = 0; i < sizeof(heapFrameBytecodes); i++) {
+        if (heapFrameBytecodes[i] == bc) {
+            return BC_SEND_STACK + i;
+        }
+    }
+    return bc;
+}
+
+uint8_t HeapFrameBytecode(uint8_t bc) {
+    return bc >= BC_SEND_STACK && bc <= _LAST_BYTECODE
+               ? heapFrameBytecodes[bc - BC_SEND_STACK]
+               : bc;
 }
 #endif

@@ -193,7 +193,7 @@ void Disassembler::dumpMethod(uint8_t* bytecodes, size_t numberOfBytecodes,
             continue;
         }
 
-        switch (bytecode) {
+        switch (HeapFrameBytecode(bytecode)) {
             case BC_PUSH_0:
             case BC_PUSH_1:
             case BC_PUSH_NIL:
@@ -448,7 +448,7 @@ void Disassembler::DumpBytecode(VMFrame* frame, VMMethod* method,
         ikind = '@';
     }
 
-    switch (bc) {
+    switch (HeapFrameBytecode(bc)) {
         case BC_PUSH_0:
         case BC_PUSH_1:
         case BC_PUSH_NIL: {

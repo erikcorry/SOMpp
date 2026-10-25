@@ -1025,6 +1025,10 @@ VMMethod* VMMethod::MakeStackRelative() {
         lowered->stackFrameSize = VMStackFrame::SizeFor(lowered);
   #if USE_FRAME_STACK
         lowered->MoveArguments((int)VMStackFrame::ArgumentGap());
+        uint8_t* const out = lowered->GetBytecodes();
+        for (size_t i = 0; i < n; i += Bytecode::GetBytecodeLength(out[i])) {
+            out[i] = StackFrameBytecode(out[i]);
+        }
   #endif
     }
     // the lowered method owns them now
