@@ -17,7 +17,7 @@ void ErrorPrintf(const char* format, ...)
     __attribute__((format(printf, 1, 2)));
 
 __attribute__((noreturn)) __attribute__((noinline)) void Quit(int32_t err);
-__attribute__((noreturn)) __attribute__((noinline)) void ErrorExit(
+__attribute__((noreturn)) __attribute__((noinline, cold)) void ErrorExit(
     const char* /*err*/);
 
 #ifdef FRUCTUS

@@ -1,5 +1,5 @@
 /* The memory of SOM++ on fructus, in place of the fructus repository's
- * ld/fructus-sim.ld, which it follows below 0x0700.
+ * ld/fructus-sim.ld, which it follows below 0x0500.
  *
  *   0x0000 - 0x0002   `jmp _start', crt/crt0.s's .reset
  *   0x0003 - 0x01ff   zp_lo   .zplo, .zplo.bss       [rb, #-512..-1]
@@ -7,19 +7,25 @@
  *                     bytes of the low 32K, see src/memory/SlidingHeap.h
  *   0x0300 - 0x03ff   zp_hi   .zphi, .zphi.bss       [rb, #256..511]
  *   0x0400 - 0x04ff   the I/O page; 0x0420 is the console
- *   0x0500 - 0x06ff   the stack, growing down towards the I/O page, whose
- *                     guard traps an overflow
- *   0x0700 -          the SOM heap and its tables, up to the writable part
+ *   0x0500 - 0x05ff   the stack, growing down towards the I/O page, whose
+ *                     guard traps an overflow. It's the C++ calls', since
+ *                     the SOM frames are on the heap, and the collector's
+ *                     mark stack is a table of the heap too: the deepest
+ *                     seen is 180 bytes, in a collection
+ *   0x0600 -          the SOM heap and its tables, up to the writable part
  *          - __ro_at  THE WRITABLE PART: the image's objects that the program
  *                     stores into (som_writable), and the C++ .data and .bss
- *   __ro_at - 0xffff  THE READ-ONLY PART: code, constants and the rest of
+ *   __ro_at - 0xefff  THE READ-ONLY PART: code, constants and the rest of
  *                     the image, whose only writes are the inline caches of
  *                     its methods
+ *   0xf000 - 0xffcb   THE INTERPRETER, Interpreter::Start(), whose handler
+ *                     for a bytecode is at 0x10000 - 16 * bytecode
+ *   0xffcc - 0xffff   the vectors, isa/fructus.toml's [cpu.vectors]
  *
  * WRITES STAY BELOW 32K, because the machine has a mode where writes to the
  * top 32K go to the frame buffer: the read-only part starts at 0x8000, or
- * lower if it doesn't fit above it, and the writable part ends where it
- * starts.
+ * lower if it doesn't fit between there and the interpreter, and the
+ * writable part ends where it starts.
  *
  * cmake/fructus-link.sh links twice. The first link, without __ro_at and
  * __rw_at, puts both parts right after the stack, to measure them; the
@@ -39,7 +45,7 @@ __shadow_lr  = 0x0412;
 __shadow_isp = 0x0414;
 __console    = 0x0420;
 __uart_status  = 0x0422;    /* putchar waits on its busy bit; 0 on the simulator */
-__stack_top  = 0x0700;
+__stack_top  = 0x0600;
 __heap_start = __stack_top;
 
 SECTIONS
@@ -71,8 +77,17 @@ SECTIONS
   ASSERT(!DEFINED(__rw_at) || __heap_end <= __rw_start,
          "the SOM heap runs into the writable part")
 
+  /* The interpreter, Interpreter::Start(), whose handlers must be in 0xf010
+     to 0xfff0: but a handler can't be at 0xffc0 or above, since the vectors
+     are in its 16 bytes. Only the start of the function, before the first
+     handler, can be below 0xf010. The rare paths of the function are in
+     .text.unlikely, with the rest of the code. This comes before .text,
+     which would take the function's section. */
+  .dispatch 0xf000 : { KEEP(*(.text._ZN11Interpreter5StartEv)) }
+  ASSERT(. <= 0xffcc, "the interpreter runs into the vectors (0xffcc)")
+
   /* the read-only part */
-  .text (DEFINED(__ro_at) ? __ro_at : ALIGN(2)) : {
+  .text (DEFINED(__ro_at) ? __ro_at : ALIGN(__rw_end, 2)) : {
     __ro_start = .;
     *(.text.startup) *(.text) *(.text.*)
   }
@@ -83,7 +98,8 @@ SECTIONS
   __ro_end = .;
 
   ASSERT(__rw_end <= __ro_start, "the writable part runs into the read-only part")
-  ASSERT(__ro_end <= 0x10000, "the program does not fit below 0xffff")
+  ASSERT(!DEFINED(__ro_at) || __ro_end <= 0xf000,
+         "the read-only part runs into the interpreter (0xf000)")
 
   /DISCARD/ : { *(.comment) *(.note.*) }
 }

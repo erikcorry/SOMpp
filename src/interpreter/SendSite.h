@@ -80,12 +80,6 @@ constexpr size_t notUnderstoodLength = notUnderstoodSelector + sizeof(void*);
 /** The longest a send is. */
 constexpr size_t maxLength = Length(BC_SEND);
 
-inline uint8_t GetNumberOfArguments(const uint8_t* site) {
-    return site[0] == BC_SEND_1 || site[0] == BC_SEND_1_STACK
-               ? 1
-               : site[numberOfArguments];
-}
-
 /**
  * The selector if the send is unlinked, otherwise the invokable, which it
  * always is on fructus. `bc` is the send's bytecode, which the interpreter
@@ -95,16 +89,25 @@ inline void* GetTarget(const uint8_t* site, uint8_t bc) {
     return LoadWord(site + Target(bc));
 }
 
+#ifdef FRUCTUS
+// The first byte of a send is where its handler is, not its bytecode, see
+// Interpreter::Start(), so only the interpreter knows which send it is.
+
+/** Make the send, with bytecode `bc`, call `invokable`, see above. */
+inline void Link(uint8_t* site, uint8_t bc, VMInvokable* invokable) {
+    StoreWord(site + Target(bc), invokable);
+}
+#else
+inline uint8_t GetNumberOfArguments(const uint8_t* site) {
+    return site[0] == BC_SEND_1 || site[0] == BC_SEND_1_STACK
+               ? 1
+               : site[numberOfArguments];
+}
+
 inline void* GetTarget(const uint8_t* site) {
     return GetTarget(site, site[0]);
 }
 
-#ifdef FRUCTUS
-/** Make the send call `invokable`, see above. */
-inline void Link(uint8_t* site, VMInvokable* invokable) {
-    StoreWord(site + Target(site[0]), invokable);
-}
-#else
 /** Null if the send is unlinked. */
 inline VMClass* GetReceiverClass(const uint8_t* site, uint8_t bc) {
     return (VMClass*)LoadWord(site + ReceiverClass(bc));

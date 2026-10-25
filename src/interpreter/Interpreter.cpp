@@ -244,6 +244,91 @@ vm_oop_t Interpreter::Start() {
     vm_oop_t result = nullptr;
     RELOAD_PC();
 
+#ifdef FRUCTUS
+    // The handlers are each on a 16-byte boundary, which the compiler's
+    // -malign-label-addresses does, from 0xf010 to below the vectors, see
+    // cmake/fructus-som.ld, and the bytecode of the handler at an address is
+    // (0x10000 - address) / 16, see DISPATCH_TARGET(). That's up to where
+    // the handlers end up, so the image names them, som_bc_DUP for
+    // LABEL_BC_DUP, and the linker makes the bytecodes, see
+    // FructusImage::AsmFile::writeBytecodes().
+  #define NAME_HANDLER(name)                              \
+      asm(".globl som_bc_" #name "\n\t.set som_bc_" #name \
+          ", %c0" ::"i"(&&LABEL_BC_##name))
+    NAME_HANDLER(HALT);
+    NAME_HANDLER(DUP);
+    NAME_HANDLER(DUP_SECOND);
+    NAME_HANDLER(PUSH_LOCAL);
+    NAME_HANDLER(PUSH_ARGUMENT);
+    NAME_HANDLER(PUSH_FIELD);
+    NAME_HANDLER(PUSH_FIELD_0);
+    NAME_HANDLER(PUSH_FIELD_1);
+    NAME_HANDLER(PUSH_BLOCK);
+    NAME_HANDLER(PUSH_CONSTANT);
+    NAME_HANDLER(PUSH_0);
+    NAME_HANDLER(PUSH_1);
+    NAME_HANDLER(PUSH_SMALL_INT);
+    NAME_HANDLER(PUSH_NIL);
+    NAME_HANDLER(PUSH_GLOBAL);
+    NAME_HANDLER(POP);
+    NAME_HANDLER(POP_LOCAL);
+    NAME_HANDLER(POP_ARGUMENT);
+    NAME_HANDLER(POP_FIELD);
+    NAME_HANDLER(POP_FIELD_0);
+    NAME_HANDLER(POP_FIELD_1);
+    NAME_HANDLER(SEND);
+    NAME_HANDLER(SEND_1);
+    NAME_HANDLER(SUPER_SEND);
+    NAME_HANDLER(RETURN_LOCAL);
+    NAME_HANDLER(RETURN_NON_LOCAL);
+    NAME_HANDLER(RETURN_SELF);
+    NAME_HANDLER(RETURN_FIELD_0);
+    NAME_HANDLER(RETURN_FIELD_1);
+    NAME_HANDLER(RETURN_FIELD_2);
+    NAME_HANDLER(INC);
+    NAME_HANDLER(DEC);
+    NAME_HANDLER(INC_FIELD);
+    NAME_HANDLER(INC_FIELD_PUSH);
+    NAME_HANDLER(JUMP);
+    NAME_HANDLER(JUMP_ON_FALSE_POP);
+    NAME_HANDLER(JUMP_ON_TRUE_POP);
+    NAME_HANDLER(JUMP_ON_FALSE_TOP_NIL);
+    NAME_HANDLER(JUMP_ON_TRUE_TOP_NIL);
+    NAME_HANDLER(JUMP_ON_NOT_NIL_POP);
+    NAME_HANDLER(JUMP_ON_NIL_POP);
+    NAME_HANDLER(JUMP_ON_NOT_NIL_TOP_TOP);
+    NAME_HANDLER(JUMP_ON_NIL_TOP_TOP);
+    NAME_HANDLER(JUMP_IF_GREATER);
+    NAME_HANDLER(JUMP_BACKWARD);
+    NAME_HANDLER(JUMP2);
+    NAME_HANDLER(JUMP2_ON_FALSE_POP);
+    NAME_HANDLER(JUMP2_ON_TRUE_POP);
+    NAME_HANDLER(JUMP2_ON_FALSE_TOP_NIL);
+    NAME_HANDLER(JUMP2_ON_TRUE_TOP_NIL);
+    NAME_HANDLER(JUMP2_ON_NOT_NIL_POP);
+    NAME_HANDLER(JUMP2_ON_NIL_POP);
+    NAME_HANDLER(JUMP2_ON_NOT_NIL_TOP_TOP);
+    NAME_HANDLER(JUMP2_ON_NIL_TOP_TOP);
+    NAME_HANDLER(JUMP2_IF_GREATER);
+    NAME_HANDLER(JUMP2_BACKWARD);
+    NAME_HANDLER(SEND_EQEQ);
+    NAME_HANDLER(STATIC_SEND);
+    NAME_HANDLER(STATIC_SEND_1);
+    NAME_HANDLER(NOT_UNDERSTOOD);
+    NAME_HANDLER(PUSH_STACK);
+    NAME_HANDLER(POP_STACK);
+    NAME_HANDLER(SEND_STACK);
+    NAME_HANDLER(SEND_1_STACK);
+    NAME_HANDLER(SEND_EQEQ_STACK);
+    NAME_HANDLER(STATIC_SEND_STACK);
+    NAME_HANDLER(STATIC_SEND_1_STACK);
+    NAME_HANDLER(RETURN_LOCAL_STACK);
+    NAME_HANDLER(RETURN_SELF_STACK);
+    NAME_HANDLER(RETURN_FIELD_0_STACK);
+    NAME_HANDLER(RETURN_FIELD_1_STACK);
+    NAME_HANDLER(RETURN_FIELD_2_STACK);
+  #undef NAME_HANDLER
+#else
     void const* const loopTargets[] = {&&LABEL_BC_HALT,
                                        &&LABEL_BC_DUP,
                                        &&LABEL_BC_DUP_SECOND,
@@ -326,7 +411,9 @@ vm_oop_t Interpreter::Start() {
                                        &&LABEL_BC_RETURN_FIELD_1_STACK,
                                        &&LABEL_BC_RETURN_FIELD_2_STACK};
 
-    goto* loopTargets[*pc];
+#endif
+
+    DISPATCH_NOGC();
 
     //
     // THIS IS THE former interpretation loop
@@ -485,7 +572,7 @@ LABEL_BC_POP_FIELD_1:
           recordStat(ReceiverType, cls);                                    \
           auto* invokable = (VMInvokable*)SendSite::GetTarget(pc, bc);      \
           if (!hits(pc, bc, cls)) {                                         \
-              invokable = lookupMiss(pc, cls);                              \
+              invokable = lookupMiss(pc, bc, cls);                          \
           }                                                                 \
           recordStat(CallStats, cls, invokable);                            \
           if (isMethod(invokable)) {                                        \
@@ -1182,10 +1269,11 @@ gc_oop_t* Interpreter::popFrameAndPushResult(vm_oop_t result) {
 #ifdef FRUCTUS
 // The slow path of a send, where the receiver's classId isn't in the first
 // range of the target: look in its other ranges, and then in the others in
-// its ring, and link the send to the one that has it, see SendSite.h.
-// Answers the invokable to call.
-VMInvokable* Interpreter::lookupMiss(uint8_t* site, VMClass* receiverClass) {
-    auto* const target = (VMInvokable*)SendSite::GetTarget(site);
+// its ring, and link the send, whose bytecode is `bc`, to the one that has
+// it, see SendSite.h. Answers the invokable to call.
+VMInvokable* Interpreter::lookupMiss(uint8_t* site, uint8_t bc,
+                                     VMClass* receiverClass) {
+    auto* const target = (VMInvokable*)SendSite::GetTarget(site, bc);
     size_t const classId = receiverClass->GetClassId();
     VMInvokable* invokable = target;
     if (!target->IsMethodOf(classId, 1)) {
@@ -1201,7 +1289,7 @@ VMInvokable* Interpreter::lookupMiss(uint8_t* site, VMClass* receiverClass) {
         // On fructus the invokables are all in the image, which the
         // collector doesn't move or free, and the methods are above 32K,
         // which the cards don't cover.
-        SendSite::Link(site, invokable);
+        SendSite::Link(site, bc, invokable);
     }
     return invokable;
 }

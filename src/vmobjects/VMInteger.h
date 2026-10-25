@@ -98,6 +98,6 @@ inline som_box_int_t WrappingAdd(som_box_int_t a, som_box_int_t b) {
  * aren't small integers: the receiver and argument must be integers, and
  * either may be boxed. See primitives/IntegerFructus.cpp.
  */
-vm_oop_t IntegerWideAdd(vm_oop_t left, vm_oop_t right);
+__attribute__((cold)) vm_oop_t IntegerWideAdd(vm_oop_t left, vm_oop_t right);
 vm_oop_t IntegerWideGreaterThan(vm_oop_t left, vm_oop_t right);
 #endif

@@ -111,9 +111,14 @@ if(FRUCTUS)
   add_compile_options(-fmin-function-alignment=2)
   add_link_options(-Wl,--gc-sections -Wl,-Map=SOM++.map)
   # At -Os gcc gives all the bytecodes one shared indirect jump, so every
-  # dispatch takes several extra jumps to get to it
+  # dispatch takes several extra jumps to get to it. The handlers of the
+  # bytecodes are each on a 16-byte boundary, so the dispatch needs no table,
+  # and the rare paths, which call cold functions, are out of the 4K the
+  # handlers are in, see Interpreter::Start(). Guessing which GetClass() a
+  # receiver has would take another 300 bytes of it.
   set_source_files_properties(${INTERPRETER_DIR}/Interpreter.cpp PROPERTIES
-    COMPILE_OPTIONS -O2)
+    COMPILE_OPTIONS
+    "-O2;-malign-label-addresses=16;-freorder-blocks-and-partition;-fno-devirtualize-speculatively")
 
   # The class library: compiled by the host SOM++ (see src/vm/FructusImage.h)
   # and linked in as som-image.o

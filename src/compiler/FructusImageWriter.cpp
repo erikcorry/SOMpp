@@ -978,6 +978,16 @@ static uint8_t FrameKindBytecode(VMMethod* method, uint8_t bc) {
     return FructusArgumentGap(method) == 0 ? bc : StackFrameBytecode(bc);
 }
 
+/**
+ * The bytecode `bc` as a byte of a method on fructus: the linker makes it from
+ * where its handler is, see Interpreter::Start().
+ */
+static std::string DispatchByte(uint8_t bc) {
+    std::string name = Bytecode::GetBytecodeName(bc);
+    name.erase(name.find_last_not_of(' ') + 1);
+    return "dispatch(som_bc_" + name + ")";
+}
+
 /** The slots the host's compiler left between them, for the host's frames. */
 static int HostArgumentGap(VMMethod* method) {
 #if USE_FRAME_STACK
@@ -1091,11 +1101,15 @@ FructusImage::AsmFile::Lines FructusImage::AsmFile::writeBytecodes(
         line << "\t.byte\t";
         uint8_t const newBc = FrameKindBytecode(method, fructusBytecodes[n]);
         for (size_t j = 0; j < numBytes; j++) {
-            unsigned byte = j == 0 ? newBc : fructusBytecodes[n + j];
+            if (j == 0) {
+                line << DispatchByte(newBc);
+                continue;
+            }
+            unsigned byte = fructusBytecodes[n + j];
             if (j == 1 && HasFieldOperand(bc)) {
                 byte = FructusFieldIndex(method->GetHolder(), byte);
             }
-            line << (j == 0 ? "" : ", ") << byte;
+            line << ", " << byte;
         }
         std::string name = Bytecode::GetBytecodeName(newBc);
         name.erase(name.find_last_not_of(' ') + 1);
@@ -1163,14 +1177,14 @@ size_t FructusImage::AsmFile::writeSendSite(ObjectWriter& w, size_t offset,
     std::ostringstream line;
     if (newBc == BC_STATIC_SEND || newBc == BC_STATIC_SEND_1) {
         VMInvokable* target = image.StaticTarget(method, index);
-        line << "\t.byte\t" << (unsigned)kindBc << "\t; " << comment
+        line << "\t.byte\t" << DispatchByte(kindBc) << "\t; " << comment
              << ", static " << describe(target) << "\n"
              << "\t.short\t" << Ref(target) << "\n";
         w.Raw(offset, L::StaticSend_length, line.str());
         return L::StaticSend_length;
     }
     if (newBc == BC_NOT_UNDERSTOOD) {
-        line << "\t.byte\t" << (unsigned)newBc << ", " << numArgs << "\t; "
+        line << "\t.byte\t" << DispatchByte(newBc) << ", " << numArgs << "\t; "
              << comment << ", which no class has\n"
              << "\t.short\t" << SelectorRef(selector) << "\n";
         w.Raw(offset, L::NotUnderstood_length, line.str());
@@ -1180,7 +1194,7 @@ size_t FructusImage::AsmFile::writeSendSite(ObjectWriter& w, size_t offset,
 
     // a unary send has no number of arguments
     VMInvokable* head = image.RingHead(selector);
-    line << "\t.byte\t" << (unsigned)kindBc;
+    line << "\t.byte\t" << DispatchByte(kindBc);
     if (bc != BC_SEND_1) {
         line << ", " << numArgs;
     }

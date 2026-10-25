@@ -1,8 +1,9 @@
 #!/bin/sh
 # Links the fructus program twice, see cmake/fructus-som.ld: once to measure
 # its writable and read-only parts, and again to put the read-only part at
-# 0x8000, or as high as it fits if it's bigger than 32K, and the writable
-# part right below it, where the SOM heap ends.
+# 0x8000, or as high as it fits below the interpreter at 0xf000 if it's
+# bigger than 28K, and the writable part right below it, where the SOM heap
+# ends.
 #
 #   fructus-link.sh <nm> <compiler> <arguments of the link...>
 #
@@ -28,7 +29,7 @@ symbol() {
 rw_size=$(($(symbol __rw_end) - $(symbol __rw_start)))
 ro_size=$(($(symbol __ro_end) - $(symbol __ro_start)))
 
-ro_at=$(((0x10000 - ro_size) & ~15))
+ro_at=$(((0xf000 - ro_size) & ~15))
 if [ $ro_at -gt $((0x8000)) ]; then
     ro_at=$((0x8000))
 fi

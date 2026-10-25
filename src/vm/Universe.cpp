@@ -336,7 +336,13 @@ VMMethod* Universe::createBootstrapMethod(VMClass* holder,
                   bootStrapScope, inlinedLoops);
 #endif
 
+#ifdef FRUCTUS
+    // where its handler is, see Interpreter::Start()
+    extern char som_bc_HALT[];
+    bootstrapMethod->SetBytecode(0, (0 - (uintptr_t)som_bc_HALT) >> 4);
+#else
     bootstrapMethod->SetBytecode(0, BC_HALT);
+#endif
 #ifdef FRUCTUS
     (void)holder;  // invokables have no holder on fructus
 #else

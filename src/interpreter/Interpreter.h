@@ -79,9 +79,17 @@
       (pc = method->GetBytecodes() + frame->GetBytecodeIndex())
 #endif
 
-#define DISPATCH_NOGC()         \
-    {                           \
-        goto* loopTargets[*pc]; \
+#ifdef FRUCTUS
+// The handler of a bytecode is at 0x10000 - 16 * bytecode, see Start(), so
+// the dispatch is a shift and a negation, with no table.
+  #define DISPATCH_TARGET() ((void*)(0 - ((uintptr_t)*pc << 4)))
+#else
+  #define DISPATCH_TARGET() loopTargets[*pc]
+#endif
+
+#define DISPATCH_NOGC()          \
+    {                            \
+        goto* DISPATCH_TARGET(); \
     }
 
 // Collects if a collection was requested, with pc at the next bytecode. If
@@ -98,7 +106,7 @@
             startGC();                                      \
             RELOAD_PC();                                    \
         }                                                   \
-        goto* loopTargets[*pc];                             \
+        goto* DISPATCH_TARGET();                            \
     }
 
 // A bytecode reads its operands at positive offsets from pc, then moves pc
@@ -272,7 +280,7 @@ public:
      * Sends #unknownGlobal: to self. Answers false, and changes nothing, if
      * it failed.
      */
-    bool SendUnknownGlobal(VMSymbol* globalName);
+    __attribute__((cold)) bool SendUnknownGlobal(VMSymbol* globalName);
 
 #ifdef FRUCTUS
     /**
@@ -292,7 +300,9 @@ private:
 
     void startGC();
 #if USE_FRAME_STACK
-    bool growFrameStack(char* end);
+    // Rare, so its caller's path is out of the interpreter's 4K on fructus,
+    // see Start()
+    __attribute__((noinline, cold)) bool growFrameStack(char* end);
 #endif
 
     void switchFrame(VMFrame* frm);
@@ -302,7 +312,7 @@ private:
     gc_oop_t* popFrameAndPushResult(vm_oop_t result);
 
 #ifdef FRUCTUS
-    VMInvokable* lookupMiss(uint8_t* site, VMClass* receiverClass);
+    VMInvokable* lookupMiss(uint8_t* site, uint8_t bc, VMClass* receiverClass);
 #else
     gc_oop_t* sendMiss(uint8_t* site, VMClass* receiverClass, gc_oop_t* sp);
 #endif
