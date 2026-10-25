@@ -1509,7 +1509,7 @@ vm_oop_t Interpreter::incField(uint8_t fieldIndex) {
 }
 
 bool Interpreter::checkIsGreater(vm_oop_t top, vm_oop_t top2) {
-    if (IS_SMALL_INT(top) && IS_SMALL_INT(top2)) {
+    if (likely(IS_SMALL_INT(top) && IS_SMALL_INT(top2))) {
         return SMALL_INT_VAL(top) > SMALL_INT_VAL(top2);
     }
 #ifdef FRUCTUS
