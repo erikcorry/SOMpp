@@ -62,6 +62,8 @@ fructus 354eb00's toolchain, whose libgcc makes the reciprocal itself.
 | 8016517d | 2,159,186 | 1,031,028 | 63,562,606 | 29,926,830 | sp passed into Invoke: a send saves and reloads only the pc |
 | b4cfc11a | 2,173,670 | 1,033,275 | 61,672,016 | 28,976,132 | No stack_ptr in stack frames; self in the interpreter, saved above a send's arguments |
 | 24d7e292 | 1,964,887 | 942,597 | 56,845,447 | 26,611,773 | Frames pushed and popped inline in Start(), with bytecodes for stack methods' sends and returns; stack frames keep their arguments in the sender's stack |
+| f60ee0ff | 1,943,665 | 941,590 | 55,951,702 | 26,568,111 | fructus 0ab3ed0: gcc sends a far branch to a nearby jmp, not over one; INC's fast path takes no branch |
+| 370470b5 | 1,942,377 | 941,590 | 55,951,910 | 26,568,111 | checkIsGreater expects two small integers |
 
 ## Setup
 

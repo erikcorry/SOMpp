@@ -78,12 +78,15 @@ const SHORT = {
   '5b70889': 'Newer gcc',
   '68fad41': 'Two-cycle loads',
   'f840fa3': 'No indirect jump predictor',
+  '0ab3ed0': 'Far branches to stubs',
 };
 
 // Rows the charts leave out, to keep the bars few; the table keeps them.  A
 // left-out row's change shows in the next bar, whose count includes it, or,
-// if FOLD, in the bar before, which takes the row's count.
-const SKIP = new Set(['9e49ec9', '6b4c7f0', 'ebd3f71', '76d6d4f', '3893847', '6c667ac']);
+// if FOLD, in the bar before, which takes the row's count.  A row is named by
+// its fructus commit, or by its own if its note has none.
+const SKIP = new Set(['9e49ec9', '6b4c7f0', 'ebd3f71', '76d6d4f', '3893847', '6c667ac',
+                      '370470b5']);
 const FOLD = new Set(['ae14399', '0aa5f42']);
 
 function readTable() {
@@ -115,7 +118,7 @@ function bars(benchmark, table) {
       bar.cycles = cycles;
     } else {
       const fructus = row.note.match(/^fructus ([0-9a-f]{7})/)?.[1];
-      if (SKIP.has(fructus)) continue;
+      if (SKIP.has(fructus ?? row.commit)) continue;
       if (FOLD.has(fructus)) {
         list[list.length - 1].cycles = cycles;
         continue;
