@@ -68,6 +68,7 @@ const SHORT = {
   '8016517d': 'Pass sp into Invoke',
   'b4cfc11a': 'Self in the interpreter',
   '24d7e292': 'Inline frame push and pop',
+  'ba2852ee': 'Shift dispatch',
   // The rows after them are named by the fructus commit their note starts with.
   'c51921e': 'Faster absolute jump/call',
   'd170fdf': 'Dynamic branch predictor',
@@ -84,9 +85,10 @@ const SHORT = {
 // Rows the charts leave out, to keep the bars few; the table keeps them.  A
 // left-out row's change shows in the next bar, whose count includes it, or,
 // if FOLD, in the bar before, which takes the row's count.  A row is named by
-// its fructus commit, or by its own if its note has none.
+// its fructus commit, or by its own if its note has none.  A mined bar named
+// here still gives the bars around it their counts before it's left out.
 const SKIP = new Set(['9e49ec9', '6b4c7f0', 'ebd3f71', '76d6d4f', '3893847', '6c667ac',
-                      '370470b5']);
+                      '370470b5', '67f69752', '10f97a4d', 'ad04a24d']);
 const FOLD = new Set(['ae14399', '0aa5f42']);
 
 function readTable() {
@@ -145,7 +147,7 @@ function bars(benchmark, table) {
   if (missing.length) {
     throw new Error(`${benchmark}: no count for ${missing.map((b) => b.commit).join(', ')}`);
   }
-  return list;
+  return list.filter((b) => !SKIP.has(b.commit));
 }
 
 const SIZE = 800;

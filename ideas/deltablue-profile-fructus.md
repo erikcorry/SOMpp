@@ -64,6 +64,7 @@ fructus 354eb00's toolchain, whose libgcc makes the reciprocal itself.
 | 24d7e292 | 1,964,887 | 942,597 | 56,845,447 | 26,611,773 | Frames pushed and popped inline in Start(), with bytecodes for stack methods' sends and returns; stack frames keep their arguments in the sender's stack |
 | f60ee0ff | 1,943,665 | 941,590 | 55,951,702 | 26,568,111 | fructus 0ab3ed0: gcc sends a far branch to a nearby jmp, not over one; INC's fast path takes no branch |
 | 370470b5 | 1,942,377 | 941,590 | 55,951,910 | 26,568,111 | checkIsGreater expects two small integers |
+| ba2852ee | 1,883,511 | 943,644 | 54,129,621 | 26,635,492 | Bytecode handlers 16 bytes apart at 0xf000, dispatched with a shift and no table (fructus 28ec8b5); the frame no longer has the table's stack copy, so spills take short forms, and the stack is 256 bytes |
 
 ## Setup
 
