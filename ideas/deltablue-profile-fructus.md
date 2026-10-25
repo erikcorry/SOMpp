@@ -60,6 +60,7 @@ fructus 354eb00's toolchain, whose libgcc makes the reciprocal itself.
 | 67f69752 | 2,232,886 | 1,049,571 | 65,615,047 | 30,713,392 | No write barrier on the C++ stores into the current frame (8a978552), no totalObjectSize in fructus's frames (639ab731), the frame stack grown by just what a frame needs |
 | f7672260 | 2,243,428 | 1,056,682 | 65,774,494 | 30,843,925 | Frames split into VMStackFrame and VMHeapFrame; NewFrame has a construction site per kind |
 | 8016517d | 2,159,186 | 1,031,028 | 63,562,606 | 29,926,830 | sp passed into Invoke: a send saves and reloads only the pc |
+| b4cfc11a | 2,173,670 | 1,033,275 | 61,672,016 | 28,976,132 | No stack_ptr in stack frames; self in the interpreter, saved above a send's arguments |
 
 ## Setup
 
