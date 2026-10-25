@@ -67,6 +67,7 @@ const SHORT = {
   'f7672260': 'Stack and heap frames',
   '8016517d': 'Pass sp into Invoke',
   'b4cfc11a': 'Self in the interpreter',
+  '24d7e292': 'Inline frame push and pop',
   // The rows after them are named by the fructus commit their note starts with.
   'c51921e': 'Faster absolute jump/call',
   'd170fdf': 'Dynamic branch predictor',

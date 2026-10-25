@@ -61,6 +61,7 @@ fructus 354eb00's toolchain, whose libgcc makes the reciprocal itself.
 | f7672260 | 2,243,428 | 1,056,682 | 65,774,494 | 30,843,925 | Frames split into VMStackFrame and VMHeapFrame; NewFrame has a construction site per kind |
 | 8016517d | 2,159,186 | 1,031,028 | 63,562,606 | 29,926,830 | sp passed into Invoke: a send saves and reloads only the pc |
 | b4cfc11a | 2,173,670 | 1,033,275 | 61,672,016 | 28,976,132 | No stack_ptr in stack frames; self in the interpreter, saved above a send's arguments |
+| 24d7e292 | 1,964,887 | 942,597 | 56,845,447 | 26,611,773 | Frames pushed and popped inline in Start(), with bytecodes for stack methods' sends and returns; stack frames keep their arguments in the sender's stack |
 
 ## Setup
 
